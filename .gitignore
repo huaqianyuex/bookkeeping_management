@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+backend/test_backend/
+*.class
+*.jar
+*.war
+.idea/
+*.iml
+.vscode/
