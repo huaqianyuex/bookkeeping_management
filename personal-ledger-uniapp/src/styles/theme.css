@@ -1,0 +1,139 @@
+﻿:root {
+  /* ============================
+     Brand Colors (Elegant, Muted Palette)
+     ============================ */
+  --color-primary: #1e2d3d;
+  --color-primary-light: #2c3e50;
+  --color-primary-lighter: #3d566e;
+  --color-primary-rgb: 30, 45, 61;
+
+  /* Accent: muted teal (replaces AI-typical purple) */
+  --color-accent: #3a7ca5;
+  --color-accent-light: #e8f4f8;
+  --color-accent-rgb: 58, 124, 165;
+
+  /* Semantic Colors (muted, natural) */
+  --color-success: #2ecc71;
+  --color-success-light: #eafaf1;
+  --color-success-rgb: 46, 204, 113;
+  --color-danger: #e74c3c;
+  --color-danger-light: #fdedec;
+  --color-danger-rgb: 231, 76, 60;
+  --color-warning: #f0ad4e;
+  --color-warning-light: #fef9e7;
+  --color-warning-text: #8a6d3b;
+  --color-info: #5dade2;
+  --color-info-light: #ebf5fb;
+
+  /* Surface Colors (warm off-white) */
+  --color-bg: #f6f5f3;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f9f8f6;
+
+  /* Text Colors (warm dark) */
+  --color-text: #2c3e50;
+  --color-text-secondary: #7f8c9a;
+  --color-text-tertiary: #bdc3cb;
+  --color-text-inverse: #ffffff;
+  --color-text-heading: #1e2d3d;
+
+  /* Border Colors (softer) */
+  --color-border: #e8e6e1;
+  --color-border-input: #d5d3cd;
+  --color-divider: #eeede9;
+
+  /* Disabled */
+  --color-disabled-bg: #e8e6e1;
+  --color-disabled-text: #bdc3cb;
+
+  /* ============================
+     Border Radius
+     ============================ */
+  --radius-xs: 6rpx;
+  --radius-sm: 10rpx;
+  --radius-md: 14rpx;
+  --radius-lg: 18rpx;
+  --radius-xl: 22rpx;
+  --radius-2xl: 26rpx;
+  --radius-3xl: 32rpx;
+  --radius-full: 999rpx;
+
+  /* ============================
+     Shadows (soft, natural)
+     ============================ */
+  --shadow-xs: 0 1rpx 3rpx rgba(30, 45, 61, 0.04);
+  --shadow-sm: 0 2rpx 12rpx rgba(30, 45, 61, 0.06);
+  --shadow-md: 0 6rpx 20rpx rgba(30, 45, 61, 0.08);
+  --shadow-lg: 0 12rpx 40rpx rgba(30, 45, 61, 0.10);
+  --shadow-xl: 0 20rpx 60rpx rgba(30, 45, 61, 0.12);
+  --shadow-primary: 0 4rpx 20rpx rgba(30, 45, 61, 0.20);
+  --shadow-success: 0 4rpx 16rpx rgba(46, 204, 113, 0.20);
+  --shadow-danger: 0 4rpx 16rpx rgba(231, 76, 60, 0.20);
+  --shadow-accent: 0 4rpx 20rpx rgba(58, 124, 165, 0.20);
+
+  /* ============================
+     Spacing
+     ============================ */
+  --space-2xs: 4rpx;
+  --space-xs: 8rpx;
+  --space-sm: 12rpx;
+  --space-md: 16rpx;
+  --space-lg: 24rpx;
+  --space-xl: 32rpx;
+  --space-2xl: 40rpx;
+  --space-3xl: 48rpx;
+  --space-4xl: 64rpx;
+
+  /* ============================
+     Font Size
+     ============================ */
+  --font-2xs: 18rpx;
+  --font-xs: 20rpx;
+  --font-sm: 22rpx;
+  --font-md: 24rpx;
+  --font-base: 28rpx;
+  --font-lg: 32rpx;
+  --font-xl: 36rpx;
+  --font-2xl: 40rpx;
+  --font-3xl: 48rpx;
+  --font-4xl: 56rpx;
+  --font-5xl: 64rpx;
+  --font-6xl: 72rpx;
+  --font-7xl: 84rpx;
+  --font-8xl: 96rpx;
+
+  /* Font Weight */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+
+  /* Line Height */
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* Letter Spacing */
+  --tracking-heading: -0.5rpx;
+  --tracking-body: 0rpx;
+  --tracking-caption: 0.5rpx;
+
+  /* ============================
+     Transitions
+     ============================ */
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ============================
+     Z-index
+     ============================ */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 500;
+  --z-modal: 999;
+  --z-toast: 1000;
+  --z-overlay-bg: 998;
+}

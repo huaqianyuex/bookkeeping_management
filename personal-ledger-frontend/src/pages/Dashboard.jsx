@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react'
-import { Card, Row, Col, Statistic, Table, DatePicker, Spin } from 'antd'
+import { Row, Col, Table, DatePicker, Typography } from 'antd'
 import { ArrowUpOutlined, ArrowDownOutlined, WalletOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { getMonthlyStatistics, getCategoryStatistics } from '../api/statistics'
+import StatCard from '../components/ui/StatCard'
+import PageHeader from '../components/ui/PageHeader'
+import SectionTitle from '../components/ui/SectionTitle'
+import EmptyState from '../components/ui/EmptyState'
+import SkeletonCard, { StatsRowSkeleton } from '../components/ui/SkeletonCard'
+import AnimatedRoute from '../components/ui/AnimatedRoute'
 
 const { MonthPicker } = DatePicker
+const { Text } = Typography
 
 export default function Dashboard() {
   const now = dayjs()
@@ -13,6 +20,13 @@ export default function Dashboard() {
   const [expenseData, setExpenseData] = useState([])
   const [incomeData, setIncomeData] = useState([])
   const [loading, setLoading] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const fetchData = async (date) => {
     setLoading(true)
@@ -34,89 +48,147 @@ export default function Dashboard() {
   useEffect(() => { fetchData(month) }, [month])
 
   const categoryColumns = [
-    { title: '分类', dataIndex: 'categoryName', key: 'categoryName' },
     {
-      title: '金额', dataIndex: 'amount', key: 'amount',
-      render: (v) => `¥${v.toFixed(2)}`,
+      title: '分类',
+      dataIndex: 'categoryName',
+      key: 'categoryName',
+      render: (text) => <Text strong style={{ color: 'var(--color-text)' }}>{text}</Text>,
     },
     {
-      title: '占比', dataIndex: 'percentage', key: 'percentage',
-      render: (v) => `${v}%`,
+      title: '金额',
+      dataIndex: 'amount',
+      key: 'amount',
+      render: (v) => (
+        <Text strong style={{ color: 'var(--color-text)' }}>¥{v.toFixed(2)}</Text>
+      ),
+    },
+    {
+      title: '占比',
+      dataIndex: 'percentage',
+      key: 'percentage',
+      render: (v) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="progress-bar-track">
+            <div className="progress-bar-fill" style={{ width: `${v}%` }} />
+          </div>
+          <Text style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>{v}%</Text>
+        </div>
+      ),
     },
   ]
 
-  return (
-    <Spin spinning={loading}>
-      <div style={{ marginBottom: 16 }}>
-        <MonthPicker value={month} onChange={(d) => setMonth(d || now)} allowClear={false} />
-      </div>
-
-      {monthlyData && (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={8}>
-            <Card bordered={false} style={{ boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)' }}>
-              <Statistic
-                title={<span style={{ color: '#8c8c8c' }}>收入</span>}
-                value={monthlyData.totalIncome}
-                precision={2}
-                prefix={<ArrowUpOutlined />}
-                suffix="元"
-                valueStyle={{ color: '#3f8600', fontWeight: 500 }}
-              />
-            </Card>
+  if (loading) {
+    return (
+      <AnimatedRoute>
+        <PageHeader
+          title="数据概览"
+          action={<MonthPicker value={month} allowClear={false} style={{ width: 180 }} size="large" />}
+        />
+        <StatsRowSkeleton count={3} />
+        <Row gutter={24}>
+          <Col xs={24} md={12}>
+            <SkeletonCard type="table" rows={4} />
           </Col>
-          <Col span={8}>
-            <Card bordered={false} style={{ boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)' }}>
-              <Statistic
-                title={<span style={{ color: '#8c8c8c' }}>支出</span>}
-                value={monthlyData.totalExpense}
-                precision={2}
-                prefix={<ArrowDownOutlined />}
-                suffix="元"
-                valueStyle={{ color: '#cf1322', fontWeight: 500 }}
-              />
-            </Card>
+          <Col xs={24} md={12}>
+            <SkeletonCard type="table" rows={4} />
           </Col>
-          <Col span={8}>
-            <Card bordered={false} style={{ boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)' }}>
-              <Statistic
-                title={<span style={{ color: '#8c8c8c' }}>结余</span>}
-                value={monthlyData.balance}
-                precision={2}
-                prefix={<WalletOutlined />}
-                suffix="元"
-                valueStyle={{ color: monthlyData.balance >= 0 ? '#3f8600' : '#cf1322', fontWeight: 500 }}
-              />
-            </Card>
-          </Col>
-
         </Row>
-      )}
+      </AnimatedRoute>
+    )
+  }
 
-      <Row gutter={16}>
-        <Col span={12}>
-          <Card title="支出分类统计" bordered={false} style={{ boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)' }}>
+  if (!monthlyData) {
+    return (
+      <AnimatedRoute>
+        <PageHeader
+          title="数据概览"
+          action={<MonthPicker value={month} onChange={(d) => setMonth(d || now)} allowClear={false} style={{ width: 180 }} size="large" />}
+        />
+        <EmptyState title="暂无统计数据" description="请选择月份查看账单统计" />
+      </AnimatedRoute>
+    )
+  }
+
+  return (
+    <AnimatedRoute>
+      <PageHeader
+        title={isMobile ? undefined : '数据概览'}
+        action={
+          <MonthPicker
+            value={month}
+            onChange={(d) => setMonth(d || now)}
+            allowClear={false}
+            style={{ width: isMobile ? '100%' : 180 }}
+            size={isMobile ? 'middle' : 'large'}
+          />
+        }
+      />
+
+      {/* Stats Cards */}
+      <Row gutter={isMobile ? 12 : 24} style={{ marginBottom: 24 }}>
+        <Col xs={8} md={8}>
+          <StatCard
+            icon={ArrowUpOutlined}
+            label="本月收入"
+            value={monthlyData.totalIncome}
+            color="income"
+            compact={isMobile}
+          />
+        </Col>
+        <Col xs={8} md={8}>
+          <StatCard
+            icon={ArrowDownOutlined}
+            label="本月支出"
+            value={monthlyData.totalExpense}
+            color="expense"
+            compact={isMobile}
+          />
+        </Col>
+        <Col xs={8} md={8}>
+          <StatCard
+            icon={WalletOutlined}
+            label="本月结余"
+            value={monthlyData.balance}
+            color="balance"
+            balance={monthlyData.balance}
+            compact={isMobile}
+          />
+        </Col>
+      </Row>
+
+      {/* Category Tables */}
+      <Row gutter={isMobile ? 0 : 24}>
+        <Col xs={24} md={12}>
+          <div className="card-base" style={{ padding: '20px 24px', marginBottom: isMobile ? 16 : 0 }}>
+            <SectionTitle title="支出分类统计" dotColor="danger" />
             <Table
               dataSource={expenseData}
               columns={categoryColumns}
               rowKey="categoryId"
               pagination={false}
-              size="middle"
+              size={isMobile ? 'small' : 'middle'}
+              scroll={isMobile ? { x: 300 } : undefined}
+              style={{ marginTop: 16 }}
+              locale={{ emptyText: <EmptyState title="暂无支出数据" size="small" /> }}
             />
-          </Card>
+          </div>
         </Col>
-        <Col span={12}>
-          <Card title="收入分类统计" bordered={false} style={{ boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03)' }}>
+        <Col xs={24} md={12}>
+          <div className="card-base" style={{ padding: '20px 24px' }}>
+            <SectionTitle title="收入分类统计" dotColor="success" />
             <Table
               dataSource={incomeData}
               columns={categoryColumns}
               rowKey="categoryId"
               pagination={false}
-              size="middle"
+              size={isMobile ? 'small' : 'middle'}
+              scroll={isMobile ? { x: 300 } : undefined}
+              style={{ marginTop: 16 }}
+              locale={{ emptyText: <EmptyState title="暂无收入数据" size="small" /> }}
             />
-          </Card>
+          </div>
         </Col>
       </Row>
-    </Spin>
+    </AnimatedRoute>
   )
 }

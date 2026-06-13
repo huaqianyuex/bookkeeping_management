@@ -1,12 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Platform,
+  View, Text, StyleSheet, ScrollView,
+  RefreshControl,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
+import { useFocusEffect } from '@react-navigation/native'
 import dayjs from 'dayjs'
 import { getMonthlyStatistics, getCategoryStatistics } from '../api/statistics'
+import { theme } from '../config/theme'
+import StatCard from '../components/StatCard'
+import DonutChart from '../components/DonutChart'
+import SkeletonCard from '../components/SkeletonCard'
+import EmptyState from '../components/EmptyState'
+import FadeInView from '../components/FadeInView'
+import ScaleButton from '../components/ScaleButton'
 
 export default function DashboardScreen() {
   const now = dayjs()
@@ -16,7 +24,6 @@ export default function DashboardScreen() {
   const [expenseData, setExpenseData] = useState([])
   const [incomeData, setIncomeData] = useState([])
   const [loading, setLoading] = useState(false)
-  const [showMonthPicker, setShowMonthPicker] = useState(false)
 
   const fetchData = useCallback(async (y, m) => {
     setLoading(true)
@@ -30,15 +37,16 @@ export default function DashboardScreen() {
       if (expenseRes.code === 200) setExpenseData(expenseRes.data)
       if (incomeRes.code === 200) setIncomeData(incomeRes.data)
     } catch (e) {
-      // silent
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => {
-    fetchData(year, month)
-  }, [year, month, fetchData])
+  useFocusEffect(
+    useCallback(() => {
+      fetchData(year, month)
+    }, [year, month])
+  )
 
   const prevMonth = () => {
     if (month === 1) {
@@ -60,95 +68,100 @@ export default function DashboardScreen() {
 
   const currentMonthLabel = `${year}年${String(month).padStart(2, '0')}月`
 
-  const renderCategoryTable = (data, title, color) => (
-    <View style={styles.tableCard}>
-      <View style={[styles.tableHeader, { borderLeftColor: color }]}>
-        <Text style={styles.tableTitle}>{title}</Text>
-      </View>
-      {data.length === 0 ? (
-        <Text style={styles.emptyText}>暂无数据</Text>
-      ) : (
-        data.map((item) => (
-          <View key={item.categoryId} style={styles.tableRow}>
-            <Text style={styles.categoryName}>{item.categoryName}</Text>
-            <View style={styles.barContainer}>
-              <View
-                style={[
-                  styles.bar,
-                  {
-                    width: `${Math.min(item.percentage, 100)}%`,
-                    backgroundColor: color,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={[styles.amount, { color }]}>
-              ¥{item.amount.toFixed(2)}
-            </Text>
-            <Text style={styles.percentage}>{item.percentage}%</Text>
-          </View>
-        ))
-      )}
-    </View>
-  )
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>数据概览</Text>
+        <Text style={styles.headerSubtitle}>掌控您的财务状况</Text>
       </View>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={() => fetchData(year, month)} />
-        }
-      >
-        <View style={styles.monthSelector}>
-          <TouchableOpacity onPress={prevMonth} style={styles.monthArrow}>
-            <Ionicons name="chevron-back" size={22} color="#18181b" />
-          </TouchableOpacity>
-          <Text style={styles.monthText}>{currentMonthLabel}</Text>
-          <TouchableOpacity onPress={nextMonth} style={styles.monthArrow}>
-            <Ionicons name="chevron-forward" size={22} color="#18181b" />
-          </TouchableOpacity>
-        </View>
-
-        {loading && !monthlyData ? (
-          <ActivityIndicator size="large" color="#18181b" style={{ marginTop: 40 }} />
-        ) : monthlyData ? (
-          <>
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, { borderTopColor: '#3f8600' }]}>
-                <Text style={styles.statLabel}>收入</Text>
-                <Text style={[styles.statValue, { color: '#3f8600' }]}>
-                  ¥{monthlyData.totalIncome.toFixed(2)}
-                </Text>
-              </View>
-              <View style={[styles.statCard, { borderTopColor: '#cf1322' }]}>
-                <Text style={styles.statLabel}>支出</Text>
-                <Text style={[styles.statValue, { color: '#cf1322' }]}>
-                  ¥{monthlyData.totalExpense.toFixed(2)}
-                </Text>
-              </View>
-              <View style={[styles.statCard, { borderTopColor: monthlyData.balance >= 0 ? '#3f8600' : '#cf1322' }]}>
-                <Text style={styles.statLabel}>结余</Text>
-                <Text
-                  style={[
-                    styles.statValue,
-                    { color: monthlyData.balance >= 0 ? '#3f8600' : '#cf1322' },
-                  ]}
-                >
-                  ¥{monthlyData.balance.toFixed(2)}
-                </Text>
-              </View>
+      <FadeInView style={{ flex: 1 }}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={() => fetchData(year, month)} />
+          }
+        >
+          <View style={styles.monthSelector}>
+            <ScaleButton onPress={prevMonth} style={styles.monthArrow}>
+              <Ionicons name="chevron-back" size={20} color={theme.colors.textSecondary} />
+            </ScaleButton>
+            <View style={styles.monthBadge}>
+              <Text style={styles.monthText}>{currentMonthLabel}</Text>
             </View>
+            <ScaleButton onPress={nextMonth} style={styles.monthArrow}>
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+            </ScaleButton>
+          </View>
 
-            {renderCategoryTable(expenseData, '支出分类统计', '#cf1322')}
-            {renderCategoryTable(incomeData, '收入分类统计', '#3f8600')}
-          </>
-        ) : null}
-      </ScrollView>
+          {loading && !monthlyData ? (
+            <SkeletonCard lines={3} />
+          ) : monthlyData ? (
+            <>
+              <View style={styles.statsRow}>
+                <View style={styles.statFlex}>
+                  <StatCard
+                    label="收入"
+                    value={`¥${monthlyData.totalIncome.toFixed(2)}`}
+                    type="income"
+                    icon="arrow-down"
+                  />
+                </View>
+                <View style={styles.statFlex}>
+                  <StatCard
+                    label="支出"
+                    value={`¥${monthlyData.totalExpense.toFixed(2)}`}
+                    type="expense"
+                    icon="arrow-up"
+                  />
+                </View>
+                <View style={styles.statFlex}>
+                  <StatCard
+                    label="结余"
+                    value={`¥${monthlyData.balance.toFixed(2)}`}
+                    type="balance"
+                    icon="wallet"
+                  />
+                </View>
+              </View>
+
+              {expenseData.length > 0 && (
+                <View style={styles.chartCard}>
+                  <View style={styles.chartHeader}>
+                    <Ionicons name="pie-chart" size={18} color={theme.colors.error} />
+                    <Text style={styles.chartTitle}>支出构成</Text>
+                  </View>
+                  <DonutChart data={expenseData} />
+                </View>
+              )}
+
+              {incomeData.length > 0 && (
+                <View style={styles.chartCard}>
+                  <View style={styles.chartHeader}>
+                    <Ionicons name="pie-chart" size={18} color={theme.colors.success} />
+                    <Text style={styles.chartTitle}>收入构成</Text>
+                  </View>
+                  <DonutChart data={incomeData} />
+                </View>
+              )}
+
+              {expenseData.length === 0 && incomeData.length === 0 && (
+                <EmptyState
+                  icon="bar-chart-outline"
+                  title="暂无数据"
+                  description="该月份暂无记账记录"
+                />
+              )}
+            </>
+          ) : (
+            <EmptyState
+              icon="bar-chart-outline"
+              title="暂无数据"
+              description="该月份暂无记账记录"
+            />
+          )}
+        </ScrollView>
+      </FadeInView>
     </SafeAreaView>
   )
 }
@@ -156,131 +169,82 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.colors.background,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.colors.borderLight,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#18181b',
+    ...theme.typography.h1,
+    color: theme.colors.primary,
+  },
+  headerSubtitle: {
+    ...theme.typography.caption,
+    color: theme.colors.textSecondary,
+    marginTop: 4,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
   },
   monthSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: theme.spacing.lg,
   },
   monthArrow: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...theme.shadows.small,
+  },
+  monthBadge: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    marginHorizontal: theme.spacing.md,
   },
   monthText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#18181b',
-    marginHorizontal: 24,
+    fontSize: 16,
+    fontWeight: '700',
+    color: theme.colors.surface,
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+    gap: 8,
+    marginBottom: theme.spacing.md,
   },
-  statCard: {
+  statFlex: {
     flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 14,
-    marginHorizontal: 4,
-    borderTopWidth: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#8c8c8c',
-    marginBottom: 6,
+  chartCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    ...theme.shadows.small,
   },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  tableCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  tableHeader: {
-    padding: 14,
-    borderLeftWidth: 3,
-    backgroundColor: '#fafafa',
-  },
-  tableTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#18181b',
-  },
-  tableRow: {
+  chartHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#f5f5f5',
+    gap: 8,
+    marginBottom: theme.spacing.md,
   },
-  categoryName: {
-    width: 70,
-    fontSize: 13,
-    color: '#18181b',
-  },
-  barContainer: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 4,
-    marginHorizontal: 8,
-    overflow: 'hidden',
-  },
-  bar: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  amount: {
-    width: 90,
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'right',
-  },
-  percentage: {
-    width: 40,
-    fontSize: 12,
-    color: '#8c8c8c',
-    textAlign: 'right',
-  },
-  emptyText: {
-    padding: 20,
-    textAlign: 'center',
-    color: '#8c8c8c',
-    fontSize: 13,
+  chartTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
 })

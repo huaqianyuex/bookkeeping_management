@@ -13,6 +13,7 @@
     "axios": "^1.16.1",
     "dayjs": "^1.11.20",
     "expo": "~56.0.4",
+    "expo-image-picker": "~56.0.17",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",

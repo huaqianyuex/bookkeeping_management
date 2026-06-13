@@ -13,6 +13,7 @@ import AddEditRecordScreen from '../screens/AddEditRecordScreen'
 import CategoriesScreen from '../screens/CategoriesScreen'
 import UserInfoScreen from '../screens/UserInfoScreen'
 import ChangePasswordScreen from '../screens/ChangePasswordScreen'
+import AiChatScreen from '../screens/AiChatScreen'
 
 const Stack = createNativeStackNavigator()
 const Tab = createBottomTabNavigator()
@@ -61,6 +62,11 @@ function ProfileStackNavigator() {
         name="ChangePassword"
         component={ChangePasswordScreen}
         options={{ title: '修改密码', headerTintColor: '#18181b' }}
+      />
+      <ProfileStack.Screen
+        name="AiChat"
+        component={AiChatScreen}
+        options={{ title: 'AI记账助手', headerTintColor: '#18181b' }}
       />
     </ProfileStack.Navigator>
   )

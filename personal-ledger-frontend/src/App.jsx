@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import './styles/design-tokens.css'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ConfigProvider } from 'antd'
+import { ConfigProvider, App as AntdApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { AuthProvider } from './context/AuthContext'
 import MainLayout from './components/MainLayout'
 import AuthRoute from './components/AuthRoute'
+import AdminRoute from './components/AdminRoute'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -12,6 +13,10 @@ import Records from './pages/Records'
 import Categories from './pages/Categories'
 import UserInfo from './pages/UserInfo'
 import ChangePassword from './pages/ChangePassword'
+import AdminDashboard from './pages/AdminDashboard'
+import AdminUsers from './pages/AdminUsers'
+import AdminRecords from './pages/AdminRecords'
+import AiChatPage from './pages/AiChat'
 
 function AppContent() {
   return (
@@ -29,6 +34,10 @@ function AppContent() {
         <Route path="categories" element={<Categories />} />
         <Route path="user-info" element={<UserInfo />} />
         <Route path="change-password" element={<ChangePassword />} />
+        <Route path="admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
+        <Route path="admin/records" element={<AdminRoute><AdminRecords /></AdminRoute>} />
+        <Route path="ai-chat" element={<AiChatPage />} />
       </Route>
     </Routes>
   )
@@ -36,29 +45,56 @@ function AppContent() {
 
 const customTheme = {
   token: {
-    colorPrimary: '#18181b',
-    colorBgLayout: '#fafafa',
+    colorPrimary: '#1a1a2e',
+    colorPrimaryBg: '#f0f0ff',
+    colorBgLayout: '#f5f5f7',
     colorBgContainer: '#ffffff',
-    colorBorderSecondary: '#f4f4f5',
-    borderRadius: 6,
-    wireframe: false,
-    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)',
+    colorBorder: '#e5e5ea',
+    colorBorderSecondary: '#eaeaef',
+    colorText: '#1a1a2e',
+    colorTextSecondary: '#636e72',
+    borderRadius: 10,
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   },
   components: {
     Layout: {
       siderBg: '#ffffff',
       headerBg: '#ffffff',
-      bodyBg: '#fafafa',
+      bodyBg: '#f5f5f7',
+      triggerBg: '#f5f5f7',
     },
     Menu: {
       itemBg: '#ffffff',
-      itemActiveBg: '#f4f4f5',
-      itemSelectedBg: '#f4f4f5',
-      itemSelectedColor: '#18181b',
-      itemHoverBg: '#f4f4f5',
+      itemActiveBg: '#f0f0ff',
+      itemSelectedBg: '#f0f0ff',
+      itemSelectedColor: '#1a1a2e',
+      itemHoverBg: '#f8f8fa',
+      itemColor: '#636e72',
+      itemBorderRadius: 8,
+      itemMarginInline: 8,
+      itemPaddingInline: 16,
     },
     Card: {
       headerBg: 'transparent',
+      borderRadiusLG: 12,
+    },
+    Button: {
+      primaryShadow: '0 2px 8px rgba(26, 26, 46, 0.2)',
+    },
+    Input: {
+      activeBorderColor: '#1a1a2e',
+      hoverBorderColor: '#636e72',
+    },
+    Table: {
+      headerBg: '#fafafa',
+      headerColor: '#636e72',
+      rowHoverBg: '#f8f8fa',
+    },
+    Tag: {
+      borderRadiusSM: 6,
+    },
+    Empty: {
+      colorTextDisabled: '#b2bec3',
     },
   },
 }
@@ -66,11 +102,13 @@ const customTheme = {
 export default function App() {
   return (
     <ConfigProvider locale={zhCN} theme={customTheme}>
-      <AuthProvider>
-        <HashRouter>
-          <AppContent />
-        </HashRouter>
-      </AuthProvider>
+      <AntdApp>
+        <AuthProvider>
+          <HashRouter>
+            <AppContent />
+          </HashRouter>
+        </AuthProvider>
+      </AntdApp>
     </ConfigProvider>
   )
 }

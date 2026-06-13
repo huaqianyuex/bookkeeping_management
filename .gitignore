@@ -12,3 +12,30 @@ backend/test_backend/
 .idea/
 *.iml
 .vscode/
+
+# Agent tool directories
+.agents/
+.codebuddy/
+.workbuddy/
+personal-ledger-frontend/.agents/
+personal-ledger-mobile/.workbuddy/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Build artifacts
+unpackage/
+
+# Generated reports and docs
+项目技术报告.md
+毕设项目完整介绍.md
+智能记账分析系统-需求文档/
+
+# Lock files
+skills-lock.json
+personal-ledger-frontend/skills-lock.json
+
+# Binary documents
+*.docx

@@ -94,6 +94,8 @@ CREATE TABLE `user` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `username` varchar(50) NOT NULL,
   `password` varchar(100) NOT NULL,
+  `avatar_url` varchar(255) DEFAULT NULL COMMENT '头像URL',
+  `role` tinyint NOT NULL DEFAULT '0' COMMENT '0普通用户 1管理员',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
