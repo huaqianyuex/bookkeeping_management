@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- namespace必须与对应的Mapper接口全限定名一致 -->
+<mapper namespace="com.example.test_backend.Mapper.StatisticsMapper">
+
+    <select id="get_monthly_records">
+        SELECT
+            #{year} AS year,
+                #{month} AS month,
+            COALESCE(SUM(CASE WHEN c.type = 1 THEN r.amount ELSE 0 END), 0) AS totalIncome,
+            COALESCE(SUM(CASE WHEN c.type = 0 THEN r.amount ELSE 0 END), 0) AS totalExpense
+        FROM record r
+            LEFT JOIN category c ON r.category_id = c.id
+        WHERE r.user_id = #{userId}
+          AND YEAR(r.record_date) = #{year}
+          AND MONTH(r.record_date) = #{month}
+    </select>
+</mapper>
+

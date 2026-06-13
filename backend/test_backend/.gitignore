@@ -1,0 +1,16 @@
+target/
+.idea/
+*.class
+*.jar
+*.war
+*.log
+*.iml
+bin-debug/
+bin-release/
+[Oo]bj/
+[Bb]in/
+.settings/
+*.swf
+*.air
+*.ipa
+*.apk

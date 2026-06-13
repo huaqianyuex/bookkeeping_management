@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- namespace必须与对应的Mapper接口全限定名一致 -->
+<mapper namespace="com.example.test_backend.Mapper.RecordMapper">
+    <select id="selectRecordVOById" resultType="com.example.test_backend.entity.Vo.RecordVO">
+        SELECT
+            r.id,
+            r.user_id,
+            r.category_id,
+            r.amount,
+            r.remark,
+            r.record_date,
+            r.create_time,
+            r.update_time,
+            c.name AS categoryName,
+            c.type AS categoryType
+        FROM record r
+        LEFT JOIN category c ON r.category_id = c.id
+        WHERE r.id = #{id}
+    </select>
+
+
+</mapper>
+
