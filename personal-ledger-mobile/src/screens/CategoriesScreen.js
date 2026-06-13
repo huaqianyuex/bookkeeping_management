@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react'
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, RefreshControl, TextInput, Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { getCategoryList, addCategory, updateCategory, deleteCategory } from '../api/category'
+import { theme } from '../config/theme'
+import SkeletonCard from '../components/SkeletonCard'
+import EmptyState from '../components/EmptyState'
+import FadeInView from '../components/FadeInView'
+import ScaleButton from '../components/ScaleButton'
 
 export default function CategoriesScreen() {
   const [list, setList] = useState([])
@@ -94,96 +99,142 @@ export default function CategoriesScreen() {
     }
   }
 
-  const renderCategory = ({ item }) => (
-    <TouchableOpacity
+  const expenseCategories = list.filter(c => c.type === 0)
+  const incomeCategories = list.filter(c => c.type === 1)
+
+  const renderCategoryItem = (item) => (
+    <ScaleButton
+      key={item.id}
       style={styles.categoryItem}
-      activeOpacity={0.7}
       onPress={() => handleEdit(item)}
     >
-      <View style={styles.categoryLeft}>
-        <View style={[
-          styles.typeDot,
-          { backgroundColor: item.type === 0 ? '#cf1322' : '#3f8600' },
-        ]} />
-        <View>
-          <Text style={styles.categoryName}>{item.name}</Text>
-          <Text style={styles.categoryType}>
-            {item.type === 0 ? '支出' : '收入'}
-          </Text>
-        </View>
+      <View style={[
+        styles.categoryIcon,
+        { backgroundColor: item.type === 0 ? `${theme.colors.error}15` : `${theme.colors.success}15` }
+      ]}>
+        <Ionicons
+          name={item.type === 0 ? 'arrow-down' : 'arrow-up'}
+          size={20}
+          color={item.type === 0 ? theme.colors.error : theme.colors.success}
+        />
+      </View>
+      <View style={styles.categoryInfo}>
+        <Text style={styles.categoryName}>{item.name}</Text>
       </View>
       <TouchableOpacity
+        style={styles.deleteBtn}
         onPress={() => handleDelete(item.id)}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="trash-outline" size={18} color="#8c8c8c" />
+        <Ionicons name="trash-outline" size={18} color={theme.colors.textLight} />
       </TouchableOpacity>
-    </TouchableOpacity>
+    </ScaleButton>
   )
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>分类管理</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View>
+          <Text style={styles.headerTitle}>分类管理</Text>
+          <Text style={styles.headerSubtitle}>共 {list.length} 个分类</Text>
+        </View>
+        <ScaleButton style={styles.addBtn} onPress={handleAdd}>
+          <Ionicons name="add" size={24} color={theme.colors.surface} />
+        </ScaleButton>
       </View>
 
-      <FlatList
-        data={list}
-        renderItem={renderCategory}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.empty}>
-              <Ionicons name="grid-outline" size={48} color="#d9d9d9" />
-              <Text style={styles.emptyText}>暂无分类</Text>
-            </View>
-          ) : (
-            <ActivityIndicator color="#18181b" style={{ marginTop: 40 }} />
-          )
-        }
-      />
+      {loading && !refreshing ? (
+        <SkeletonCard lines={4} />
+      ) : (
+        <FadeInView style={{ flex: 1 }}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            {list.length === 0 ? (
+              <EmptyState
+                icon="grid-outline"
+                title="暂无分类"
+                description="点击右上角按钮添加分类"
+              />
+            ) : (
+              <>
+                {expenseCategories.length > 0 && (
+                  <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <View style={[styles.sectionDot, { backgroundColor: theme.colors.error }]} />
+                      <Text style={styles.sectionTitle}>支出分类</Text>
+                      <Text style={styles.sectionCount}>{expenseCategories.length}个</Text>
+                    </View>
+                    {expenseCategories.map(renderCategoryItem)}
+                  </View>
+                )}
+                {incomeCategories.length > 0 && (
+                  <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <View style={[styles.sectionDot, { backgroundColor: theme.colors.success }]} />
+                      <Text style={styles.sectionTitle}>收入分类</Text>
+                      <Text style={styles.sectionCount}>{incomeCategories.length}个</Text>
+                    </View>
+                    {incomeCategories.map(renderCategoryItem)}
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
+        </FadeInView>
+      )}
 
       <Modal visible={modalOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {editing ? '编辑分类' : '新增分类'}
-            </Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {editing ? '编辑分类' : '新增分类'}
+              </Text>
+              <TouchableOpacity onPress={() => setModalOpen(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.fieldLabel}>分类名称</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="请输入分类名称"
-              placeholderTextColor="#bfbfbf"
-              value={name}
-              onChangeText={setName}
-            />
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="请输入分类名称"
+                placeholderTextColor={theme.colors.textLight}
+                value={name}
+                onChangeText={setName}
+              />
+            </View>
 
             <Text style={styles.fieldLabel}>分类类型</Text>
             <View style={styles.typeOptions}>
-              <TouchableOpacity
-                style={[styles.typeOption, type === 0 && styles.typeOptionActive]}
+              <ScaleButton
+                style={[styles.typeOption, type === 0 && styles.typeOptionExpense]}
                 onPress={() => setType(0)}
               >
+                <View style={[styles.typeIconContainer, { backgroundColor: type === 0 ? `${theme.colors.error}15` : theme.colors.surfaceHover }]}>
+                  <Ionicons name="arrow-down" size={16} color={type === 0 ? theme.colors.error : theme.colors.textSecondary} />
+                </View>
                 <Text style={[styles.typeOptionText, type === 0 && styles.typeOptionTextActive]}>
                   支出
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.typeOption, type === 1 && styles.typeOptionActive]}
+              </ScaleButton>
+              <ScaleButton
+                style={[styles.typeOption, type === 1 && styles.typeOptionIncome]}
                 onPress={() => setType(1)}
               >
+                <View style={[styles.typeIconContainer, { backgroundColor: type === 1 ? `${theme.colors.success}15` : theme.colors.surfaceHover }]}>
+                  <Ionicons name="arrow-up" size={16} color={type === 1 ? theme.colors.success : theme.colors.textSecondary} />
+                </View>
                 <Text style={[styles.typeOptionText, type === 1 && styles.typeOptionTextActive]}>
                   收入
                 </Text>
-              </TouchableOpacity>
+              </ScaleButton>
             </View>
 
             <View style={styles.modalActions}>
@@ -199,7 +250,7 @@ export default function CategoriesScreen() {
                 disabled={submitting}
               >
                 {submitting ? (
-                  <ActivityIndicator color="#fff" size="small" />
+                  <ActivityIndicator color={theme.colors.surface} size="small" />
                 ) : (
                   <Text style={styles.saveBtnText}>确定</Text>
                 )}
@@ -215,168 +266,208 @@ export default function CategoriesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.colors.borderLight,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#18181b',
+    ...theme.typography.h1,
+    color: theme.colors.primary,
+  },
+  headerSubtitle: {
+    ...theme.typography.caption,
+    color: theme.colors.textSecondary,
+    marginTop: 4,
   },
   addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#18181b',
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  list: {
-    padding: 16,
-    paddingBottom: 32,
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
+  },
+  section: {
+    marginBottom: theme.spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.primary,
+    flex: 1,
+  },
+  sectionCount: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontWeight: '500',
   },
   categoryItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    ...theme.shadows.small,
   },
-  categoryLeft: {
-    flexDirection: 'row',
+  categoryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.sm,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginRight: theme.spacing.md,
   },
-  typeDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 12,
+  categoryInfo: {
+    flex: 1,
   },
   categoryName: {
     fontSize: 15,
-    fontWeight: '500',
-    color: '#18181b',
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
-  categoryType: {
-    fontSize: 12,
-    color: '#8c8c8c',
-    marginTop: 2,
-  },
-  empty: {
-    alignItems: 'center',
+  deleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.background,
     justifyContent: 'center',
-    paddingTop: 80,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#8c8c8c',
-    marginTop: 12,
+    alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: theme.colors.shadowDark,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 24,
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.borderRadius.xl,
+    borderTopRightRadius: theme.borderRadius.xl,
+    padding: theme.spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#18181b',
-    marginBottom: 20,
+    ...theme.typography.h2,
+    color: theme.colors.primary,
   },
   fieldLabel: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#18181b',
-    marginBottom: 8,
-    marginTop: 12,
+    fontWeight: '600',
+    color: theme.colors.primary,
+    marginBottom: 10,
+  },
+  inputContainer: {
+    marginBottom: theme.spacing.md,
   },
   input: {
-    height: 48,
+    height: 50,
     borderWidth: 1,
-    borderColor: '#e8e8e8',
-    borderRadius: 8,
-    paddingHorizontal: 16,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.md,
+    paddingHorizontal: theme.spacing.md,
     fontSize: 16,
-    color: '#18181b',
-    backgroundColor: '#fafafa',
+    color: theme.colors.text,
+    backgroundColor: theme.colors.background,
   },
   typeOptions: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: theme.spacing.lg,
   },
   typeOption: {
     flex: 1,
-    height: 44,
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 50,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surfaceHover,
+    gap: 8,
+  },
+  typeOptionExpense: {
+    backgroundColor: `${theme.colors.error}15`,
+    borderWidth: 1,
+    borderColor: theme.colors.error,
+  },
+  typeOptionIncome: {
+    backgroundColor: `${theme.colors.success}15`,
+    borderWidth: 1,
+    borderColor: theme.colors.success,
+  },
+  typeIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: theme.borderRadius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#f5f5f5',
-  },
-  typeOptionActive: {
-    backgroundColor: '#18181b',
-    borderColor: '#18181b',
   },
   typeOptionText: {
     fontSize: 15,
-    fontWeight: '500',
-    color: '#595959',
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
   },
   typeOptionTextActive: {
-    color: '#fff',
+    color: theme.colors.primary,
   },
   modalActions: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 24,
   },
   cancelBtn: {
     flex: 1,
-    height: 44,
-    borderRadius: 8,
+    height: 50,
+    borderRadius: theme.borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.colors.surfaceHover,
   },
   cancelBtnText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#595959',
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
   },
   saveBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 8,
+    flex: 2,
+    height: 50,
+    borderRadius: theme.borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#18181b',
+    backgroundColor: theme.colors.primary,
   },
   saveBtnText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: theme.colors.surface,
   },
 })

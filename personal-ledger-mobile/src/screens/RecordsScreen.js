@@ -1,15 +1,22 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import {
   View, Text, StyleSheet, SectionList, TouchableOpacity,
   Alert, ActivityIndicator, RefreshControl, Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useFocusEffect } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 import dayjs from 'dayjs'
 import { getRecordPage, deleteRecord } from '../api/record'
 import { getCategoryList } from '../api/category'
+import { theme } from '../config/theme'
+import RecordItem from '../components/RecordItem'
+import SkeletonCard from '../components/SkeletonCard'
+import EmptyState from '../components/EmptyState'
+import FadeInView from '../components/FadeInView'
+import ScaleButton from '../components/ScaleButton'
 
-export default function RecordsScreen({ navigation }) {
+export default function RecordsScreen({ navigation, route }) {
   const [data, setData] = useState({ records: [], total: 0, pages: 0, current: 1, size: 20 })
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -46,10 +53,32 @@ export default function RecordsScreen({ navigation }) {
     }
   }, [])
 
+  // 使用 ref 保存当前筛选值，避免 useFocusEffect 闭包陈旧
+  const filterCategoryRef = useRef(filterCategory)
+  filterCategoryRef.current = filterCategory
+
+  // 每次屏幕获得焦点时，强制从第1页重新加载数据
+  // 解决从新增/编辑页面返回后列表不刷新的问题
+  useFocusEffect(
+    useCallback(() => {
+      fetchCategories()
+      const params = { page: 1, size: 20 }
+      if (filterCategoryRef.current) params.categoryId = filterCategoryRef.current
+      setQuery(params)
+      fetchData(params)
+    }, [])
+  )
+
+  // 监听 route.params.refresh 信号作为辅助刷新机制
+  // 当 AddEditRecord 保存成功后 navigate 回来时会携带此参数
   useEffect(() => {
-    fetchCategories()
-    fetchData(query)
-  }, [])
+    if (route.params?.refresh) {
+      const params = { page: 1, size: 20 }
+      if (filterCategory) params.categoryId = filterCategory
+      setQuery(params)
+      fetchData(params)
+    }
+  }, [route.params?.refresh])
 
   const sections = useMemo(() => {
     const groups = {}
@@ -125,74 +154,49 @@ export default function RecordsScreen({ navigation }) {
   const renderSectionHeader = ({ section }) => {
     const d = dayjs(section.title)
     const dayOfWeek = ['日', '一', '二', '三', '四', '五', '六'][d.day()]
+    const isToday = dayjs().format('YYYY-MM-DD') === section.title
+
     return (
       <View style={styles.sectionHeader}>
-        <View style={styles.sectionHeaderTop}>
-          <View style={styles.sectionHeaderLeft}>
+        <View style={styles.sectionHeaderLeft}>
+          <View style={[styles.dateBadge, isToday && styles.dateBadgeToday]}>
+            <Text style={[styles.dateBadgeDay, isToday && styles.dateBadgeDayToday]}>{d.format('DD')}</Text>
+          </View>
+          <View>
             <Text style={styles.sectionDate}>{section.title}</Text>
-            <Text style={styles.sectionDay}>周{dayOfWeek}</Text>
+            <Text style={styles.sectionDay}>周{dayOfWeek}{isToday ? ' · 今天' : ''}</Text>
           </View>
-          <View style={styles.sectionHeaderRight}>
-            {section.totalIncome > 0 && (
-              <Text style={styles.sectionIncome}>收 ¥{section.totalIncome.toFixed(2)}</Text>
-            )}
-            {section.totalExpense > 0 && (
-              <Text style={styles.sectionExpense}>支 ¥{section.totalExpense.toFixed(2)}</Text>
-            )}
-          </View>
+        </View>
+        <View style={styles.sectionSummary}>
+          {section.totalIncome > 0 && (
+            <View style={styles.summaryItem}>
+              <Ionicons name="arrow-down" size={12} color={theme.colors.success} />
+              <Text style={styles.sectionIncome}>¥{section.totalIncome.toFixed(2)}</Text>
+            </View>
+          )}
+          {section.totalExpense > 0 && (
+            <View style={styles.summaryItem}>
+              <Ionicons name="arrow-up" size={12} color={theme.colors.error} />
+              <Text style={styles.sectionExpense}>¥{section.totalExpense.toFixed(2)}</Text>
+            </View>
+          )}
         </View>
       </View>
     )
   }
 
-  const renderRecord = ({ item }) => (
-    <TouchableOpacity
-      style={styles.recordItem}
-      activeOpacity={0.7}
-      onPress={() => navigation.navigate('AddEditRecord', { record: item })}
-    >
-      <View style={styles.recordLeft}>
-        <View style={[
-          styles.typeBadge,
-          { backgroundColor: item.categoryType === 0 ? '#fff1f0' : '#f6ffed' },
-        ]}>
-          <Ionicons
-            name={item.categoryType === 0 ? 'arrow-down' : 'arrow-up'}
-            size={14}
-            color={item.categoryType === 0 ? '#cf1322' : '#3f8600'}
-          />
-        </View>
-        <View style={styles.recordInfo}>
-          <Text style={styles.recordCategory}>{item.categoryName}</Text>
-          {item.remark ? (
-            <Text style={styles.recordRemark} numberOfLines={1}>{item.remark}</Text>
-          ) : null}
-        </View>
-      </View>
-      <View style={styles.recordRight}>
-        <Text style={[
-          styles.recordAmount,
-          { color: item.categoryType === 0 ? '#cf1322' : '#3f8600' },
-        ]}>
-          {item.categoryType === 0 ? '-' : '+'}¥{item.amount.toFixed(2)}
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={styles.deleteBtn}
-        onPress={() => handleDelete(item.id)}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Ionicons name="trash-outline" size={18} color="#8c8c8c" />
-      </TouchableOpacity>
-    </TouchableOpacity>
-  )
-
   const renderFooter = () => {
     if (loading && data.records.length > 0) {
-      return <ActivityIndicator color="#18181b" style={{ padding: 16 }} />
+      return <ActivityIndicator color={theme.colors.primary} style={{ padding: theme.spacing.md }} />
     }
     if (data.current >= data.pages && data.records.length > 0) {
-      return <Text style={styles.footerText}>没有更多了</Text>
+      return (
+        <View style={styles.footer}>
+          <View style={styles.footerLine} />
+          <Text style={styles.footerText}>没有更多了</Text>
+          <View style={styles.footerLine} />
+        </View>
+      )
     }
     return null
   }
@@ -202,67 +206,86 @@ export default function RecordsScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>账单管理</Text>
+        <View>
+          <Text style={styles.headerTitle}>账单管理</Text>
+          <Text style={styles.headerSubtitle}>共 {data.total} 条记录</Text>
+        </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity
+          <ScaleButton
             style={[styles.filterBtn, filterCategory && styles.filterBtnActive]}
             onPress={() => setFilterOpen(true)}
           >
             <Ionicons
-              name="filter-outline"
-              size={20}
-              color={filterCategory ? '#fff' : '#18181b'}
+              name="filter"
+              size={18}
+              color={filterCategory ? theme.colors.surface : theme.colors.textSecondary}
             />
-          </TouchableOpacity>
-          {filterCategory && (
-            <Text style={styles.filterLabel} numberOfLines={1}>
-              {activeFilterCategory?.name}
-            </Text>
-          )}
-          <TouchableOpacity
+          </ScaleButton>
+          <ScaleButton
             style={styles.addBtn}
             onPress={() => navigation.navigate('AddEditRecord', {})}
           >
-            <Ionicons name="add" size={24} color="#fff" />
-          </TouchableOpacity>
+            <Ionicons name="add" size={24} color={theme.colors.surface} />
+          </ScaleButton>
         </View>
       </View>
 
-      <SectionList
-        sections={sections}
-        renderItem={renderRecord}
-        renderSectionHeader={renderSectionHeader}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
-        stickySectionHeadersEnabled={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.3}
-        ListFooterComponent={renderFooter}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.empty}>
-              <Ionicons name="receipt-outline" size={48} color="#d9d9d9" />
-              <Text style={styles.emptyText}>暂无账单记录</Text>
-              <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={() => navigation.navigate('AddEditRecord', {})}
-              >
-                <Text style={styles.emptyBtnText}>记一笔</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <ActivityIndicator color="#18181b" style={{ marginTop: 40 }} />
-          )
-        }
-      />
+      {filterCategory && (
+        <View style={styles.activeFilter}>
+          <Text style={styles.activeFilterText}>
+            筛选: {activeFilterCategory?.name}
+          </Text>
+          <TouchableOpacity onPress={handleReset}>
+            <Ionicons name="close-circle" size={18} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <FadeInView style={{ flex: 1 }}>
+        <SectionList
+          sections={sections}
+          renderItem={({ item }) => (
+            <RecordItem
+              item={item}
+              onPress={() => navigation.navigate('AddEditRecord', { record: item })}
+              onDelete={handleDelete}
+            />
+          )}
+          renderSectionHeader={renderSectionHeader}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={
+            !loading ? (
+              <EmptyState
+                icon="receipt-outline"
+                title="暂无账单记录"
+                description="点击下方按钮开始记账"
+                actionLabel="记一笔"
+                onAction={() => navigation.navigate('AddEditRecord', {})}
+              />
+            ) : (
+              <SkeletonCard lines={5} variant="list" />
+            )
+          }
+        />
+      </FadeInView>
 
       <Modal visible={filterOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>筛选条件</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>筛选条件</Text>
+              <TouchableOpacity onPress={() => setFilterOpen(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.filterLabelTitle}>分类</Text>
             <View style={styles.filterOptions}>
@@ -270,7 +293,9 @@ export default function RecordsScreen({ navigation }) {
                 style={[styles.filterOption, !filterCategory && styles.filterOptionActive]}
                 onPress={() => handleSearch(null)}
               >
-                <Text style={[styles.filterOptionText, !filterCategory && styles.filterOptionTextActive]}>全部</Text>
+                <Text style={[styles.filterOptionText, !filterCategory && styles.filterOptionTextActive]}>
+                  全部
+                </Text>
               </TouchableOpacity>
               {categories.map((c) => (
                 <TouchableOpacity
@@ -286,8 +311,14 @@ export default function RecordsScreen({ navigation }) {
             </View>
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalBtn} onPress={handleReset}>
-                <Text style={styles.modalBtnText}>重置</Text>
+              <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
+                <Text style={styles.resetBtnText}>重置</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyBtn}
+                onPress={() => setFilterOpen(false)}
+              >
+                <Text style={styles.applyBtnText}>确定</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -300,229 +331,231 @@ export default function RecordsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fafafa',
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.colors.borderLight,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#18181b',
+    ...theme.typography.h1,
+    color: theme.colors.primary,
+  },
+  headerSubtitle: {
+    ...theme.typography.caption,
+    color: theme.colors.textSecondary,
+    marginTop: 4,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   filterBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.colors.surfaceHover,
   },
   filterBtnActive: {
-    backgroundColor: '#18181b',
-  },
-  filterLabel: {
-    fontSize: 12,
-    color: '#8c8c8c',
-    maxWidth: 60,
+    backgroundColor: theme.colors.primary,
   },
   addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#18181b',
+    width: 40,
+    height: 40,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  activeFilter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: `${theme.colors.accent}15`,
+  },
+  activeFilterText: {
+    fontSize: 13,
+    color: theme.colors.accent,
+    fontWeight: '500',
   },
   list: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
   },
   sectionHeader: {
-    paddingTop: 20,
-    paddingBottom: 8,
-  },
-  sectionHeaderTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
   },
   sectionHeaderLeft: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
+    alignItems: 'center',
+  },
+  dateBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surfaceHover,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: theme.spacing.md,
+  },
+  dateBadgeToday: {
+    backgroundColor: theme.colors.primary,
+  },
+  dateBadgeDay: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.colors.text,
+  },
+  dateBadgeDayToday: {
+    color: theme.colors.surface,
   },
   sectionDate: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#18181b',
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   sectionDay: {
     fontSize: 12,
-    color: '#8c8c8c',
+    color: theme.colors.textSecondary,
+    marginTop: 2,
   },
-  sectionHeaderRight: {
+  sectionSummary: {
     flexDirection: 'row',
     gap: 12,
   },
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   sectionIncome: {
-    fontSize: 12,
-    color: '#3f8600',
-    fontWeight: '500',
-  },
-  sectionExpense: {
-    fontSize: 12,
-    color: '#cf1322',
-    fontWeight: '500',
-  },
-  recordItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
-  },
-  recordLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  typeBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  recordInfo: {
-    flex: 1,
-  },
-  recordCategory: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#18181b',
-  },
-  recordRemark: {
-    fontSize: 12,
-    color: '#8c8c8c',
-    marginTop: 2,
-  },
-  recordRight: {
-    alignItems: 'flex-end',
-    marginRight: 8,
-  },
-  recordAmount: {
-    fontSize: 15,
+    fontSize: 13,
+    color: theme.colors.success,
     fontWeight: '600',
   },
-  deleteBtn: {
-    padding: 4,
+  sectionExpense: {
+    fontSize: 13,
+    color: theme.colors.error,
+    fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 12,
+  },
+  footerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.border,
   },
   footerText: {
     textAlign: 'center',
-    color: '#bfbfbf',
+    color: theme.colors.textLight,
     fontSize: 13,
-    paddingVertical: 20,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#8c8c8c',
-    marginTop: 12,
-  },
-  emptyBtn: {
-    marginTop: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    backgroundColor: '#18181b',
-    borderRadius: 8,
-  },
-  emptyBtnText: {
-    color: '#fff',
-    fontSize: 14,
     fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: theme.colors.shadowDark,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 24,
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.borderRadius.xl,
+    borderTopRightRadius: theme.borderRadius.xl,
+    padding: theme.spacing.lg,
     maxHeight: '70%',
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#18181b',
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
+  },
+  modalTitle: {
+    ...theme.typography.h2,
+    color: theme.colors.primary,
   },
   filterLabelTitle: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#18181b',
-    marginBottom: 10,
+    fontWeight: '600',
+    color: theme.colors.primary,
+    marginBottom: 12,
   },
   filterOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 24,
+    gap: 10,
+    marginBottom: theme.spacing.lg,
   },
   filterOption: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#f5f5f5',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surfaceHover,
   },
   filterOptionActive: {
-    backgroundColor: '#18181b',
+    backgroundColor: theme.colors.primary,
   },
   filterOptionText: {
-    fontSize: 13,
-    color: '#595959',
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    fontWeight: '500',
   },
   filterOptionTextActive: {
-    color: '#fff',
-    fontWeight: '500',
+    color: theme.colors.surface,
+    fontWeight: '600',
   },
   modalActions: {
     flexDirection: 'row',
     gap: 12,
   },
-  modalBtn: {
+  resetBtn: {
     flex: 1,
-    height: 44,
-    borderRadius: 8,
+    height: 50,
+    borderRadius: theme.borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.colors.surfaceHover,
   },
-  modalBtnText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#595959',
+  resetBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  applyBtn: {
+    flex: 2,
+    height: 50,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.primary,
+  },
+  applyBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.surface,
   },
 })

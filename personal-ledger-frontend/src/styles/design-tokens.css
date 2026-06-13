@@ -1,0 +1,265 @@
+/* ============================================================
+   Design Tokens - Personal Ledger App
+   Modern, clean, professional aesthetic (Linear/Vercel-inspired)
+   ============================================================ */
+
+:root {
+  /* ── Color Palette ── */
+  /* Primary - Deep navy */
+  --color-primary: #1a1a2e;
+  --color-primary-light: #2d3748;
+  --color-primary-bg: #f0f0ff;
+
+  /* Success / Income */
+  --color-success: #00b894;
+  --color-success-light: #00cec9;
+  --color-success-bg: rgba(0, 184, 148, 0.08);
+
+  /* Danger / Expense */
+  --color-danger: #e94560;
+  --color-danger-light: #ff6b6b;
+  --color-danger-bg: rgba(233, 69, 96, 0.08);
+
+  /* Warning */
+  --color-warning: #feca57;
+  --color-warning-bg: rgba(254, 202, 87, 0.08);
+
+  /* Info */
+  --color-info: #54a0ff;
+  --color-info-bg: rgba(84, 160, 255, 0.08);
+
+  /* Background layers */
+  --color-bg: #f5f5f7;
+  --color-bg-subtle: #fafafa;
+
+  /* Surface (cards, panels) */
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+
+  /* Text hierarchy */
+  --color-text: #1a1a2e;
+  --color-text-secondary: #636e72;
+  --color-text-tertiary: #a0a0a8;
+  --color-text-inverse: #ffffff;
+  --color-text-disabled: #c0c0c8;
+
+  /* Border */
+  --color-border: #e5e5ea;
+  --color-border-secondary: #eaeaef;
+  --color-border-focus: #1a1a2e;
+
+  /* ── Spacing Scale ── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-base: 16px;
+  --space-lg: 20px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 40px;
+  --space-4xl: 48px;
+
+  /* ── Border Radius Scale ── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.04);
+
+  /* Sider shadow */
+  --shadow-sider: 2px 0 8px rgba(0, 0, 0, 0.03);
+
+  /* ── Font Size Scale ── */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-md: 15px;
+  --font-size-lg: 17px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 30px;
+
+  /* Font weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Line heights */
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+  --line-height-relaxed: 1.65;
+
+  /* ── Transitions ── */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+  --transition-slower: 400ms ease-out;
+
+  /* ── Z-Index Scale ── */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+
+  /* ── Layout Constants ── */
+  --sider-width: 240px;
+  --sider-collapsed-width: 72px;
+  --header-height: 64px;
+  --content-max-width: 1200px;
+}
+
+/* ============================================================
+   Utility Classes - Derived from Tokens
+   ============================================================ */
+
+/* Card base style using design tokens */
+.card-base {
+  border-radius: var(--radius-lg);
+  border: none;
+  box-shadow: var(--shadow-sm);
+  background-color: var(--color-surface);
+}
+
+.card-elevated {
+  box-shadow: var(--shadow-md);
+}
+
+/* Text utilities */
+.text-primary { color: var(--color-text); }
+.text-secondary { color: var(--color-text-secondary); }
+.text-tertiary { color: var(--color-text-tertiary); }
+.text-success { color: var(--color-success); }
+.text-danger { color: var(--color-danger); }
+
+/* Color indicator dot (used in SectionTitle) */
+.color-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.color-dot--danger { background: var(--color-danger); }
+.color-dot--success { background: var(--color-success); }
+.color-dot--primary { background: var(--color-primary); }
+.color-dot--info { background: var(--color-info); }
+.color-dot--warning { background: var(--color-warning); }
+
+/* Stat card icon gradient backgrounds */
+.gradient-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.gradient-icon--success {
+  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-light) 100%);
+}
+.gradient-icon--danger {
+  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-light) 100%);
+}
+.gradient-icon--primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+}
+.gradient-icon--balance-positive {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+}
+.gradient-icon--balance-negative {
+  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-light) 100%);
+}
+
+/* Page transition keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animated-route {
+  animation: fadeInUp var(--transition-slow) ease both;
+}
+
+/* Menu item hover enhancement */
+.menu-item-hover {
+  transition: all var(--transition-fast);
+  border-radius: var(--radius-md);
+}
+
+.menu-item-hover:hover {
+  background-color: var(--color-bg) !important;
+}
+
+/* Logo gradient */
+.logo-gradient {
+  background: linear-gradient(135deg, var(--color-primary) 0%, #2d3748 50%, #4a5568 100%);
+}
+
+/* Progress bar base */
+.progress-bar-track {
+  width: 60px;
+  height: 6px;
+  border-radius: 3px;
+  background: #f0f0f0;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--color-primary);
+  transition: width var(--transition-slow);
+}
+
+/* Responsive container for page content */
+.page-container {
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0;
+  width: 100%;
+  max-width: var(--content-max-width);
+}
+
+.page-container--mobile {
+  margin: var(--space-base);
+}
+
+.page-container--desktop {
+  margin: var(--space-xl) auto;
+}
+
+/* Breadcrumb styles */
+.breadcrumb-nav {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.breadcrumb-current {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
