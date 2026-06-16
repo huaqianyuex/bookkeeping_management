@@ -381,9 +381,9 @@ async function startServer() {
   });
 
   app.listen(PORT, () => {
-    console.log(`🚀 聊天机器人服务器运行在 http://localhost:${PORT}`);
-    console.log(`📊 管理后台 API: http://localhost:${PORT}/api/admin/stats`);
-    console.log(`❤️  健康检查: http://localhost:${PORT}/api/health`);
+    console.log(` 聊天机器人服务器运行在 http://localhost:${PORT}`);
+    console.log(` 管理后台 API: http://localhost:${PORT}/api/admin/stats`);
+    console.log(` 健康检查: http://localhost:${PORT}/api/health`);
   });
 }
 
