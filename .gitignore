@@ -16,6 +16,8 @@ Thumbs.db
 .agents/
 .codebuddy/
 .workbuddy/
+.workbuddy-ai/
+.zcode/
 personal-ledger-frontend/.agents/
 
 # Database files
@@ -36,3 +38,15 @@ personal-ledger-frontend/skills-lock.json
 
 # Binary documents
 *.docx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ZCode agent directory
+.zcode/
+
+# Runtime user uploads
+fast_backend/uploads/

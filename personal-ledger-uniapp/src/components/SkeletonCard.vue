@@ -1,6 +1,5 @@
 <template>
 	<view class="skeleton-card">
-		<!-- 可选头像骨架 -->
 		<view v-if="showAvatar" class="skeleton-avatar"></view>
 		<view class="skeleton-lines">
 			<view
@@ -8,9 +7,7 @@
 				:key="i"
 				class="skeleton-line"
 				:class="{ 'is-title': i === 1 }"
-				:style="{
-					width: getWidth(i),
-				}"
+				:style="{ width: getWidth(i) }"
 			></view>
 		</view>
 	</view>
@@ -20,14 +17,8 @@
 export default {
 	name: 'SkeletonCard',
 	props: {
-		lines: {
-			type: Number,
-			default: 3,
-		},
-		showAvatar: {
-			type: Boolean,
-			default: false,
-		},
+		lines: { type: Number, default: 3 },
+		showAvatar: { type: Boolean, default: false },
 	},
 	methods: {
 		getWidth(index) {
@@ -44,7 +35,7 @@ export default {
 	background-color: var(--color-surface);
 	border-radius: var(--radius-2xl);
 	padding: var(--space-lg);
-	box-shadow: var(--shadow-xs);
+	box-shadow: var(--shadow-card);
 	display: flex;
 	align-items: flex-start;
 	gap: var(--space-lg);
@@ -55,13 +46,15 @@ export default {
 	height: 76rpx;
 	border-radius: var(--radius-xl);
 	background: linear-gradient(
-		90deg,
-		var(--color-border) 25%,
-		var(--color-surface-raised) 37%,
-		var(--color-border) 63%
+		110deg,
+		var(--color-border) 0%,
+		var(--color-border) 40%,
+		var(--color-surface-raised) 50%,
+		var(--color-border) 60%,
+		var(--color-border) 100%
 	);
-	background-size: 400% 100%;
-	animation: shimmer 1.6s ease infinite;
+	background-size: 300% 100%;
+	animation: shimmer 1.8s ease-in-out infinite;
 	flex-shrink: 0;
 }
 
@@ -72,15 +65,17 @@ export default {
 
 .skeleton-line {
 	height: 24rpx;
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-full);
 	background: linear-gradient(
-		90deg,
-		var(--color-border) 25%,
-		var(--color-surface-raised) 37%,
-		var(--color-border) 63%
+		110deg,
+		var(--color-border) 0%,
+		var(--color-border) 40%,
+		var(--color-surface-raised) 50%,
+		var(--color-border) 60%,
+		var(--color-border) 100%
 	);
-	background-size: 400% 100%;
-	animation: shimmer 1.6s ease infinite;
+	background-size: 300% 100%;
+	animation: shimmer 1.8s ease-in-out infinite;
 	margin-bottom: var(--space-sm);
 }
 
@@ -94,11 +89,7 @@ export default {
 }
 
 @keyframes shimmer {
-	0% {
-		background-position: 200% 0;
-	}
-	100% {
-		background-position: -200% 0;
-	}
+	0% { background-position: 100% 0; }
+	100% { background-position: -100% 0; }
 }
 </style>

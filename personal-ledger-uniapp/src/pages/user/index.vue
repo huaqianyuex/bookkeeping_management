@@ -3,7 +3,10 @@
 		<!-- 状态栏占位 -->
 		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 		<scroll-view scroll-y class="scroll-content">
-			<!-- 用户头像卡片 -->
+			<!-- 设计稿06：顶部大标题 -->
+			<text class="page-title">我的</text>
+
+			<!-- 设计稿06 用户卡：头像左 + 名称信息右 -->
 			<view class="profile-card">
 				<view class="avatar-container" @click="handlePickAvatar">
 					<image
@@ -13,25 +16,26 @@
 						mode="aspectFill"
 					/>
 					<view v-else class="avatar-placeholder">
-						<text class="avatar-emoji">👤</text>
+						<text class="avatar-emoji">{{ (userInfo?.username || '记').slice(0, 1) }}</text>
 					</view>
-					<view class="avatar-badge">
-						<text class="badge-icon">📷</text>
+						<view class="avatar-badge">
+							<text class="badge-icon">📷</text>
+						</view>
 					</view>
-					<view class="online-indicator"></view>
-				</view>
-				<text class="avatar-hint">点击更换头像</text>
 
 				<!-- 用户名 + 编辑 -->
-				<view class="username-row">
-					<text class="username">{{ userInfo?.username || '加载中...' }}</text>
-					<view class="edit-btn" @click="openUsernameEditor">
-						<text class="edit-icon">✏️</text>
+				<view class="profile-info">
+					<view class="username-row">
+						<text class="username">{{ userInfo?.username || '加载中...' }}</text>
+						<view class="edit-btn" @click="openUsernameEditor">
+							<text class="edit-icon">✏️</text>
+						</view>
 					</view>
-				</view>
 
-				<view class="user-id-badge">
-					<text class="user-id">ID: {{ userInfo?.id || '-' }}</text>
+					<view class="user-id-badge">
+						<text class="user-id">ID: {{ userInfo?.id || '-' }}</text>
+					</view>
+					<text class="avatar-hint">点击头像更换</text>
 				</view>
 			</view>
 
@@ -57,34 +61,27 @@
 						<view class="info-icon">⏰</view>
 						<text class="info-label">创建时间</text>
 					</view>
-					<text class="info-value">{{ formatDate(userInfo?.createTime) }}</text>
+					<text class="info-value">{{ formatDate(userInfo?.created_at) }}</text>
 				</view>
 				<view class="info-row last">
 					<view class="info-left">
 						<view class="info-icon">🔄</view>
 						<text class="info-label">更新时间</text>
 					</view>
-					<text class="info-value">{{ formatDate(userInfo?.updateTime) }}</text>
+					<text class="info-value">{{ formatDate(userInfo?.updated_at) }}</text>
 				</view>
 			</view>
 
-			<!-- 功能菜单 -->
-			<view class="menu-card">
-				<view class="menu-item" @click="goAiChat">
-					<view class="menu-left">
-						<view class="menu-icon">🤖</view>
-						<text class="menu-text">AI记账助手</text>
-					</view>
-					<text class="menu-arrow">›</text>
+		<!-- 功能菜单 -->
+		<view class="menu-card">
+			<view class="menu-item" @click="goPassword">
+				<view class="menu-left">
+					<view class="menu-icon">🔒</view>
+					<text class="menu-text">修改密码</text>
 				</view>
-				<view class="menu-item" @click="goPassword">
-					<view class="menu-left">
-						<view class="menu-icon">🔒</view>
-						<text class="menu-text">修改密码</text>
-					</view>
-					<text class="menu-arrow">›</text>
-				</view>
+				<text class="menu-arrow">›</text>
 			</view>
+		</view>
 
 			<!-- 退出按钮 -->
 			<view class="logout-btn" @click="handleLogout">
@@ -157,7 +154,7 @@ export default {
 	computed: {
 		/** 拼接完整的头像 URL */
 		avatarSrc() {
-			const avatarUrl = this.userInfo?.avatarUrl
+			const avatarUrl = this.userInfo?.avatar
 			if (!avatarUrl) return ''
 			if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
 				return avatarUrl
@@ -167,6 +164,12 @@ export default {
 		},
 	},
 	onShow() {
+		// 未登录/登录过期由 App.vue onLaunch 与 request.js 的全局 401 拦截统一处理，
+		// 此处不再主动 reLaunch，避免启动瞬间多个页面同时跳转造成 "do not operate continuously" 卡死。
+		const token = uni.getStorageSync('token')
+		if (!token) {
+			return
+		}
 		this.fetchUserInfo()
 	},
 	methods: {
@@ -298,9 +301,6 @@ export default {
 		goPassword() {
 			uni.navigateTo({ url: '/pages/password/index' })
 		},
-		goAiChat() {
-			uni.navigateTo({ url: '/pages/ai-chat/index' })
-		},
 
 		// ── 退出 ──
 		handleLogout() {
@@ -329,44 +329,54 @@ export default {
 
 .status-bar {
 	width: 100%;
-	background-color: var(--color-surface);
+	background-color: var(--color-bg);
 }
 
 .scroll-content {
 	flex: 1;
 	box-sizing: border-box;
-	padding: var(--space-xl) var(--space-xl) calc(var(--space-4xl) + 100rpx);
+	padding: var(--space-lg) var(--space-xl) calc(var(--space-4xl) + 240rpx);
 	-webkit-overflow-scrolling: touch;
 }
 
-/* ── 头像卡片 ── */
+/* 设计稿06：顶部大标题 */
+.page-title {
+	display: block;
+	font-size: 52rpx;
+	font-weight: var(--weight-extrabold);
+	color: var(--color-text-heading);
+	margin-bottom: var(--space-xl);
+}
+
+/* ── 用户卡（设计稿06：白卡内头像左 + 信息右） ── */
 .profile-card {
-	text-align: center;
-	padding: 64rpx 0;
-	background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface));
+	display: flex;
+	align-items: center;
+	padding: var(--space-2xl);
+	background: var(--color-surface);
 	border-radius: var(--radius-2xl);
 	margin-bottom: var(--space-lg);
-	box-shadow: var(--shadow-sm);
+	box-shadow: var(--shadow-card);
 }
 
 .avatar-container {
 	position: relative;
-	display: inline-block;
-	margin-bottom: var(--space-sm);
+	flex-shrink: 0;
+	margin-right: var(--space-xl);
 }
 
 .avatar-image {
-	width: 140rpx;
-	height: 140rpx;
+	width: 128rpx;
+	height: 128rpx;
 	border-radius: var(--radius-full);
-	border: 4rpx solid var(--color-border);
 }
 
+/* 设计稿06：黄色圆形头像占位，显示用户名首字 */
 .avatar-placeholder {
-	width: 140rpx;
-	height: 140rpx;
+	width: 128rpx;
+	height: 128rpx;
 	border-radius: var(--radius-full);
-	background: linear-gradient(145deg, var(--color-primary), var(--color-accent));
+	background: var(--color-accent);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -374,8 +384,9 @@ export default {
 }
 
 .avatar-emoji {
-	font-size: var(--font-5xl);
-	opacity: 0.9;
+	font-size: 56rpx;
+	font-weight: var(--weight-bold);
+	color: var(--color-text-heading);
 }
 
 .avatar-badge {
@@ -385,64 +396,52 @@ export default {
 	width: 40rpx;
 	height: 40rpx;
 	border-radius: var(--radius-full);
-	background-color: var(--color-accent);
+	background-color: var(--color-surface);
+	box-shadow: var(--shadow-xs);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	border: 4rpx solid var(--color-surface);
 }
 
 .badge-icon {
 	font-size: var(--font-sm);
 }
 
-.avatar-hint {
-	font-size: var(--font-xs);
-	color: var(--color-text-tertiary);
-	display: block;
-	margin-bottom: var(--space-lg);
-}
-
-.online-indicator {
-	position: absolute;
-	top: 4rpx;
-	right: 4rpx;
-	width: 28rpx;
-	height: 28rpx;
-	border-radius: var(--radius-full);
-	background-color: var(--color-success);
-	border: 6rpx solid var(--color-surface);
-	box-shadow: var(--shadow-success);
+.profile-info {
+	flex: 1;
+	min-width: 0;
 }
 
 .username-row {
 	display: flex;
 	align-items: center;
-	justify-content: center;
 	gap: var(--space-sm);
 	margin-bottom: var(--space-sm);
 }
 
 .username {
-	font-size: var(--font-3xl);
-	font-weight: var(--weight-extrabold);
+	font-size: var(--font-2xl);
+	font-weight: var(--weight-bold);
 	color: var(--color-text-heading);
-	letter-spacing: var(--tracking-heading);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .edit-btn {
 	width: 48rpx;
 	height: 48rpx;
-	border-radius: var(--radius-sm);
-	background-color: var(--color-border);
+	border-radius: var(--radius-full);
+	background-color: var(--color-surface-raised);
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	flex-shrink: 0;
 	transition: background-color var(--transition-fast);
 }
 
 .edit-btn:active {
-	background-color: var(--color-primary-bg);
+	background-color: var(--color-border);
 }
 
 .edit-icon {
@@ -452,31 +451,38 @@ export default {
 .user-id-badge {
 	display: inline-flex;
 	align-items: center;
-	padding: var(--space-xs) var(--space-lg);
-	background-color: var(--color-border);
+	padding: var(--space-2xs) var(--space-md);
+	background-color: var(--color-surface-raised);
 	border-radius: var(--radius-full);
+	margin-bottom: var(--space-xs);
 }
 
 .user-id {
-	font-size: var(--font-sm);
+	font-size: var(--font-xs);
 	color: var(--color-text-secondary);
 	font-weight: var(--weight-medium);
 }
 
-/* ── 信息卡片 ── */
+.avatar-hint {
+	display: block;
+	font-size: var(--font-2xs);
+	color: var(--color-text-tertiary);
+}
+
+/* ── 信息卡片（设计稿06：白卡无边框） ── */
 .info-card {
 	background-color: var(--color-surface);
 	border-radius: var(--radius-2xl);
-	padding: var(--space-xl);
+	padding: var(--space-lg) var(--space-xl);
 	margin-bottom: var(--space-lg);
-	box-shadow: var(--shadow-sm);
+	box-shadow: var(--shadow-card);
 }
 
 .card-title {
-	font-size: var(--font-lg);
+	font-size: var(--font-md);
 	font-weight: var(--weight-bold);
 	color: var(--color-text-heading);
-	margin-bottom: var(--space-lg);
+	margin-bottom: var(--space-xs);
 	display: block;
 	letter-spacing: var(--tracking-heading);
 	padding-bottom: var(--space-md);
@@ -519,13 +525,13 @@ export default {
 	font-weight: var(--weight-semibold);
 }
 
-/* ── 功能菜单 ── */
+/* ── 功能菜单（设计稿06：白卡菜单行 + 右箭头） ── */
 .menu-card {
 	background-color: var(--color-surface);
 	border-radius: var(--radius-2xl);
 	margin-bottom: var(--space-xl);
 	overflow: hidden;
-	box-shadow: var(--shadow-sm);
+	box-shadow: var(--shadow-card);
 }
 
 .menu-item {
@@ -577,34 +583,33 @@ export default {
 	flex-shrink: 0;
 }
 
-/* ── 退出登录 ── */
+/* ── 退出登录（设计稿：红字胶囊按钮） ── */
 .logout-btn {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	gap: var(--space-sm);
-	height: 96rpx;
-	border-radius: var(--radius-xl);
-	border: 2rpx solid var(--color-danger-light);
-	background-color: var(--color-surface);
+	height: 104rpx;
+	border-radius: var(--radius-full);
+	border: 2rpx solid var(--color-danger);
+	background-color: transparent;
 	margin-top: var(--space-xl);
 	transition:
 		background-color var(--transition-fast),
-		transform var(--transition-spring);
+		opacity var(--transition-fast);
 }
 
 .logout-btn:active {
 	background-color: var(--color-danger-light);
-	transform: scale(0.97);
 }
 
 .logout-icon {
-	font-size: var(--font-xl);
+	font-size: var(--font-lg);
 }
 
 .logout-text {
-	font-size: var(--font-lg);
-	font-weight: var(--weight-semibold);
+	font-size: var(--font-base);
+	font-weight: var(--weight-medium);
 	color: var(--color-danger);
 }
 
@@ -628,13 +633,13 @@ export default {
 	max-width: 600rpx;
 	background-color: var(--color-surface);
 	border-radius: var(--radius-2xl);
-	padding: var(--space-xl);
+	padding: var(--space-2xl);
 	box-shadow: var(--shadow-lg);
 }
 
 .modal-title {
 	font-size: var(--font-xl);
-	font-weight: var(--weight-bold);
+	font-weight: var(--weight-extrabold);
 	color: var(--color-text-heading);
 	display: block;
 	margin-bottom: var(--space-xs);
@@ -648,18 +653,19 @@ export default {
 	line-height: 1.5;
 }
 
+/* 设计稿01：灰底无边框圆角输入 */
 .modal-input {
-	height: 88rpx;
-	border: 2rpx solid var(--color-border);
-	border-radius: var(--radius-md);
-	padding: 0 var(--space-lg);
+	height: 96rpx;
+	border: none;
+	border-radius: var(--radius-lg);
+	padding: 0 var(--space-xl);
 	font-size: var(--font-base);
 	color: var(--color-text);
-	background-color: var(--color-bg);
+	background-color: var(--color-surface-raised);
 }
 
 .modal-input-error {
-	border-color: var(--color-danger);
+	background-color: var(--color-danger-light);
 }
 
 .modal-error {
@@ -678,9 +684,9 @@ export default {
 
 .modal-cancel-btn {
 	flex: 1;
-	height: 80rpx;
-	border-radius: var(--radius-md);
-	border: 2rpx solid var(--color-border);
+	height: 96rpx;
+	border-radius: var(--radius-full);
+	background-color: var(--color-surface-raised);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -692,23 +698,26 @@ export default {
 	font-weight: var(--weight-semibold);
 }
 
+/* 设计稿01：黑色胶囊确认按钮 */
 .modal-confirm-btn {
 	flex: 1;
-	height: 80rpx;
-	border-radius: var(--radius-md);
+	height: 96rpx;
+	border-radius: var(--radius-full);
 	background-color: var(--color-primary);
+	box-shadow: var(--shadow-primary);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
 
 .modal-confirm-disabled {
-	opacity: 0.5;
+	opacity: 0.4;
+	box-shadow: none;
 }
 
 .modal-confirm-text {
 	font-size: var(--font-base);
-	color: #fff;
+	color: var(--color-text-inverse);
 	font-weight: var(--weight-semibold);
 }
 </style>

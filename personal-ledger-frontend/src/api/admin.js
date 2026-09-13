@@ -4,6 +4,8 @@ export const getAdminUserList = (params) => request.get('/admin/users', { params
 
 export const getAdminUserDetail = (id) => request.get(`/admin/users/${id}`)
 
+export const updateAdminUserStatus = (id, status) => request.put(`/admin/users/${id}/status`, { status })
+
 export const deleteAdminUser = (id) => request.delete(`/admin/users/${id}`)
 
 export const batchDeleteAdminUsers = (ids) => request.post('/admin/users/batch-delete', { ids })

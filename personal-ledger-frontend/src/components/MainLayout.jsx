@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Layout, Menu, Avatar, Dropdown, Button, theme, Drawer, Typography } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Button, theme, Drawer, Typography, Modal, Form, Input, Select, InputNumber, DatePicker, Space, App as AntdApp } from 'antd'
 import {
   DashboardOutlined,
   BookOutlined,
@@ -15,16 +15,20 @@ import {
   FileTextOutlined,
   RobotOutlined,
   HomeOutlined,
+  PlusCircleOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import AiChatDrawer from './AiChatDrawer'
+import { getCategoryList } from '../api/category'
+import { addRecord } from '../api/record'
+import dayjs from 'dayjs'
 
 const { Header, Sider, Content } = Layout
 const { Text } = Typography
 
 const menuItems = [
-  { key: '/dashboard', icon: <DashboardOutlined />, label: '数据概览' },
   { key: '/records',   icon: <BookOutlined />,      label: '账单管理' },
   { key: '/categories', icon: <AppstoreOutlined />,  label: '分类管理' },
   { key: '/ai-chat',   icon: <RobotOutlined />,     label: 'AI助手' },
@@ -52,10 +56,45 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [categories, setCategories] = useState([])
+  const [form] = Form.useForm()
+  const [addLoading, setAddLoading] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, fetchUserInfo, logout } = useAuth()
   const { token: { colorBgContainer } } = theme.useToken()
+  const { message } = AntdApp.useApp()
+
+  useEffect(() => {
+    getCategoryList().then(res => {
+      if (res.code === 200) setCategories(res.data)
+    })
+  }, [])
+
+  const handleQuickAdd = async () => {
+    try {
+      const values = await form.validateFields()
+      setAddLoading(true)
+      const data = {
+        ...values,
+        recordDate: values.recordDate.format('YYYY-MM-DD'),
+      }
+      const res = await addRecord(data)
+      if (res.code === 200) {
+        message.success('记账成功')
+        setAddModalOpen(false)
+        form.resetFields()
+        window.dispatchEvent(new CustomEvent('record-added'))
+      } else {
+        message.error(res.message)
+      }
+    } catch (e) {
+      // validation error
+    } finally {
+      setAddLoading(false)
+    }
+  }
 
   useEffect(() => {
     fetchUserInfo()
@@ -139,6 +178,27 @@ export default function MainLayout() {
           </Text>
         )}
       </div>
+
+      <div style={{ padding: '16px 12px 8px' }}>
+        <Button
+          type="primary"
+          icon={<PlusCircleOutlined />}
+          block
+          size="large"
+          collapsed={collapsed}
+          onClick={() => setAddModalOpen(true)}
+          style={{
+            height: 48,
+            fontSize: 16,
+            fontWeight: 600,
+            borderRadius: 12,
+            boxShadow: '0 4px 12px rgba(26, 26, 46, 0.25)',
+          }}
+        >
+          {collapsed ? '' : '快速记账'}
+        </Button>
+      </div>
+
       <Menu
         theme="light"
         mode="inline"
@@ -146,7 +206,7 @@ export default function MainLayout() {
         items={allMenuItems}
         style={{
           borderRight: 0,
-          padding: '12px 8px',
+          padding: '8px 8px',
         }}
         onClick={({ key }) => {
           navigate(key)
@@ -256,6 +316,72 @@ export default function MainLayout() {
         </Content>
       </Layout>
       <AiChatDrawer open={location.pathname === '/ai-chat'} />
+
+      {/* 浮动记账按钮 - 仅移动端显示 */}
+      {isMobile && (
+        <div
+          onClick={() => setAddModalOpen(true)}
+          style={{
+            position: 'fixed',
+            bottom: 80,
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 16px rgba(26, 26, 46, 0.4)',
+            zIndex: 999,
+            cursor: 'pointer',
+          }}
+        >
+          <PlusCircleOutlined style={{ fontSize: 24, color: '#fff' }} />
+        </div>
+      )}
+
+      {/* 快速记账弹窗 */}
+      <Modal
+        title="快速记账"
+        open={addModalOpen}
+        onOk={handleQuickAdd}
+        onCancel={() => { setAddModalOpen(false); form.resetFields() }}
+        confirmLoading={addLoading}
+        okText="保存"
+        cancelText="取消"
+        width={480}
+      >
+        <Form form={form} layout="vertical" initialValues={{ recordDate: dayjs() }}>
+          <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
+            <Select placeholder="选择分类">
+              {categories.filter(c => c.type === 0).map(c => (
+                <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+              ))}
+              <Select.Option disabled label="收入" />
+              {categories.filter(c => c.type === 1).map(c => (
+                <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请输入金额' }]}>
+            <InputNumber
+              min={0.01}
+              precision={2}
+              placeholder="0.00"
+              style={{ width: '100%' }}
+              prefix="¥"
+              size="large"
+            />
+          </Form.Item>
+          <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: '请选择日期' }]}>
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea placeholder="添加备注（可选）" rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Layout>
   )
 }

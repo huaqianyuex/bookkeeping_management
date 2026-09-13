@@ -109,7 +109,7 @@ export default function AdminRecords() {
       key: 'amount',
       render: (v, r) => (
         <Text strong style={{ color: r.categoryType === 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
-          {r.categoryType === 0 ? '-' : '+'}¥{v.toFixed(2)}
+          {r.categoryType === 0 ? '-' : '+'}¥{Number(v).toFixed(2)}
         </Text>
       ),
     },

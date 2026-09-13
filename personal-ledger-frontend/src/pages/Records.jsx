@@ -1,26 +1,26 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, InputNumber, DatePicker, Space, Card, Tag, Typography, App as AntdApp } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Row, Col, Table, Button, Form, Input, Select, InputNumber, DatePicker, Space, Card, Tag, Typography, Tabs, Modal, App as AntdApp } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { getRecordPage, addRecord, updateRecord, deleteRecord } from '../api/record'
 import { getCategoryList } from '../api/category'
-import SectionTitle from '../components/ui/SectionTitle'
 import EmptyState from '../components/ui/EmptyState'
 import SkeletonCard from '../components/ui/SkeletonCard'
 import AnimatedRoute from '../components/ui/AnimatedRoute'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 export default function Records() {
   const [data, setData] = useState({ records: [], total: 0, pages: 0, current: 1, size: 10 })
   const [loading, setLoading] = useState(false)
   const [categories, setCategories] = useState([])
-  const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [addForm] = Form.useForm()
   const [searchForm] = Form.useForm()
-  const [form] = Form.useForm()
   const [query, setQuery] = useState({ page: 1, size: 10 })
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [activeType, setActiveType] = useState('0')
+  const [addLoading, setAddLoading] = useState(false)
   const { message } = AntdApp.useApp()
 
   useEffect(() => {
@@ -42,6 +42,32 @@ export default function Records() {
   }
 
   useEffect(() => { fetchCategories(); fetchData() }, [])
+
+  const handleQuickAdd = async () => {
+    try {
+      const values = await addForm.validateFields()
+      setAddLoading(true)
+      const payload = {
+        categoryId: values.categoryId,
+        amount: values.amount,
+        remark: values.remark,
+        recordDate: values.recordDate.format('YYYY-MM-DD'),
+      }
+      const res = await addRecord(payload)
+      if (res.code === 200) {
+        message.success('记账成功')
+        addForm.resetFields()
+        addForm.setFieldsValue({ recordDate: dayjs() })
+        fetchData({ page: 1, size: query.size })
+      } else {
+        message.error(res.message)
+      }
+    } catch (e) {
+      // validation error
+    } finally {
+      setAddLoading(false)
+    }
+  }
 
   const handleSearch = () => {
     const values = searchForm.getFieldsValue()
@@ -68,21 +94,15 @@ export default function Records() {
     fetchData(params)
   }
 
-  const handleAdd = () => {
-    setEditing(null)
-    form.resetFields()
-    setModalOpen(true)
-  }
-
-  const handleEdit = async (record) => {
+  const handleEdit = (record) => {
     setEditing(record)
-    form.setFieldsValue({
+    setActiveType(String(record.categoryType))
+    addForm.setFieldsValue({
       categoryId: record.categoryId,
       amount: record.amount,
       remark: record.remark,
       recordDate: dayjs(record.recordDate),
     })
-    setModalOpen(true)
   }
 
   const handleDelete = async (id) => {
@@ -101,94 +121,15 @@ export default function Records() {
     })
   }
 
-  const handleOk = async () => {
-    const values = await form.validateFields()
-    const payload = {
-      categoryId: values.categoryId,
-      amount: values.amount,
-      remark: values.remark,
-      recordDate: values.recordDate.format('YYYY-MM-DD'),
-    }
-    let res
-    if (editing) {
-      res = await updateRecord(editing.id, payload)
-    } else {
-      res = await addRecord(payload)
-    }
-    if (res.code === 200) {
-      message.success(editing ? '修改成功' : '新增成功')
-      setModalOpen(false)
-      fetchData(query)
-    } else {
-      message.error(res.message)
-    }
+  const handleCancelEdit = () => {
+    setEditing(null)
+    addForm.resetFields()
+    addForm.setFieldsValue({ recordDate: dayjs(), categoryId: undefined })
   }
 
   const expenseCategories = categories.filter(c => c.type === 0)
   const incomeCategories = categories.filter(c => c.type === 1)
-
-  const renderMobileCard = (record) => (
-    <Card
-      key={record.id}
-      className="card-base"
-      style={{ marginBottom: 'var(--space-md)' }}
-    >
-      <div style={{ padding: 'var(--space-base)' }}>
-        <div className="mobile-record-field">
-          <span className="mobile-record-label">日期</span>
-          <span className="mobile-record-value">{record.recordDate}</span>
-        </div>
-        <div className="mobile-record-field">
-          <span className="mobile-record-label">类型</span>
-          <Tag color={record.categoryType === 0 ? 'error' : 'success'}>
-            {record.categoryType === 0 ? '支出' : '收入'}
-          </Tag>
-        </div>
-        <div className="mobile-record-field">
-          <span className="mobile-record-label">分类</span>
-          <span className="mobile-record-value">{record.categoryName}</span>
-        </div>
-        <div className="mobile-record-field">
-          <span className="mobile-record-label">金额</span>
-          <span className="mobile-record-value" style={{
-            color: record.categoryType === 0 ? 'var(--color-danger)' : 'var(--color-success)',
-            fontWeight: 600,
-          }}>
-            {record.categoryType === 0 ? '-' : '+'}¥{record.amount.toFixed(2)}
-          </span>
-        </div>
-        {record.remark && (
-          <div className="mobile-record-field">
-            <span className="mobile-record-label">备注</span>
-            <span className="mobile-record-value" style={{ color: 'var(--color-text-secondary)' }}>
-              {record.remark}
-            </span>
-          </div>
-        )}
-        <div className="mobile-record-actions">
-          <Button
-            type="primary"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            style={{ flex: 1, borderRadius: 'var(--radius-md)' }}
-          >
-            编辑
-          </Button>
-          <Button
-            type="primary"
-            danger
-            size="small"
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.id)}
-            style={{ flex: 1, borderRadius: 'var(--radius-md)' }}
-          >
-            删除
-          </Button>
-        </div>
-      </div>
-    </Card>
-  )
+  const filteredCategories = activeType === '0' ? expenseCategories : incomeCategories
 
   const columns = [
     {
@@ -222,7 +163,7 @@ export default function Records() {
       width: 120,
       render: (v, r) => (
         <Text strong style={{ color: r.categoryType === 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
-          {r.categoryType === 0 ? '-' : '+'}¥{v.toFixed(2)}
+          {r.categoryType === 0 ? '-' : '+'}¥{Number(v).toFixed(2)}
         </Text>
       ),
     },
@@ -233,35 +174,16 @@ export default function Records() {
       responsive: ['lg'],
     },
     {
-      title: '创建时间',
-      dataIndex: 'createTime',
-      key: 'createTime',
-      width: 180,
-      responsive: ['xl'],
-      render: (text) => <Text style={{ fontSize: 'var(--font-size-sm)' }}>{text}</Text>,
-    },
-    {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 140,
       responsive: ['md'],
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            style={{ padding: '4px 8px' }}
-          >
+          <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)} style={{ padding: '4px 8px' }}>
             编辑
           </Button>
-          <Button
-            type="link"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.id)}
-            style={{ padding: '4px 8px' }}
-          >
+          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} style={{ padding: '4px 8px' }}>
             删除
           </Button>
         </Space>
@@ -269,191 +191,172 @@ export default function Records() {
     },
   ]
 
-  const renderDesktopTable = () => {
-    if (loading) {
-      return <SkeletonCard type="table" rows={6} />
-    }
-    if (data.records.length === 0) {
-      return <EmptyState title="暂无账单记录" description="点击右上角「新增账单」开始记录" />
-    }
-    return (
-      <Table
-        dataSource={data.records}
-        columns={columns}
-        rowKey="id"
-        size="middle"
-        pagination={{
-          current: data.current,
-          pageSize: data.size,
-          total: data.total,
-          showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 条`,
-          onChange: handlePageChange,
-        }}
-      />
-    )
-  }
-
-  const renderMobileCards = () => {
-    if (loading) {
-      return (
-        <>
-          {[1, 2, 3].map(i => <SkeletonCard key={i} type="list" lines={3} />)}
-        </>
-      )
-    }
-    if (data.records.length === 0) {
-      return <EmptyState title="暂无账单记录" description="点击右上角按钮开始记录" />
-    }
-    return (
-      <>
-        {data.records.map(renderMobileCard)}
-        <div style={{ marginTop: 'var(--space-base)', textAlign: 'center' }}>
-          <Button
-            onClick={() => handlePageChange(data.current - 1, data.size)}
-            disabled={data.current <= 1}
-            style={{ marginRight: 8, borderRadius: 'var(--radius-md)' }}
-          >
-            上一页
-          </Button>
-          <Text className="text-secondary">
-            第 {data.current} / {Math.ceil(data.total / data.size)} 页
-          </Text>
-          <Button
-            onClick={() => handlePageChange(data.current + 1, data.size)}
-            disabled={data.current >= Math.ceil(data.total / data.size)}
-            style={{ marginLeft: 8, borderRadius: 'var(--radius-md)' }}
-          >
-            下一页
-          </Button>
-        </div>
-      </>
-    )
-  }
-
   return (
     <AnimatedRoute>
-      <Card
-        title={<SectionTitle title="账单管理" />}
-        extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleAdd}
-          >
-            新增账单
-          </Button>
-        }
-        variant="borderless"
-        className="card-base"
-      >
-        {/* Search Form */}
-        <Form
-          form={searchForm}
-          layout={isMobile ? 'vertical' : 'inline'}
-          style={{ marginBottom: 24 }}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {/* 记账区域 - 核心 */}
+        <Card
+          style={{
+            borderRadius: 16,
+            border: 'none',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          }}
+          styles={{ body: { padding: isMobile ? 20 : 28 } }}
         >
-          <Form.Item name="categoryId" label="分类" style={{ marginBottom: isMobile ? 12 : 8 }}>
-            <Select style={{ width: isMobile ? '100%' : 140 }} placeholder="全部" allowClear>
-              {categories.map(c => (
-                <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="month" label="月份" style={{ marginBottom: isMobile ? 12 : 8 }}>
-            <DatePicker picker="month" placeholder="选择月份" style={{ width: isMobile ? '100%' : undefined }} />
-          </Form.Item>
-          <Form.Item style={{ marginBottom: isMobile ? 12 : 8 }}>
-            <Space>
-              <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>查询</Button>
-              <Button icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-
-        {/* Desktop Table */}
-        <div className="desktop-table">{renderDesktopTable()}</div>
-
-        {/* Mobile Cards */}
-        <div className="mobile-cards" style={{ display: 'none' }}>{renderMobileCards()}</div>
-
-        <style>{`
-          @media (max-width: 768px) {
-            .desktop-table { display: none !important; }
-            .mobile-cards { display: block !important; }
-          }
-          @media (min-width: 769px) {
-            .desktop-table { display: block !important; }
-            .mobile-cards { display: none !important; }
-          }
-          .mobile-record-field {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-          }
-          .mobile-record-label {
-            color: var(--color-text-secondary);
-            font-size: var(--font-size-sm);
-          }
-          .mobile-record-value {
-            font-size: var(--font-size-base);
-            font-weight: var(--font-weight-medium);
-            color: var(--color-text);
-          }
-          .mobile-record-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid var(--color-border);
-          }
-        `}</style>
-      </Card>
-
-      {/* Add/Edit Modal */}
-      <Modal
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-            <span className="color-dot color-dot--primary" />
-            <Text strong>{editing ? '编辑账单' : '新增账单'}</Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+            <div style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <PlusOutlined style={{ color: '#fff', fontSize: 16 }} />
+            </div>
+            <Text strong style={{ fontSize: 18 }}>{editing ? '编辑账单' : '快速记账'}</Text>
           </div>
-        }
-        open={modalOpen}
-        onOk={handleOk}
-        onCancel={() => setModalOpen(false)}
-        destroyOnClose
-        width={window.innerWidth < 768 ? '95%' : 520}
-      >
-        <Form form={form} layout="vertical" style={{ marginTop: 24 }}>
-          <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
-            <Select placeholder="请选择分类">
-              <Select.OptGroup label="支出">
-                {expenseCategories.map(c => (
+
+          <Tabs
+            activeKey={activeType}
+            onChange={setActiveType}
+            items={[
+              { key: '0', label: <span><ArrowUpOutlined style={{ color: '#e94560' }} /> 支出</span> },
+              { key: '1', label: <span><ArrowDownOutlined style={{ color: '#00b894' }} /> 收入</span> },
+            ]}
+            style={{ marginBottom: 16 }}
+          />
+
+          <Form
+            form={addForm}
+            layout="vertical"
+            initialValues={{ recordDate: dayjs() }}
+            onFinish={handleQuickAdd}
+          >
+            <Row gutter={16}>
+              <Col xs={24} sm={8}>
+                <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择' }]} style={{ marginBottom: isMobile ? 12 : 16 }}>
+                  <Select placeholder="选择分类" size="large">
+                    {filteredCategories.map(c => (
+                      <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请输入金额' }]} style={{ marginBottom: isMobile ? 12 : 16 }}>
+                  <InputNumber
+                    min={0.01}
+                    precision={2}
+                    placeholder="0.00"
+                    prefix="¥"
+                    size="large"
+                    style={{ width: '100%' }}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: '请选择日期' }]} style={{ marginBottom: isMobile ? 12 : 16 }}>
+                  <DatePicker style={{ width: '100%' }} size="large" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col xs={24} sm={16}>
+                <Form.Item name="remark" label="备注" style={{ marginBottom: 16 }}>
+                  <Input.TextArea placeholder="添加备注（可选）" rows={1} autoSize={{ minRows: 1, maxRows: 3 }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Form.Item style={{ marginBottom: 0 }}>
+                  <Space style={{ width: '100%' }} direction={isMobile ? 'vertical' : 'horizontal'}>
+                    {editing && (
+                      <Button size="large" onClick={handleCancelEdit} style={{ flex: 1 }}>
+                        取消
+                      </Button>
+                    )}
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      size="large"
+                      loading={addLoading}
+                      icon={<PlusOutlined />}
+                      style={{
+                        flex: 1,
+                        height: 44,
+                        fontWeight: 600,
+                        borderRadius: 10,
+                      }}
+                    >
+                      {editing ? '保存修改' : '记一笔'}
+                    </Button>
+                  </Space>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        </Card>
+
+        {/* 账单列表 */}
+        <Card
+          title={<Text strong style={{ fontSize: 16 }}>最近账单</Text>}
+          extra={
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              共 {data.total} 条记录
+            </Text>
+          }
+          style={{
+            borderRadius: 16,
+            border: 'none',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          }}
+          styles={{ body: { padding: isMobile ? 16 : 24 } }}
+        >
+          {/* 搜索 */}
+          <Form form={searchForm} layout={isMobile ? 'vertical' : 'inline'} style={{ marginBottom: 16 }}>
+            <Form.Item name="categoryId" label="分类" style={{ marginBottom: isMobile ? 12 : 8 }}>
+              <Select style={{ width: isMobile ? '100%' : 140 }} placeholder="全部" allowClear>
+                {categories.map(c => (
                   <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
                 ))}
-              </Select.OptGroup>
-              <Select.OptGroup label="收入">
-                {incomeCategories.map(c => (
-                  <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
-                ))}
-              </Select.OptGroup>
-            </Select>
-          </Form.Item>
-          <Form.Item name="amount" label="金额" rules={[
-            { required: true, message: '请输入金额' },
-            { type: 'number', min: 0.01, message: '金额必须大于0' },
-          ]}>
-            <InputNumber style={{ width: '100%' }} precision={2} prefix="¥" placeholder="请输入金额" />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} placeholder="可选" />
-          </Form.Item>
-          <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: '请选择日期' }]}>
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-        </Form>
-      </Modal>
+              </Select>
+            </Form.Item>
+            <Form.Item name="month" label="月份" style={{ marginBottom: isMobile ? 12 : 8 }}>
+              <DatePicker picker="month" placeholder="选择月份" style={{ width: isMobile ? '100%' : undefined }} />
+            </Form.Item>
+            <Form.Item style={{ marginBottom: isMobile ? 12 : 8 }}>
+              <Space>
+                <Button icon={<SearchOutlined />} onClick={handleSearch}>查询</Button>
+                <Button icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
+              </Space>
+            </Form.Item>
+          </Form>
+
+          {/* 表格 */}
+          {loading ? (
+            <SkeletonCard type="table" rows={5} />
+          ) : data.records.length === 0 ? (
+            <EmptyState title="暂无账单" description="开始记一笔吧" />
+          ) : (
+            <Table
+              dataSource={data.records}
+              columns={columns}
+              rowKey="id"
+              size="middle"
+              pagination={{
+                current: data.current,
+                pageSize: data.size,
+                total: data.total,
+                showSizeChanger: true,
+                showTotal: (t) => `共 ${t} 条`,
+                onChange: handlePageChange,
+              }}
+              scroll={{ x: 700 }}
+            />
+          )}
+        </Card>
+      </div>
     </AnimatedRoute>
   )
 }

@@ -58,10 +58,11 @@ export default {
 	opacity: 0.9;
 }
 
+/* 设计稿10 空态：灰色主文案 + 灰色说明 + 黄色胶囊 action 按钮 */
 .empty-title {
-	font-size: var(--font-base);
-	font-weight: var(--weight-semibold);
-	color: var(--color-text-heading);
+	font-size: var(--font-md);
+	font-weight: var(--weight-medium);
+	color: var(--color-text-secondary);
 	display: block;
 	margin-bottom: var(--space-sm);
 	letter-spacing: var(--tracking-heading);
@@ -69,7 +70,7 @@ export default {
 }
 
 .empty-desc {
-	font-size: var(--font-xs);
+	font-size: var(--font-sm);
 	color: var(--color-text-tertiary);
 	display: block;
 	margin-bottom: var(--space-xl);
@@ -79,6 +80,17 @@ export default {
 }
 
 .empty-action {
-	margin-top: var(--space-sm);
+	margin-top: var(--space-lg);
+}
+
+/* slot 内主按钮默认呈黄色胶囊（设计稿10「去记一笔」），页面可用自定义样式覆盖 */
+.empty-action :deep(button),
+.empty-action :deep(.btn-primary) {
+	background-color: var(--color-accent);
+	color: var(--color-text-heading);
+	border-radius: var(--radius-full);
+	font-weight: var(--weight-semibold);
+	box-shadow: var(--shadow-accent);
+	padding: 0 var(--space-3xl);
 }
 </style>

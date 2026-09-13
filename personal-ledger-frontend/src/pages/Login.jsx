@@ -13,14 +13,18 @@ export default function Login() {
   const { message } = AntdApp.useApp()
 
   const onFinish = async (values) => {
-    const res = await login(values)
-    if (res.code === 200) {
-      localStorage.setItem('token', res.data)
-      message.success('登录成功')
-      await fetchUserInfo()
-      navigate('/', { replace: true })
-    } else {
-      message.error(res.message)
+    try {
+      const res = await login(values)
+      if (res.code === 200) {
+        localStorage.setItem('token', res.data.token)
+        message.success('登录成功')
+        await fetchUserInfo()
+        navigate('/', { replace: true })
+      } else {
+        message.error(res.message)
+      }
+    } catch (error) {
+      message.error(error?.response?.data?.message || '登录失败，请稍后重试')
     }
   }
 
@@ -104,22 +108,14 @@ export default function Login() {
           </div>
 
           <Form form={form} onFinish={onFinish} size="large" layout="vertical">
-            <Form.Item
-              name="username"
-              rules={[{ required: true, message: '请输入用户名' }]}
-              style={{ marginBottom: 20 }}
-            >
+            <Form.Item name="username" style={{ marginBottom: 20 }}>
               <Input
                 prefix={<UserOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
                 placeholder="用户名"
                 style={{ height: 48, borderRadius: 'var(--radius-md)' }}
               />
             </Form.Item>
-            <Form.Item
-              name="password"
-              rules={[{ required: true, message: '请输入密码' }]}
-              style={{ marginBottom: 28 }}
-            >
+            <Form.Item name="password" style={{ marginBottom: 28 }}>
               <Input.Password
                 prefix={<LockOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
                 placeholder="密码"

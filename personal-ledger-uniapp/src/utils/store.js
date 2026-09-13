@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { getUserInfo, updateUserInfo } from '../api/user'
+import { resetLoginRedirect } from '../api/request'
 
 export const useUserStore = defineStore('user', {
 	state: () => ({
@@ -15,6 +16,8 @@ export const useUserStore = defineStore('user', {
 		setToken(token) {
 			this.token = token
 			uni.setStorageSync('token', token)
+			// 登录成功后重置 401 跳转标记，确保后续若再次出现 401 仍能正常跳转到登录页。
+			resetLoginRedirect()
 		},
 		clearToken() {
 			this.token = ''

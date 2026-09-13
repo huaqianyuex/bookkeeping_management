@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Card, Modal, Typography, Tag, Input, Space, Popconfirm, App as AntdApp } from 'antd'
+import { Table, Button, Card, Modal, Typography, Tag, Input, Space, Popconfirm, Switch, App as AntdApp } from 'antd'
 import { SearchOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
-import { getAdminUserList, deleteAdminUser, batchDeleteAdminUsers } from '../api/admin'
+import { getAdminUserList, deleteAdminUser, batchDeleteAdminUsers, updateAdminUserStatus } from '../api/admin'
 import SectionTitle from '../components/ui/SectionTitle'
 import EmptyState from '../components/ui/EmptyState'
 import SkeletonCard from '../components/ui/SkeletonCard'
@@ -38,6 +38,17 @@ export default function AdminUsers() {
     const res = await deleteAdminUser(id)
     if (res.code === 200) {
       message.success('删除成功')
+      fetchData(data.current, data.size)
+    } else {
+      message.error(res.message)
+    }
+  }
+
+  const handleToggleStatus = async (record) => {
+    const next = record.status === 1 ? 0 : 1
+    const res = await updateAdminUserStatus(record.id, next)
+    if (res.code === 200) {
+      message.success(next === 1 ? '已启用' : '已禁用')
       fetchData(data.current, data.size)
     } else {
       message.error(res.message)
@@ -89,6 +100,27 @@ export default function AdminUsers() {
       width: 100,
       render: (v) => (
         <Tag color={v === 1 ? 'gold' : 'default'}>{v === 1 ? '管理员' : '普通用户'}</Tag>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 90,
+      render: (v, record) => (
+        record.role === 1 ? (
+          <Tag color="success">启用</Tag>
+        ) : (
+          <Popconfirm
+            title={v === 1 ? '确认禁用' : '确认启用'}
+            description={v === 1 ? '禁用后该账号将无法登录' : '启用后该账号可正常登录'}
+            onConfirm={() => handleToggleStatus(record)}
+            okText="确认"
+            cancelText="取消"
+          >
+            <Switch size="small" checked={v === 1} />
+          </Popconfirm>
+        )
       ),
     },
     {

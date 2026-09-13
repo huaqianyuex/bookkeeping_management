@@ -1,79 +1,98 @@
-﻿:root {
-  /* ============================
-     Brand Colors (Elegant, Muted Palette)
-     ============================ */
-  --color-primary: #1e2d3d;
-  --color-primary-light: #2c3e50;
-  --color-primary-lighter: #3d566e;
-  --color-primary-rgb: 30, 45, 61;
+/* ============================================
+   Design Tokens — 「简记」设计系统（设计稿 01-11）
+   浅灰底 + 白卡大圆角 + 黄色强调 + 墨黑主按钮，
+   收入绿仅用于收入语义，分类图标用粉彩色板。
+   变量名与旧版保持一致，页面零改动即可继承。
+   ============================================ */
 
-  /* Accent: muted teal (replaces AI-typical purple) */
-  --color-accent: #3a7ca5;
-  --color-accent-light: #e8f4f8;
-  --color-accent-rgb: 58, 124, 165;
+:root {
+  /* ── Brand ── 墨黑为主控色（主按钮/选中态），黄为品牌强调色 */
+  --color-primary: #1A1A1A;
+  --color-primary-light: #333333;
+  --color-primary-lighter: #4D4D4D;
+  --color-primary-rgb: 26, 26, 26;
 
-  /* Semantic Colors (muted, natural) */
-  --color-success: #2ecc71;
-  --color-success-light: #eafaf1;
-  --color-success-rgb: 46, 204, 113;
-  --color-danger: #e74c3c;
-  --color-danger-light: #fdedec;
-  --color-danger-rgb: 231, 76, 60;
-  --color-warning: #f0ad4e;
-  --color-warning-light: #fef9e7;
-  --color-warning-text: #8a6d3b;
-  --color-info: #5dade2;
-  --color-info-light: #ebf5fb;
+  /* Accent — 简记黄，用于 Logo/选中分类/FAB/进度条/高亮 pill */
+  --color-accent: #FACC15;
+  --color-accent-light: #FEF3C0;
+  --color-accent-rgb: 250, 204, 21;
+  --color-accent-deep: #EAB308;
 
-  /* Surface Colors (warm off-white) */
-  --color-bg: #f6f5f3;
-  --color-surface: #ffffff;
-  --color-surface-raised: #f9f8f6;
+  /* Semantic — 收支语义色 */
+  --color-success: #22A45D;
+  --color-success-light: #E3F5EB;
+  --color-success-rgb: 34, 164, 93;
+  --color-danger: #E5484D;
+  --color-danger-light: #FDE8E8;
+  --color-danger-rgb: 229, 72, 77;
+  --color-warning: #EAB308;
+  --color-warning-light: #FEF3C0;
+  --color-warning-text: #A16207;
+  --color-info: #6366F1;
+  --color-info-light: #E0E7FF;
 
-  /* Text Colors (warm dark) */
-  --color-text: #2c3e50;
-  --color-text-secondary: #7f8c9a;
-  --color-text-tertiary: #bdc3cb;
-  --color-text-inverse: #ffffff;
-  --color-text-heading: #1e2d3d;
+  /* Surface */
+  --color-bg: #F5F6F7;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #EFEFEF;
 
-  /* Border Colors (softer) */
-  --color-border: #e8e6e1;
-  --color-border-input: #d5d3cd;
-  --color-divider: #eeede9;
+  /* Text — 中性灰阶 */
+  --color-text: #1A1A1A;
+  --color-text-secondary: #71717A;
+  --color-text-tertiary: #A1A1AA;
+  --color-text-inverse: #FFFFFF;
+  --color-text-heading: #111111;
+
+  /* Border — 卡片基本无边框，分隔线极浅 */
+  --color-border: #ECECEE;
+  --color-border-input: #E4E4E7;
+  --color-divider: #F2F2F4;
 
   /* Disabled */
-  --color-disabled-bg: #e8e6e1;
-  --color-disabled-text: #bdc3cb;
+  --color-disabled-bg: #EFEFF1;
+  --color-disabled-text: #BDBDC4;
 
-  /* ============================
-     Border Radius
-     ============================ */
-  --radius-xs: 6rpx;
-  --radius-sm: 10rpx;
-  --radius-md: 14rpx;
-  --radius-lg: 18rpx;
-  --radius-xl: 22rpx;
-  --radius-2xl: 26rpx;
-  --radius-3xl: 32rpx;
+  /* ── Radius — 大圆角胶囊语言 ── */
+  --radius-xs: 8rpx;
+  --radius-sm: 12rpx;
+  --radius-md: 16rpx;
+  --radius-lg: 24rpx;
+  --radius-xl: 28rpx;
+  --radius-2xl: 32rpx;
+  --radius-3xl: 40rpx;
   --radius-full: 999rpx;
 
-  /* ============================
-     Shadows (soft, natural)
-     ============================ */
-  --shadow-xs: 0 1rpx 3rpx rgba(30, 45, 61, 0.04);
-  --shadow-sm: 0 2rpx 12rpx rgba(30, 45, 61, 0.06);
-  --shadow-md: 0 6rpx 20rpx rgba(30, 45, 61, 0.08);
-  --shadow-lg: 0 12rpx 40rpx rgba(30, 45, 61, 0.10);
-  --shadow-xl: 0 20rpx 60rpx rgba(30, 45, 61, 0.12);
-  --shadow-primary: 0 4rpx 20rpx rgba(30, 45, 61, 0.20);
-  --shadow-success: 0 4rpx 16rpx rgba(46, 204, 113, 0.20);
-  --shadow-danger: 0 4rpx 16rpx rgba(231, 76, 60, 0.20);
-  --shadow-accent: 0 4rpx 20rpx rgba(58, 124, 165, 0.20);
+  /* ── Shadows — 柔和弥散，卡片层次靠阴影而非边框 ── */
+  --shadow-xs: 0 2rpx 6rpx rgba(24, 24, 27, 0.03);
+  --shadow-sm: 0 4rpx 12rpx rgba(24, 24, 27, 0.04);
+  --shadow-md: 0 8rpx 24rpx rgba(24, 24, 27, 0.06);
+  --shadow-lg: 0 12rpx 32rpx rgba(24, 24, 27, 0.08);
+  --shadow-xl: 0 16rpx 48rpx rgba(24, 24, 27, 0.12);
+  --shadow-primary: 0 8rpx 20rpx rgba(26, 26, 26, 0.16);
+  --shadow-accent: 0 8rpx 20rpx rgba(250, 204, 21, 0.35);
+  --shadow-success: 0 2rpx 8rpx rgba(34, 164, 93, 0.12);
+  --shadow-danger: 0 2rpx 8rpx rgba(229, 72, 77, 0.12);
+  --shadow-glass: 0 8rpx 24rpx rgba(24, 24, 27, 0.06);
+  --shadow-card: 0 4rpx 16rpx rgba(24, 24, 27, 0.04);
+  --shadow-tabbar: 0 8rpx 32rpx rgba(24, 24, 27, 0.12);
 
-  /* ============================
-     Spacing
-     ============================ */
+  /* ── 分类粉彩色板（设计稿02/05/08 图标底色） ── */
+  --cat-yellow: #FDF0C0;
+  --cat-yellow-deep: #A16207;
+  --cat-pink: #FBD9D9;
+  --cat-pink-deep: #C0392B;
+  --cat-blue: #DBE4FD;
+  --cat-blue-deep: #4C5FD5;
+  --cat-orange: #FDE8CC;
+  --cat-orange-deep: #B45309;
+  --cat-green: #D9F2E4;
+  --cat-green-deep: #0F766E;
+  --cat-purple: #E7E0FB;
+  --cat-purple-deep: #6D28D9;
+  --cat-gray: #EFEFEF;
+  --cat-gray-deep: #52525B;
+
+  /* ── Spacing ── */
   --space-2xs: 4rpx;
   --space-xs: 8rpx;
   --space-sm: 12rpx;
@@ -84,9 +103,7 @@
   --space-3xl: 48rpx;
   --space-4xl: 64rpx;
 
-  /* ============================
-     Font Size
-     ============================ */
+  /* ── Typography ── */
   --font-2xs: 18rpx;
   --font-xs: 20rpx;
   --font-sm: 22rpx;
@@ -94,15 +111,13 @@
   --font-base: 28rpx;
   --font-lg: 32rpx;
   --font-xl: 36rpx;
-  --font-2xl: 40rpx;
-  --font-3xl: 48rpx;
-  --font-4xl: 56rpx;
-  --font-5xl: 64rpx;
-  --font-6xl: 72rpx;
-  --font-7xl: 84rpx;
-  --font-8xl: 96rpx;
+  --font-2xl: 42rpx;
+  --font-3xl: 52rpx;
+  --font-4xl: 64rpx;
+  --font-5xl: 76rpx;
+  --font-6xl: 96rpx;
 
-  /* Font Weight */
+  /* Weight */
   --weight-normal: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
@@ -110,30 +125,149 @@
   --weight-extrabold: 800;
 
   /* Line Height */
-  --leading-tight: 1.2;
+  --leading-tight: 1.25;
   --leading-normal: 1.5;
   --leading-relaxed: 1.65;
 
   /* Letter Spacing */
-  --tracking-heading: -0.5rpx;
+  --tracking-heading: 0rpx;
   --tracking-body: 0rpx;
   --tracking-caption: 0.5rpx;
+  --tracking-amount: -1rpx;
 
-  /* ============================
-     Transitions
-     ============================ */
-  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* ── Transitions — 平缓，无回弹 ── */
+  --ease-out-expo: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out-back: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.2, 0, 0, 1);
+  --transition-fast: 0.15s var(--ease-out-expo);
+  --transition-normal: 0.2s var(--ease-out-expo);
+  --transition-slow: 0.3s var(--ease-out-expo);
+  --transition-spring: 0.2s var(--ease-out-expo);
 
-  /* ============================
-     Z-index
-     ============================ */
+  /* ── Z-index ── */
   --z-dropdown: 100;
   --z-sticky: 200;
   --z-overlay: 500;
   --z-modal: 999;
   --z-toast: 1000;
-  --z-overlay-bg: 998;
+
+  /* ── Financial Typography ── */
+  --font-amount: "DIN Alternate", "Tabular Nums", "SF Mono", "Menlo", "Consolas", monospace;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", -apple-system, sans-serif;
+}
+
+/* ============================================
+   Dark Mode
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #F5F5F4;
+    --color-primary-light: #E7E7E4;
+    --color-primary-lighter: #D6D6D2;
+    --color-primary-rgb: 245, 245, 244;
+
+    --color-accent: #FACC15;
+    --color-accent-light: rgba(250, 204, 21, 0.16);
+    --color-accent-rgb: 250, 204, 21;
+    --color-accent-deep: #FDE047;
+
+    --color-success: #4ADE80;
+    --color-success-light: rgba(74, 222, 128, 0.14);
+    --color-danger: #F87171;
+    --color-danger-light: rgba(248, 113, 113, 0.14);
+    --color-warning: #FACC15;
+    --color-warning-light: rgba(250, 204, 21, 0.14);
+    --color-warning-text: #FDE047;
+    --color-info: #A5B4FC;
+    --color-info-light: rgba(165, 180, 252, 0.14);
+
+    --color-bg: #131316;
+    --color-surface: #1C1C1F;
+    --color-surface-raised: #26262A;
+
+    --color-text: #F4F4F5;
+    --color-text-secondary: #A1A1AA;
+    --color-text-tertiary: #71717A;
+    --color-text-inverse: #131316;
+    --color-text-heading: #FAFAFA;
+
+    --color-border: #2C2C30;
+    --color-border-input: #3F3F46;
+    --color-divider: #26262A;
+
+    --color-disabled-bg: #2C2C30;
+    --color-disabled-text: #52525B;
+
+    --shadow-xs: 0 2rpx 6rpx rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 4rpx 12rpx rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 8rpx 24rpx rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12rpx 32rpx rgba(0, 0, 0, 0.45);
+    --shadow-xl: 0 16rpx 48rpx rgba(0, 0, 0, 0.5);
+    --shadow-primary: 0 8rpx 20rpx rgba(0, 0, 0, 0.4);
+    --shadow-accent: 0 8rpx 20rpx rgba(250, 204, 21, 0.2);
+    --shadow-card: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+    --shadow-glass: 0 8rpx 24rpx rgba(0, 0, 0, 0.35);
+    --shadow-tabbar: 0 8rpx 32rpx rgba(0, 0, 0, 0.5);
+
+    --cat-yellow: rgba(250, 204, 21, 0.16);
+    --cat-pink: rgba(248, 113, 113, 0.16);
+    --cat-blue: rgba(129, 140, 248, 0.16);
+    --cat-orange: rgba(251, 146, 60, 0.16);
+    --cat-green: rgba(52, 211, 153, 0.16);
+    --cat-purple: rgba(167, 139, 250, 0.16);
+    --cat-gray: rgba(161, 161, 170, 0.16);
+  }
+}
+
+/* UniApp dark mode class toggle */
+.dark {
+  --color-primary: #F5F5F4;
+  --color-primary-light: #E7E7E4;
+  --color-primary-lighter: #D6D6D2;
+  --color-primary-rgb: 245, 245, 244;
+
+  --color-accent: #FACC15;
+  --color-accent-light: rgba(250, 204, 21, 0.16);
+  --color-accent-deep: #FDE047;
+
+  --color-success: #4ADE80;
+  --color-success-light: rgba(74, 222, 128, 0.14);
+  --color-danger: #F87171;
+  --color-danger-light: rgba(248, 113, 113, 0.14);
+  --color-warning: #FACC15;
+  --color-warning-light: rgba(250, 204, 21, 0.14);
+  --color-warning-text: #FDE047;
+
+  --color-bg: #131316;
+  --color-surface: #1C1C1F;
+  --color-surface-raised: #26262A;
+
+  --color-text: #F4F4F5;
+  --color-text-secondary: #A1A1AA;
+  --color-text-tertiary: #71717A;
+  --color-text-inverse: #131316;
+  --color-text-heading: #FAFAFA;
+
+  --color-border: #2C2C30;
+  --color-border-input: #3F3F46;
+  --color-divider: #26262A;
+
+  --color-disabled-bg: #2C2C30;
+  --color-disabled-text: #52525B;
+
+  --shadow-xs: 0 2rpx 6rpx rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 4rpx 12rpx rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8rpx 24rpx rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12rpx 32rpx rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
+  --shadow-glass: 0 8rpx 24rpx rgba(0, 0, 0, 0.35);
+  --shadow-tabbar: 0 8rpx 32rpx rgba(0, 0, 0, 0.5);
+
+  --cat-yellow: rgba(250, 204, 21, 0.16);
+  --cat-pink: rgba(248, 113, 113, 0.16);
+  --cat-blue: rgba(129, 140, 248, 0.16);
+  --cat-orange: rgba(251, 146, 60, 0.16);
+  --cat-green: rgba(52, 211, 153, 0.16);
+  --cat-purple: rgba(167, 139, 250, 0.16);
+  --cat-gray: rgba(161, 161, 170, 0.16);
 }

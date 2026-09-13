@@ -2,13 +2,14 @@
 	<view class="container">
 		<view class="form-card">
 			<view class="form-header">
-				<text class="form-icon">🔒</text>
+				<view class="form-icon-wrap">
+					<text class="form-icon">🔒</text>
+				</view>
 				<text class="form-title">修改密码</text>
 				<text class="form-subtitle">请填写您的新密码</text>
 			</view>
 
 			<view class="input-group">
-				<text class="label">原密码</text>
 				<input
 					class="input"
 					v-model="oldPassword"
@@ -19,7 +20,6 @@
 			</view>
 
 			<view class="input-group">
-				<text class="label">新密码</text>
 				<input
 					class="input"
 					v-model="newPassword"
@@ -30,7 +30,6 @@
 			</view>
 
 			<view class="input-group">
-				<text class="label">确认新密码</text>
 				<input
 					class="input"
 					v-model="confirmPassword"
@@ -70,8 +69,8 @@ export default {
 				uni.showToast({ title: '请填写完整信息', icon: 'none' })
 				return
 			}
-			if (this.newPassword.length < 6 || this.newPassword.length > 20) {
-				uni.showToast({ title: '新密码长度6-20位', icon: 'none' })
+			if (this.newPassword.length !== 6 || !/^\d{6}$/.test(this.newPassword)) {
+				uni.showToast({ title: '新密码需为6位数字', icon: 'none' })
 				return
 			}
 			if (this.newPassword !== this.confirmPassword) {
@@ -117,24 +116,40 @@ export default {
 	border-radius: var(--radius-2xl);
 	padding: var(--space-3xl);
 	width: 100%;
-	box-shadow: var(--shadow-sm);
+	border: none;
+	box-shadow: var(--shadow-card);
 }
 
 .form-header {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
 	text-align: center;
-	margin-bottom: var(--space-3xl);
+	margin-bottom: var(--space-2xl);
+}
+
+/* 设计稿01：黄色圆角图标块 */
+.form-icon-wrap {
+	width: 104rpx;
+	height: 104rpx;
+	border-radius: 28rpx;
+	background-color: var(--color-accent);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: var(--shadow-accent);
+	margin-bottom: var(--space-lg);
 }
 
 .form-icon {
-	font-size: var(--font-5xl);
-	display: block;
-	margin-bottom: var(--space-md);
+	font-size: 52rpx;
+	line-height: 1;
 }
 
 .form-title {
 	font-size: var(--font-2xl);
-	font-weight: var(--weight-bold);
-	color: var(--color-text);
+	font-weight: var(--weight-extrabold);
+	color: var(--color-text-heading);
 	display: block;
 	margin-bottom: var(--space-xs);
 }
@@ -149,41 +164,44 @@ export default {
 	margin-bottom: var(--space-lg);
 }
 
-.label {
-	font-size: var(--font-md);
-	font-weight: var(--weight-medium);
-	color: var(--color-text);
-	margin-bottom: var(--space-sm);
-	display: block;
-}
-
 .input {
-	height: 88rpx;
-	border: 1px solid var(--color-border-input);
-	border-radius: var(--radius-md);
-	padding: 0 var(--space-lg);
+	height: 104rpx;
+	border: none;
+	border-radius: var(--radius-lg);
+	padding: 0 var(--space-xl);
 	font-size: var(--font-base);
 	color: var(--color-text);
-	background-color: var(--color-bg);
+	background-color: var(--color-surface-raised);
+}
+
+.input:focus {
+	background-color: var(--color-divider);
 }
 
 .placeholder {
-	color: #bfbfbf;
+	color: var(--color-text-tertiary);
 }
 
+/* ── 确认按钮（设计稿01：黑色胶囊） ── */
 .btn-primary {
-	margin-top: var(--space-lg);
-	height: 88rpx;
-	line-height: 88rpx;
+	margin-top: var(--space-xl);
+	height: 104rpx;
+	line-height: 104rpx;
 	background-color: var(--color-primary);
 	color: var(--color-text-inverse);
 	font-size: var(--font-lg);
 	font-weight: var(--weight-semibold);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-full);
 	border: none;
+	box-shadow: var(--shadow-primary);
 }
 
 .btn-primary::after {
 	border: none;
+}
+
+.btn-primary[disabled] {
+	opacity: 0.5;
+	box-shadow: none;
 }
 </style>

@@ -205,12 +205,13 @@
 				</view>
 			</animated-transition>
 		</scroll-view>
-		<TabBar currentPage="pages/dashboard/index" />
+		<TabBar currentPage="pages/dashboard/index" fab />
 	</view>
 </template>
 
 <script>
 import { getMonthlyStatistics, getCategoryStatistics } from '../../api/statistics'
+import { getWithRetry } from '../../api/request'
 import { formatAmount } from '../../utils/format'
 import StatCard from '../../components/StatCard.vue'
 import EmptyState from '../../components/EmptyState.vue'
@@ -294,39 +295,48 @@ export default {
 		month() { this.fetchData() },
 	},
 	onShow() {
+		const token = uni.getStorageSync('token')
+		// 这里不再主动 reLaunch 到登录页：
+		// 1) App.vue 的 onLaunch 已在启动时处理过未登录跳转；
+		// 2) 若 token 过期，下方请求会统一触发 request.js 的全局 401 跳转（已做去重），
+		//    避免启动瞬间多个页面同时 reLaunch 造成 "do not operate continuously" 卡死。
+		if (!token) {
+			return
+		}
 		this.fetchData()
 	},
-	methods: {
-		formatAmount,
-		async fetchData() {
-			this.loading = true
-			try {
-				const [monthlyRes, expenseRes, incomeRes] = await Promise.all([
-					getMonthlyStatistics({ year: this.year, month: this.month }),
-					getCategoryStatistics({ year: this.year, month: this.month, type: 0 }),
-					getCategoryStatistics({ year: this.year, month: this.month, type: 1 }),
-				])
-				if (monthlyRes.code === 200) this.monthlyData = monthlyRes.data
-				if (expenseRes.code === 200) this.expenseData = expenseRes.data
-				if (incomeRes.code === 200) this.incomeData = incomeRes.data
+		methods: {
+			formatAmount,
+			async fetchData() {
+				this.loading = true
+				try {
+					const [monthlyRes, expenseRes, incomeRes] = await Promise.all([
+						getWithRetry(getMonthlyStatistics, { year: this.year, month: this.month }),
+						getWithRetry(getCategoryStatistics, { year: this.year, month: this.month, type: 0 }),
+						getWithRetry(getCategoryStatistics, { year: this.year, month: this.month, type: 1 }),
+					])
+					if (monthlyRes.code === 200) this.monthlyData = monthlyRes.data
+					if (expenseRes.code === 200) this.expenseData = expenseRes.data
+					if (incomeRes.code === 200) this.incomeData = incomeRes.data
 
-				await this.fetchIncomeTrendData()
+					await this.fetchIncomeTrendData()
 
-				if (this.selectedIncomeCategoryIndex > this.incomeCategoryChartData.length - 1) {
-					this.selectedIncomeCategoryIndex = 0
+					if (this.selectedIncomeCategoryIndex > this.incomeCategoryChartData.length - 1) {
+						this.selectedIncomeCategoryIndex = 0
+					}
+				} catch (e) {
+					console.error('[Dashboard] 加载数据失败:', e)
+					uni.showToast({ title: '加载数据失败，请检查网络连接', icon: 'none' })
+				} finally {
+					this.loading = false
+					this.refreshing = false
 				}
-			} catch (e) {
-				console.error(e)
-			} finally {
-				this.loading = false
-				this.refreshing = false
-			}
-		},
+			},
 		async fetchIncomeTrendData() {
 			const recentMonths = this.buildRecentMonths(6)
 			try {
 				const responses = await Promise.all(
-					recentMonths.map(point => getMonthlyStatistics({ year: point.year, month: point.month }))
+					recentMonths.map(point => getWithRetry(getMonthlyStatistics, { year: point.year, month: point.month }))
 				)
 				this.incomeTrendData = recentMonths.map((point, index) => {
 					const res = responses[index]
@@ -337,7 +347,7 @@ export default {
 				})
 				this.selectedTrendIndex = this.incomeTrendData.length > 0 ? this.incomeTrendData.length - 1 : -1
 			} catch (e) {
-				console.error(e)
+				console.error('[Dashboard] 收入趋势加载失败:', e)
 				this.incomeTrendData = []
 				this.selectedTrendIndex = -1
 			}
@@ -422,11 +432,12 @@ export default {
 .scroll-content {
 	flex: 1;
 	box-sizing: border-box;
-	padding: var(--space-lg) var(--space-xl) calc(var(--space-4xl) + 120rpx);
+	padding: var(--space-lg) var(--space-xl) calc(var(--space-xl) + 180rpx);
 	-webkit-overflow-scrolling: touch;
+	overflow: hidden;
 }
 
-/* ── 月份选择器 ── */
+/* ── 月份选择器（设计稿03：白色胶囊月份切换） ── */
 .month-selector {
 	display: flex;
 	align-items: center;
@@ -449,7 +460,7 @@ export default {
 	align-items: center;
 	justify-content: center;
 	box-shadow: var(--shadow-xs);
-	border: 1rpx solid var(--color-border);
+	border: none;
 	transition:
 		background-color var(--transition-fast),
 		transform var(--transition-spring),
@@ -473,19 +484,20 @@ export default {
 	flex: 1;
 	min-width: 0;
 	max-width: none;
-	background: var(--color-primary);
+	background: var(--color-surface);
+	border: none;
 	padding: var(--space-md) 32rpx;
-	border-radius: var(--radius-lg);
-	box-shadow: var(--shadow-sm);
+	border-radius: var(--radius-full);
+	box-shadow: var(--shadow-xs);
 }
 
 .month-text {
 	display: block;
 	text-align: center;
 	font-size: var(--font-base);
-	font-weight: var(--weight-bold);
-	color: var(--color-text-inverse);
-	letter-spacing: 2rpx;
+	font-weight: var(--weight-semibold);
+	color: var(--color-text-heading);
+	letter-spacing: 1rpx;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -518,14 +530,15 @@ export default {
 	height: 100%;
 	min-height: 220rpx;
 	background: var(--color-surface);
-	border: 1rpx solid var(--color-border);
-	box-shadow: var(--shadow-xs);
+	border: none;
+	box-shadow: var(--shadow-card);
 }
 
 .stat-side-card {
 	min-height: 106rpx;
 	background: var(--color-surface);
-	border: 1rpx solid var(--color-border);
+	border: none;
+	box-shadow: var(--shadow-card);
 }
 
 ::v-deep(.stat-main-card .stat-body) {
@@ -567,14 +580,14 @@ export default {
 	margin-right: var(--space-sm);
 }
 
-/* ── 收入图表卡片 ── */
+/* ── 收入图表卡片（设计稿03：白卡无边框 + 黄色高亮柱） ── */
 .income-chart-card {
 	background-color: var(--color-surface);
 	border-radius: var(--radius-2xl);
 	padding: var(--space-lg) var(--space-xl) var(--space-md);
 	margin-bottom: 24rpx;
-	box-shadow: var(--shadow-xs);
-	border: 1rpx solid var(--color-border);
+	box-shadow: var(--shadow-card);
+	border: none;
 }
 
 .chart-header {
@@ -594,22 +607,23 @@ export default {
 .chart-mode-switch {
 	display: inline-flex;
 	align-items: center;
-	background-color: var(--color-bg);
-	border-radius: var(--radius-md);
+	background-color: var(--color-surface-raised);
+	border-radius: var(--radius-full);
 	padding: 4rpx;
 	gap: 4rpx;
 	flex-shrink: 0;
 }
 
 .mode-item {
-	padding: 10rpx 20rpx;
-	border-radius: var(--radius-sm);
+	padding: 10rpx 24rpx;
+	border-radius: var(--radius-full);
 	transition: all var(--transition-fast);
 }
 
+/* 设计稿02/03：选中墨黑胶囊 */
 .mode-item.active {
 	background: var(--color-primary);
-	box-shadow: var(--shadow-sm);
+	box-shadow: none;
 }
 
 .mode-text {
@@ -701,11 +715,12 @@ export default {
 	align-items: center;
 }
 
+/* 设计稿03：灰色柱 + 黄色高亮当前柱 */
 .trend-bar-bg {
 	width: 100%;
 	height: 120rpx;
 	border-radius: var(--radius-sm);
-	background: var(--color-bg);
+	background: transparent;
 	display: flex;
 	align-items: flex-end;
 	justify-content: center;
@@ -716,15 +731,15 @@ export default {
 .trend-bar {
 	width: 100%;
 	margin: 0 auto;
-	border-radius: var(--radius-xs);
-	background: var(--color-primary-lighter);
-	opacity: 0.4;
+	border-radius: var(--radius-sm);
+	background: var(--color-surface-raised);
+	opacity: 1;
 	min-height: 8rpx;
 	transition: all var(--transition-normal);
 }
 
 .trend-bar.active {
-	background: var(--color-success);
+	background: var(--color-accent);
 	opacity: 1;
 }
 
@@ -784,21 +799,22 @@ export default {
 .compare-track {
 	height: 10rpx;
 	border-radius: var(--radius-full);
-	background-color: var(--color-bg);
+	background-color: var(--color-surface-raised);
 	overflow: hidden;
 }
 
 .compare-fill {
 	height: 100%;
 	border-radius: var(--radius-full);
-	background: var(--color-primary-lighter);
-	opacity: 0.5;
+	background: var(--color-surface-raised);
+	opacity: 1;
 	transition: all var(--transition-normal);
 }
 
+/* 设计稿03：选中项黄色高亮 */
 .compare-fill.active {
-	background: var(--color-success);
-	opacity: 0.8;
+	background: var(--color-accent);
+	opacity: 1;
 }
 
 .compare-row-right {
@@ -827,7 +843,7 @@ export default {
 	padding: var(--space-lg);
 	border-radius: var(--radius-md);
 	background: var(--color-success-light);
-	border: 1rpx solid rgba(46, 204, 113, 0.15);
+	border: 1rpx solid rgba(46, 125, 82, 0.18);
 }
 
 .compare-highlight-label {
@@ -899,14 +915,14 @@ export default {
 	}
 }
 
-/* ── 分类表格卡片 ── */
+/* ── 分类表格卡片（设计稿03：白卡无边框） ── */
 .table-card {
 	background-color: var(--color-surface);
 	border-radius: var(--radius-2xl);
 	margin-bottom: 20rpx;
 	overflow: hidden;
-	box-shadow: var(--shadow-xs);
-	border: 1rpx solid var(--color-border);
+	box-shadow: var(--shadow-card);
+	border: none;
 }
 
 .table-header {
@@ -929,9 +945,9 @@ export default {
 	font-size: var(--font-2xs);
 	color: var(--color-text-tertiary);
 	font-weight: var(--weight-medium);
-	background: var(--color-bg);
+	background: var(--color-surface-raised);
 	padding: 6rpx 16rpx;
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-full);
 }
 
 /* ── 表格行 ── */
@@ -993,7 +1009,7 @@ export default {
 .bar-container {
 	width: 80rpx;
 	height: 8rpx;
-	background-color: var(--color-bg);
+	background-color: var(--color-surface-raised);
 	border-radius: var(--radius-full);
 	margin: 0 var(--space-lg);
 	overflow: hidden;
@@ -1005,8 +1021,9 @@ export default {
 	transition: width var(--transition-normal) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* 设计稿03：支出灰、收入绿 */
 .bar.type-expense {
-	background: var(--color-danger);
+	background: var(--color-text-tertiary);
 	opacity: 0.6;
 }
 
@@ -1024,7 +1041,7 @@ export default {
 }
 
 .amount.type-expense {
-	color: var(--color-danger);
+	color: var(--color-text);
 }
 
 .amount.type-income {

@@ -4,8 +4,6 @@ import { useNavigate, Link } from 'react-router-dom'
 import { register } from '../api/user'
 
 const { Title, Text } = Typography
-const USERNAME_REGEX = /^[A-Za-z0-9\u4e00-\u9fa5]{2,20}$/
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{8,16}$/
 
 export default function Register() {
   const [form] = Form.useForm()
@@ -104,31 +102,17 @@ export default function Register() {
           </div>
 
           <Form form={form} onFinish={onFinish} size="large" layout="vertical">
-            <Form.Item
-              name="username"
-              rules={[
-                { required: true, message: '请输入用户名' },
-                { pattern: USERNAME_REGEX, message: '用户名需为2-20位中英文或数字组合' },
-              ]}
-              style={{ marginBottom: 20 }}
-            >
+            <Form.Item name="username" style={{ marginBottom: 20 }}>
               <Input
                 prefix={<UserOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
                 placeholder="用户名（2-20位中英文或数字）"
                 style={{ height: 48, borderRadius: 'var(--radius-md)' }}
               />
             </Form.Item>
-            <Form.Item
-              name="password"
-              rules={[
-                { required: true, message: '请输入密码' },
-                { pattern: PASSWORD_REGEX, message: '密码需为8-16位且包含大小写字母和数字' },
-              ]}
-              style={{ marginBottom: 28 }}
-            >
+            <Form.Item name="password" style={{ marginBottom: 28 }}>
               <Input.Password
                 prefix={<LockOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
-                placeholder="密码（8-16位，含大小写字母和数字）"
+                placeholder="密码（6位数字）"
                 style={{ height: 48, borderRadius: 'var(--radius-md)' }}
               />
             </Form.Item>

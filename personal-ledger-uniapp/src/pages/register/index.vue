@@ -1,13 +1,16 @@
 <template>
 	<view class="container">
-		<view class="header">
-			<text class="title">注册账号</text>
-			<text class="subtitle">创建您的记账账户</text>
+		<!-- 设计稿01 品牌区（注册页同风格） -->
+		<view class="brand">
+			<view class="brand-logo">
+				<text class="brand-logo-icon">🧾</text>
+			</view>
+			<text class="brand-name">创建账号</text>
+			<text class="brand-slogan">加入简记，开始记录</text>
 		</view>
 
 		<view class="form-card">
 			<view class="input-group">
-				<text class="label">用户名</text>
 				<input
 					class="input"
 					v-model="username"
@@ -17,18 +20,16 @@
 			</view>
 
 			<view class="input-group">
-				<text class="label">密码</text>
 				<input
 					class="input"
 					v-model="password"
-					placeholder="6-20位密码"
+					placeholder="6位数字密码"
 					placeholder-class="placeholder"
 					:password="true"
 				/>
 			</view>
 
 			<view class="input-group">
-				<text class="label">确认密码</text>
 				<input
 					class="input"
 					v-model="confirmPassword"
@@ -77,8 +78,8 @@ export default {
 				uni.showToast({ title: '用户名长度2-20位', icon: 'none' })
 				return
 			}
-			if (this.password.length < 6 || this.password.length > 20) {
-				uni.showToast({ title: '密码长度6-20位', icon: 'none' })
+			if (this.password.length !== 6 || !/^\d{6}$/.test(this.password)) {
+				uni.showToast({ title: '密码需为6位数字', icon: 'none' })
 				return
 			}
 			if (this.password !== this.confirmPassword) {
@@ -122,87 +123,109 @@ export default {
 	padding: 60rpx var(--space-3xl);
 }
 
-.header {
-	text-align: center;
-	margin-bottom: 60rpx;
+/* ── 品牌区（设计稿01 同款，缩小版） ── */
+.brand {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin-bottom: 64rpx;
 }
 
-.title {
-	font-size: var(--font-5xl);
-	font-weight: var(--weight-bold);
-	color: var(--color-text);
-	display: block;
+.brand-logo {
+	width: 120rpx;
+	height: 120rpx;
+	border-radius: 32rpx;
+	background-color: var(--color-accent);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: var(--shadow-accent);
+	margin-bottom: var(--space-lg);
 }
 
-.subtitle {
-	font-size: var(--font-md);
-	color: #8c8c8c;
-	margin-top: var(--space-sm);
-	display: block;
+.brand-logo-icon {
+	font-size: 60rpx;
+	line-height: 1;
+}
+
+.brand-name {
+	font-size: var(--font-2xl);
+	font-weight: var(--weight-extrabold);
+	color: var(--color-text-heading);
+	line-height: var(--leading-tight);
+	margin-bottom: var(--space-xs);
+}
+
+.brand-slogan {
+	font-size: var(--font-sm);
+	color: var(--color-text-secondary);
 }
 
 .form-card {
-	background-color: var(--color-surface);
-	border-radius: var(--radius-xl);
-	padding: var(--space-3xl);
-	box-shadow: var(--shadow-sm);
+	background-color: transparent;
+	border-radius: var(--radius-lg);
+	padding: 0;
+	border: none;
 }
 
 .input-group {
-	margin-bottom: var(--space-xl);
-}
-
-.label {
-	font-size: var(--font-base);
-	font-weight: var(--weight-medium);
-	color: var(--color-text);
-	margin-bottom: var(--space-sm);
-	display: block;
+	margin-bottom: var(--space-lg);
 }
 
 .input {
-	height: 88rpx;
-	border: 1px solid var(--color-border-input);
-	border-radius: var(--radius-md);
-	padding: 0 var(--space-lg);
-	font-size: var(--font-lg);
+	height: 104rpx;
+	border: none;
+	border-radius: var(--radius-lg);
+	padding: 0 var(--space-xl);
+	font-size: var(--font-base);
 	color: var(--color-text);
-	background-color: var(--color-bg);
+	background-color: var(--color-surface-raised);
+}
+
+.input:focus {
+	background-color: var(--color-divider);
 }
 
 .placeholder {
-	color: #bfbfbf;
+	color: var(--color-text-tertiary);
 }
 
+/* ── 注册按钮（设计稿01：黑色胶囊） ── */
 .btn-primary {
-	margin-top: var(--space-md);
-	height: 88rpx;
-	line-height: 88rpx;
+	margin-top: var(--space-xl);
+	height: 104rpx;
+	line-height: 104rpx;
 	background-color: var(--color-primary);
 	color: var(--color-text-inverse);
 	font-size: var(--font-lg);
 	font-weight: var(--weight-semibold);
-	border-radius: var(--radius-md);
+	border-radius: var(--radius-full);
 	border: none;
+	box-shadow: var(--shadow-primary);
 }
 
 .btn-primary::after {
 	border: none;
 }
 
+.btn-primary[disabled] {
+	opacity: 0.5;
+	box-shadow: none;
+}
+
 .link {
 	text-align: center;
-	margin-top: var(--space-xl);
+	margin-top: var(--space-2xl);
 }
 
 .link-text {
-	font-size: var(--font-md);
-	color: #8c8c8c;
+	font-size: var(--font-sm);
+	color: var(--color-text-secondary);
 }
 
 .link-highlight {
-	font-size: var(--font-md);
+	font-size: var(--font-sm);
 	color: var(--color-text);
-	font-weight: var(--weight-medium);
+	font-weight: var(--weight-semibold);
 }
 </style>

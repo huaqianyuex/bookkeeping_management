@@ -3,12 +3,11 @@
 		<!-- 状态栏占位 -->
 		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 		<view class="page-top-bar">
+			<!-- 设计稿03：左侧大标题 -->
+			<text class="page-title">账单</text>
 			<view class="top-bar-actions">
 				<view class="filter-btn" :class="{ active: filterCategory }" @click="showFilter">
 					<text class="filter-icon">⚲</text>
-				</view>
-				<view class="add-btn" @click="goAdd">
-					<text class="add-icon">+</text>
 				</view>
 			</view>
 		</view>
@@ -61,13 +60,16 @@
 						</view>
 					</view>
 
-					<record-card
-						v-for="item in group.records"
-						:key="item.id"
-						:record="item"
-						@edit="goEdit"
-						@delete="handleDelete"
-					></record-card>
+					<!-- 设计稿03：同组账单合并在一张白卡内 -->
+					<view class="list-card">
+						<record-card
+							v-for="item in group.records"
+							:key="item.id"
+							:record="item"
+							@edit="goEdit"
+							@delete="handleDelete"
+						></record-card>
+					</view>
 				</view>
 			</view>
 
@@ -79,7 +81,7 @@
 				<text>没有更多了</text>
 			</view>
 		</scroll-view>
-		<TabBar currentPage="pages/records/index" />
+		<TabBar currentPage="pages/records/index" fab />
 
 		<!-- 筛选弹窗 -->
 		<view v-if="filterOpen" class="modal-overlay" @click="filterOpen = false">
@@ -173,6 +175,12 @@ export default {
 		}
 	},
 	onShow() {
+		// 未登录/登录过期由 App.vue onLaunch 与 request.js 的全局 401 拦截统一处理，
+		// 此处不再主动 reLaunch，避免启动瞬间多个页面同时跳转造成 "do not operate continuously" 卡死。
+		const token = uni.getStorageSync('token')
+		if (!token) {
+			return
+		}
 		this.fetchCategories()
 		this.fetchData({ page: 1, size: this.size })
 	},
@@ -275,15 +283,23 @@ export default {
 
 .status-bar {
 	width: 100%;
-	background-color: var(--color-surface);
+	background-color: var(--color-bg);
 }
 
-/* ── 顶部操作栏 ── */
+/* ── 顶部操作栏（设计稿03：左大标题 + 右操作） ── */
 .page-top-bar {
 	display: flex;
-	justify-content: flex-end;
-	padding: var(--space-md) var(--space-xl) var(--space-md);
-	background-color: var(--color-surface);
+	justify-content: space-between;
+	align-items: center;
+	padding: var(--space-lg) var(--space-2xl);
+	background-color: var(--color-bg);
+}
+
+.page-title {
+	font-size: 52rpx;
+	font-weight: var(--weight-extrabold);
+	color: var(--color-text-heading);
+	letter-spacing: var(--tracking-heading);
 }
 
 .top-bar-actions {
@@ -292,11 +308,13 @@ export default {
 	gap: var(--space-md);
 }
 
+/* 设计稿03：白色胶囊圆形操作按钮 */
 .filter-btn {
-	width: 68rpx;
-	height: 68rpx;
+	width: 76rpx;
+	height: 76rpx;
 	border-radius: var(--radius-full);
-	background-color: var(--color-border);
+	background-color: var(--color-surface);
+	box-shadow: var(--shadow-xs);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -306,7 +324,7 @@ export default {
 }
 
 .filter-btn.active {
-	background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+	background: var(--color-accent);
 }
 
 .filter-btn:active {
@@ -326,12 +344,11 @@ export default {
 	width: 68rpx;
 	height: 68rpx;
 	border-radius: var(--radius-full);
-	background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+	background: var(--color-primary);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: var(--shadow-accent);
-	transition: transform var(--transition-spring);
+	transition: opacity var(--transition-fast);
 }
 
 .add-btn:active {
@@ -352,7 +369,7 @@ export default {
 	align-items: center;
 	padding: var(--space-md) var(--space-3xl);
 	background-color: var(--color-warning-light);
-	border-bottom: 1rpx solid rgba(243, 156, 18, 0.15);
+	 border-bottom: 1rpx solid rgba(169, 106, 20, 0.15);
 	animation: slideDown var(--transition-normal);
 }
 
@@ -378,7 +395,7 @@ export default {
 .scroll-content {
 	flex: 1;
 	box-sizing: border-box;
-	padding: 0 var(--space-xl) calc(var(--space-4xl) + 100rpx);
+	padding: 0 var(--space-xl) calc(var(--space-xl) + 190rpx);
 	-webkit-overflow-scrolling: touch;
 }
 
@@ -388,19 +405,19 @@ export default {
 
 /* ── 日期分组 ── */
 .section {
-	padding-top: var(--space-2xl);
-}
-
-.section:first-child {
 	padding-top: var(--space-xl);
 }
 
-/* ── 分组头部 ── */
+.section:first-child {
+	padding-top: var(--space-md);
+}
+
+/* ── 分组头部（设计稿03：小灰字日期行） ── */
 .section-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding-bottom: var(--space-lg);
+	padding-bottom: var(--space-md);
 }
 
 .section-left {
@@ -411,39 +428,25 @@ export default {
 	padding-right: var(--space-sm);
 }
 
+/* 设计稿03：无日期方块，仅灰字日期行 */
 .date-badge {
-	width: 72rpx;
-	height: 72rpx;
-	border-radius: var(--radius-xl);
-	background-color: var(--color-border);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	margin-right: var(--space-md);
-	transition:
-		background-color var(--transition-fast),
-		transform var(--transition-fast);
-}
-
-.date-badge.today {
-	background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-	box-shadow: var(--shadow-accent);
+	display: none;
 }
 
 .date-day {
-	font-size: var(--font-xl);
-	font-weight: var(--weight-extrabold);
+	font-size: var(--font-lg);
+	font-weight: var(--weight-bold);
 	color: var(--color-text-secondary);
 }
 
 .date-day.today {
-	color: var(--color-text-inverse);
+	color: var(--color-text-secondary);
 }
 
 .section-date {
-	font-size: var(--font-base);
-	font-weight: var(--weight-bold);
-	color: var(--color-text-heading);
+	font-size: var(--font-md);
+	font-weight: var(--weight-semibold);
+	color: var(--color-text-secondary);
 	display: block;
 	letter-spacing: var(--tracking-heading);
 }
@@ -465,37 +468,64 @@ export default {
 	margin-left: var(--space-md);
 }
 
+/* 设计稿03：收入绿、支出灰 */
 .summary-income {
 	font-size: var(--font-sm);
 	color: var(--color-success);
-	font-weight: var(--weight-bold);
+	font-weight: var(--weight-semibold);
 	white-space: nowrap;
 }
 
 .summary-expense {
 	font-size: var(--font-sm);
-	color: var(--color-danger);
-	font-weight: var(--weight-bold);
+	color: var(--color-text-secondary);
+	font-weight: var(--weight-semibold);
 	white-space: nowrap;
 }
 
-/* ── 空状态按钮 ── */
+/* ── 设计稿03：同组账单合并白卡 ── */
+.list-card {
+	background-color: var(--color-surface);
+	border-radius: var(--radius-2xl);
+	box-shadow: var(--shadow-card);
+	padding: var(--space-xs) var(--space-md);
+	overflow: hidden;
+}
+
+.list-card :deep(.record-card) {
+	margin-bottom: 0;
+}
+
+/* 行底色必须不透明，否则左滑删除层会透出压住金额 */
+.list-card :deep(.record-main) {
+	background-color: var(--color-surface);
+	box-shadow: none;
+	border-radius: 0;
+	padding: var(--space-lg) var(--space-md);
+}
+
+/* 行间细分隔线 */
+.list-card :deep(.record-card + .record-card .record-main) {
+	border-top: 1rpx solid var(--color-divider);
+}
+
+/* ── 空状态按钮（设计稿10：黄色胶囊「去记一笔」） ── */
 .empty-btn {
 	display: inline-flex;
 	align-items: center;
-	background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-	padding: var(--space-lg) 44rpx;
-	border-radius: var(--radius-xl);
+	background: var(--color-accent);
+	padding: var(--space-lg) var(--space-3xl);
+	border-radius: var(--radius-full);
 	box-shadow: var(--shadow-accent);
-	transition: transform var(--transition-spring);
+	transition: opacity var(--transition-fast);
 }
 
 .empty-btn:active {
-	transform: scale(0.96);
+	opacity: 0.88;
 }
 
 .empty-btn-text {
-	color: var(--color-text-inverse);
+	color: var(--color-text-heading);
 	font-size: var(--font-base);
 	font-weight: var(--weight-semibold);
 }
@@ -579,8 +609,8 @@ export default {
 
 .filter-option {
 	padding: var(--space-md) var(--space-lg);
-	border-radius: var(--radius-md);
-	background-color: var(--color-border);
+	border-radius: var(--radius-full);
+	background-color: var(--color-surface-raised);
 	transition:
 		background-color var(--transition-fast),
 		transform var(--transition-fast);
@@ -590,8 +620,9 @@ export default {
 	transform: scale(0.95);
 }
 
+/* 设计稿08/09：选中项黄色高亮胶囊 */
 .filter-option.active {
-	background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+	background: var(--color-accent-light);
 }
 
 .filter-option-text {
@@ -601,7 +632,7 @@ export default {
 }
 
 .filter-option-text.active {
-	color: var(--color-text-inverse);
+	color: var(--color-warning-text);
 	font-weight: var(--weight-semibold);
 }
 
@@ -613,9 +644,9 @@ export default {
 
 .reset-btn {
 	flex: 1;
-	height: 88rpx;
-	border-radius: var(--radius-lg);
-	background-color: var(--color-border);
+	height: 96rpx;
+	border-radius: var(--radius-full);
+	background-color: var(--color-surface-raised);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -625,7 +656,7 @@ export default {
 }
 
 .reset-btn:active {
-	background-color: var(--color-border-input);
+	background-color: var(--color-border);
 	transform: scale(0.97);
 }
 
@@ -635,20 +666,21 @@ export default {
 	color: var(--color-text-secondary);
 }
 
+/* 设计稿：黑色胶囊主操作 */
 .apply-btn {
 	flex: 2;
-	height: 88rpx;
-	border-radius: var(--radius-lg);
-	background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+	height: 96rpx;
+	border-radius: var(--radius-full);
+	background: var(--color-primary);
+	box-shadow: var(--shadow-primary);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: var(--shadow-accent);
-	transition: transform var(--transition-spring);
+	transition: opacity var(--transition-fast);
 }
 
 .apply-btn:active {
-	transform: scale(0.97);
+	opacity: 0.88;
 }
 
 .apply-btn-text {

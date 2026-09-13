@@ -1,0 +1,155 @@
+/* ============================================
+   Global Micro-Interaction Animations
+   ============================================ */
+
+/* ── 按钮按压缩放 ── */
+.btn-press {
+  transition: transform 0.2s var(--ease-out-back);
+}
+.btn-press:active {
+  transform: scale(0.96);
+}
+
+/* ── 卡片按压 ── */
+.card-press {
+  transition: transform 0.3s var(--ease-out-back), box-shadow 0.2s ease;
+}
+.card-press:active {
+  transform: scale(0.98);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── 淡入上移 ── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-fade-in-up {
+  animation: fadeInUp 0.4s var(--ease-out-expo) both;
+}
+
+/* ── 淡入 ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.anim-fade-in {
+  animation: fadeIn 0.3s ease both;
+}
+
+/* ── 缩放弹入 ── */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.anim-scale-in {
+  animation: scaleIn 0.35s var(--ease-out-back) both;
+}
+
+/* ── 记账成功打勾动画 ── */
+@keyframes checkDraw {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes checkCircle {
+  0% {
+    stroke-dashoffset: 314;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes successBounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.15); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+.success-check-circle {
+  animation: checkCircle 0.6s var(--ease-out-expo) both;
+}
+
+.success-check-mark {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: checkDraw 0.4s 0.3s var(--ease-out-expo) both;
+}
+
+.success-bounce {
+  animation: successBounce 0.5s var(--ease-out-back) both;
+}
+
+/* ── 数字滚动（金额变化） ── */
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(16rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-count-up {
+  animation: countUp 0.4s var(--ease-out-expo) both;
+}
+
+/* ── 骨架屏微光 ── */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── 脉冲 ── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.anim-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ── 列表项交错入场 ── */
+.stagger-item {
+  opacity: 0;
+  transform: translateY(20rpx);
+  animation: fadeInUp 0.4s var(--ease-out-expo) both;
+}
+.stagger-item:nth-child(1) { animation-delay: 0s; }
+.stagger-item:nth-child(2) { animation-delay: 0.04s; }
+.stagger-item:nth-child(3) { animation-delay: 0.08s; }
+.stagger-item:nth-child(4) { animation-delay: 0.12s; }
+.stagger-item:nth-child(5) { animation-delay: 0.16s; }
+.stagger-item:nth-child(6) { animation-delay: 0.2s; }
+.stagger-item:nth-child(7) { animation-delay: 0.24s; }
+.stagger-item:nth-child(8) { animation-delay: 0.28s; }
+

@@ -28,7 +28,7 @@ function AppContent() {
           <MainLayout />
         </AuthRoute>
       }>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route index element={<Navigate to="/records" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="records" element={<Records />} />
         <Route path="categories" element={<Categories />} />

@@ -4,7 +4,7 @@ import { updatePassword } from '../api/user'
 import AnimatedRoute from '../components/ui/AnimatedRoute'
 
 const { Title, Text } = Typography
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{8,16}$/
+const PASSWORD_REGEX = /^\d{6}$/
 
 export default function ChangePassword() {
   const [form] = Form.useForm()
@@ -53,7 +53,7 @@ export default function ChangePassword() {
               修改密码
             </Title>
             <Text style={{ color: 'var(--color-text-secondary)', marginTop: 'var(--space-sm)' }}>
-              新密码需为8-16位，包含大小写字母和数字
+              新密码需为6位数字
             </Text>
           </div>
 
@@ -74,7 +74,7 @@ export default function ChangePassword() {
               label="新密码"
               rules={[
                 { required: true, message: '请输入新密码' },
-                { pattern: PASSWORD_REGEX, message: '密码需为8-16位且包含大小写字母和数字' },
+                { pattern: PASSWORD_REGEX, message: '密码需为6位数字' },
               ]}
             >
               <Input.Password

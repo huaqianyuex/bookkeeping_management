@@ -18,7 +18,7 @@ export default function UserInfo() {
 
   if (!user) return null
 
-  const avatarSrc = user.avatarUrl || undefined
+  const avatarSrc = user.avatar || undefined
 
   const onUpdateProfile = async (values) => {
     try {
@@ -159,10 +159,10 @@ export default function UserInfo() {
               <Text strong>{user.username}</Text>
             </Descriptions.Item>
             <Descriptions.Item label="创建时间">
-              <Text>{user.createTime}</Text>
+              <Text>{user.created_at || '-'}</Text>
             </Descriptions.Item>
             <Descriptions.Item label="更新时间">
-              <Text>{user.updateTime}</Text>
+              <Text>{user.updated_at || '-'}</Text>
             </Descriptions.Item>
           </Descriptions>
           <div style={{ textAlign: 'center', marginTop: 32 }}>

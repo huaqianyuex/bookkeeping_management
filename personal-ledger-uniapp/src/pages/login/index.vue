@@ -1,13 +1,16 @@
 <template>
 	<view class="container">
-		<view class="header">
-			<text class="title">个人记账本</text>
-			<text class="subtitle">记录每一笔收支</text>
+		<!-- 设计稿01 品牌区：黄色圆角 Logo + 品牌名 + slogan -->
+		<view class="brand">
+			<view class="brand-logo">
+				<text class="brand-logo-icon">🧾</text>
+			</view>
+			<text class="brand-name">简记</text>
+			<text class="brand-slogan">简单记录每一笔</text>
 		</view>
 
 		<view class="form-card">
 			<view class="input-group">
-				<text class="label">用户名</text>
 				<input
 					class="input"
 					v-model="username"
@@ -17,7 +20,6 @@
 			</view>
 
 			<view class="input-group">
-				<text class="label">密码</text>
 				<input
 					class="input"
 					v-model="password"
@@ -41,6 +43,11 @@
 				<text class="link-highlight">立即注册</text>
 			</view>
 		</view>
+
+		<!-- 设计稿01 底部协议文案（静态展示） -->
+		<view class="agreement">
+			<text class="agreement-text">登录即代表同意《用户协议》和《隐私政策》</text>
+		</view>
 	</view>
 </template>
 
@@ -56,39 +63,49 @@ export default {
 			submitting: false,
 		}
 	},
-	onLoad() {
-		// 已登录则直接跳主页，避免在登录页卡住
-		const token = uni.getStorageSync('token')
-		if (token) {
-			uni.switchTab({ url: '/pages/dashboard/index' })
-		}
-	},
-	methods: {
-		async handleLogin() {
-			if (!this.username || !this.password) {
-				uni.showToast({ title: '请输入用户名和密码', icon: 'none' })
-				return
-			}
-			this.submitting = true
-			try {
-				const res = await login({
-					username: this.username,
-					password: this.password
-				})
-				if (res.code === 200) {
-					const store = useUserStore()
-					store.setToken(res.data)
-					await store.fetchUserInfo()
-					uni.switchTab({ url: '/pages/dashboard/index' })
-				} else {
-					uni.showToast({ title: res.message || '登录失败', icon: 'none' })
-				}
-			} catch (e) {
-				uni.showToast({ title: '网络连接失败', icon: 'none' })
-			} finally {
-				this.submitting = false
+		onLoad() {
+			// 已登录则直接跳主页，避免在登录页卡住
+			const token = uni.getStorageSync('token')
+			console.log('[Login] onLoad, token存在:', !!token, ', token值:', token ? token.substring(0, 20) + '...' : '无')
+			if (token) {
+				console.log('[Login] 检测到已有token，自动跳转到 dashboard')
+				uni.reLaunch({ url: '/pages/dashboard/index' })
 			}
 		},
+		methods: {
+			async handleLogin() {
+				console.log('[Login] handleLogin 被调用, username:', this.username, ', password长度:', this.password?.length)
+				if (!this.username || !this.password) {
+					uni.showToast({ title: '请输入用户名和密码', icon: 'none' })
+					return
+				}
+				this.submitting = true
+				console.log('[Login] 开始请求登录接口...')
+				try {
+					const res = await login({
+						username: this.username,
+						password: this.password
+					})
+					console.log('[Login] 登录接口返回:', JSON.stringify(res))
+					if (res.code === 200) {
+						console.log('[Login] 登录成功，设置 token...')
+						const store = useUserStore()
+						store.setToken(res.data?.token || '')
+						console.log('[Login] 获取用户信息...')
+						await store.fetchUserInfo()
+						console.log('[Login] 跳转到 dashboard...')
+						uni.reLaunch({ url: '/pages/dashboard/index' })
+					} else {
+						console.log('[Login] 登录失败:', res.message)
+						uni.showToast({ title: res.message || '登录失败', icon: 'none' })
+					}
+				} catch (e) {
+					console.error('[Login] 登录异常:', e)
+					uni.showToast({ title: e?.message || '网络连接失败', icon: 'none' })
+				} finally {
+					this.submitting = false
+				}
+			},
 		goRegister() {
 			uni.navigateTo({ url: '/pages/register/index' })
 		}
@@ -106,64 +123,70 @@ export default {
 	padding: 80rpx var(--space-3xl);
 }
 
-/* ── 头部 ── */
-.header {
-	text-align: center;
+/* ── 品牌区（设计稿01：黄色圆角 Logo 居中 + 品牌名 + slogan） ── */
+.brand {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
 	margin-bottom: 80rpx;
 }
 
-.title {
-	font-size: var(--font-5xl);
-	font-weight: var(--weight-extrabold);
-	color: var(--color-text-heading);
-	display: block;
-	letter-spacing: var(--tracking-heading);
-	line-height: var(--leading-tight);
-}
-
-.subtitle {
-	font-size: var(--font-md);
-	color: var(--color-text-secondary);
-	margin-top: var(--space-md);
-	display: block;
-	font-weight: var(--weight-medium);
-	letter-spacing: var(--tracking-caption);
-}
-
-/* ── 表单卡片 ── */
-.form-card {
-	background-color: var(--color-surface);
-	border-radius: var(--radius-2xl);
-	padding: var(--space-3xl);
-	box-shadow: var(--shadow-sm);
-}
-
-.input-group {
+.brand-logo {
+	width: 152rpx;
+	height: 152rpx;
+	border-radius: 40rpx;
+	background-color: var(--color-accent);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: var(--shadow-accent);
 	margin-bottom: var(--space-xl);
 }
 
-.label {
-	font-size: var(--font-base);
-	font-weight: var(--weight-semibold);
-	color: var(--color-text);
+.brand-logo-icon {
+	font-size: 76rpx;
+	line-height: 1;
+}
+
+.brand-name {
+	font-size: 56rpx;
+	font-weight: var(--weight-extrabold);
+	color: var(--color-text-heading);
+	line-height: var(--leading-tight);
 	margin-bottom: var(--space-sm);
-	display: block;
+}
+
+.brand-slogan {
+	font-size: var(--font-md);
+	color: var(--color-text-secondary);
+}
+
+/* ── 表单区（设计稿01：无边框灰底圆角输入） ── */
+.form-card {
+	background-color: transparent;
+	border-radius: var(--radius-lg);
+	padding: 0;
+	border: none;
+}
+
+.input-group {
+	margin-bottom: var(--space-lg);
 }
 
 .input {
-	height: 88rpx;
-	border: 2rpx solid var(--color-border-input);
-	border-radius: var(--radius-md);
-	padding: 0 var(--space-lg);
-	font-size: var(--font-lg);
+	height: 104rpx;
+	border: none;
+	border-radius: var(--radius-lg);
+	padding: 0 var(--space-xl);
+	font-size: var(--font-base);
 	color: var(--color-text);
-	background-color: var(--color-bg);
-	transition: border-color var(--transition-fast);
+	background-color: var(--color-surface-raised);
+	transition: background-color var(--transition-fast);
 }
 
 /* 输入框激活效果用 focus 伪类的话 uni-app 支持有限，靠原生 */
 .input:focus {
-	border-color: var(--color-primary);
+	background-color: var(--color-divider);
 }
 
 .placeholder {
@@ -171,19 +194,19 @@ export default {
 	font-size: var(--font-base);
 }
 
-/* ── 登录按钮 ── */
+/* ── 登录按钮（设计稿01：黑色胶囊大按钮） ── */
 .btn-primary {
-	margin-top: var(--space-md);
-	height: 88rpx;
-	line-height: 88rpx;
-	background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+	margin-top: var(--space-xl);
+	height: 104rpx;
+	line-height: 104rpx;
+	background-color: var(--color-primary);
 	color: var(--color-text-inverse);
 	font-size: var(--font-lg);
-	font-weight: var(--weight-bold);
-	border-radius: var(--radius-lg);
+	font-weight: var(--weight-semibold);
+	border-radius: var(--radius-full);
 	border: none;
-	box-shadow: var(--shadow-accent);
-	transition: transform var(--transition-spring), opacity var(--transition-fast);
+	box-shadow: var(--shadow-primary);
+	transition: opacity var(--transition-fast);
 }
 
 .btn-primary::after {
@@ -191,11 +214,12 @@ export default {
 }
 
 .btn-primary:active {
-	transform: scale(0.97);
+	opacity: 0.88;
 }
 
 .btn-primary[disabled] {
-	opacity: 0.6;
+	opacity: 0.5;
+	box-shadow: none;
 }
 
 /* ── 注册链接 ── */
@@ -205,14 +229,28 @@ export default {
 }
 
 .link-text {
-	font-size: var(--font-md);
+	font-size: var(--font-sm);
 	color: var(--color-text-secondary);
 }
 
 .link-highlight {
-	font-size: var(--font-md);
-	color: var(--color-accent);
+	font-size: var(--font-sm);
+	color: var(--color-text);
 	font-weight: var(--weight-semibold);
 	margin-left: var(--space-xs);
+}
+
+/* ── 底部协议文案（设计稿01） ── */
+.agreement {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: calc(env(safe-area-inset-bottom) + 32rpx);
+	text-align: center;
+}
+
+.agreement-text {
+	font-size: var(--font-xs);
+	color: var(--color-text-tertiary);
 }
 </style>

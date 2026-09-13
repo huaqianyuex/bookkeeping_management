@@ -21,10 +21,10 @@ function initBaseUrl() {
 	_BASE_URL = '/api'
 	// #endif
 
-	// #ifndef H5
-	// ⬇⬇⬇ 把下面的 IP 改成你电脑的局域网 IP ⬇⬇⬇
-	_BASE_URL = 'http://192.168.101.84:8080/api'
-	// #endif
+		// #ifndef H5
+		// ⬇⬇⬇ 把下面的 IP 改成你电脑的局域网 IP ⬇⬇⬇
+		_BASE_URL = 'http://192.168.101.84:8000/api'
+		// #endif
 
 	return _BASE_URL
 }

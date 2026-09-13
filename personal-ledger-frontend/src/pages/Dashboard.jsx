@@ -59,7 +59,7 @@ export default function Dashboard() {
       dataIndex: 'amount',
       key: 'amount',
       render: (v) => (
-        <Text strong style={{ color: 'var(--color-text)' }}>¥{v.toFixed(2)}</Text>
+        <Text strong style={{ color: 'var(--color-text)' }}>¥{Number(v).toFixed(2)}</Text>
       ),
     },
     {

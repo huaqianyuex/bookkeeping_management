@@ -63,9 +63,15 @@
 		{
 			"path": "pages/ai-chat/index",
 			"style": {
-				"navigationBarTitleText": "AI记账助手",
-				"navigationBarBackgroundColor": "#1a1a2e",
-				"navigationBarTextStyle": "white"
+				"navigationStyle": "custom",
+				"navigationBarTextStyle": "black"
+			}
+		},
+		{
+			"path": "pages/ai-history/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTextStyle": "black"
 			}
 		}
 	],
@@ -73,7 +79,7 @@
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "记账本",
 		"navigationBarBackgroundColor": "#ffffff",
-		"backgroundColor": "#f8f9fa",
+		"backgroundColor": "#F4F6F8",
 		"backgroundTextStyle": "dark"
 	},
 
