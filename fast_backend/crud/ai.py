@@ -44,8 +44,12 @@ async def get_session(db: AsyncSession, session_id: str) -> ChatSession | None:
 async def get_user_session(db: AsyncSession, session_id: str, user_id: int) -> ChatSession | None:
     """按 ID 查**本人未删除**的会话（6.3 重命名 / 6.7 对话 / 6.15 记账的归属校验都用它）"""
     # TODO: 实现（WHERE id=:sid AND user_id=:uid AND deleted_at=0）
-    ...
-
+    result=await db.execute(select(ChatSession).where(
+        ChatSession.id==session_id,
+        ChatSession.user_id==user_id,
+        ChatSession.deleted_at==0
+    ))
+    return result.scalar_one_or_none()
 
 async def list_sessions(
     db: AsyncSession,
@@ -129,7 +133,13 @@ async def add_message(db: AsyncSession, session_id: str, role: str, content: str
     TODO: 插入后顺带 UPDATE sessions.updated_at=now_ms()（会话列表按它排序）
     """
     # TODO: 实现
-    ...
+    msg = ChatMessage(id=new_id("msg"), session_id=session_id,
+                      role=role, content=content, timestamp=now_ms())
+    db.add(msg)
+    await db.execute(update(ChatSession).where(ChatSession.id == session_id)
+                     .values(updated_at=now_ms()))  # 顺带刷新会话排序时间
+    await db.commit()
+    return msg
 
 
 # ── 反馈 feedback ──────────────────────────────────────────────────────
