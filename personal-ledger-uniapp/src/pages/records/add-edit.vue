@@ -28,31 +28,34 @@
 			<!-- 设计稿02：粉彩四列分类网格，选中黄底 -->
 			<view class="section category-section">
 				<view class="category-grid">
-					<view
-						v-for="(c, idx) in filteredCategories"
-						:key="c.id"
-						class="category-item stagger-item"
-						:class="{ active: form.categoryId === c.id }"
-						:style="{ animationDelay: idx * 0.03 + 's' }"
-						@click="selectCategory(c.id)"
-					>
-						<view class="category-icon" :class="['cat-palette-' + (idx % 7), { selected: form.categoryId === c.id }]">
-							<text class="category-icon-text">{{ getCategoryEmoji(c.name) }}</text>
+						<view
+							v-for="(c, idx) in filteredCategories"
+							:key="c.id"
+							class="category-item stagger-item"
+							:class="{ active: form.categoryId === c.id }"
+							:style="{ animationDelay: idx * 0.03 + 's' }"
+							@click="selectCategory(c.id)"
+						>
+							<!-- 底色按分类 id 取模，同一分类永远同色，不随排序漂移 -->
+							<view class="category-icon" :class="['cat-palette-' + (c.id % 7), { selected: form.categoryId === c.id }]">
+								<text class="category-icon-text">{{ getCategoryEmoji(c.name) }}</text>
+							</view>
+							<text class="category-name" :class="{ active: form.categoryId === c.id }">{{ c.name }}</text>
 						</view>
-						<text class="category-name" :class="{ active: form.categoryId === c.id }">{{ c.name }}</text>
-					</view>
 				</view>
 			</view>
 
-			<!-- 日期 + 备注 -->
+			<!-- 日期 + 备注（日期用原生 picker，支持补记任意日期） -->
 			<view class="section">
-				<view class="form-row" @click="showDatePicker">
-					<text class="form-label">日期</text>
-					<view class="form-value-row">
-						<text class="form-value">{{ form.recordDate || '选择日期' }}</text>
-						<text class="form-arrow">›</text>
+				<picker class="date-picker" mode="date" :value="form.recordDate" @change="onDateChange">
+					<view class="form-row">
+						<text class="form-label">日期</text>
+						<view class="form-value-row">
+							<text class="form-value">{{ form.recordDate || '选择日期' }}</text>
+							<text class="form-arrow">›</text>
+						</view>
 					</view>
-				</view>
+				</picker>
 				<view class="form-divider"></view>
 				<view class="form-row">
 					<text class="form-label">备注</text>
@@ -78,8 +81,9 @@
 				</view>
 			</view>
 			<view class="confirm-area" :style="{ paddingBottom: safeBottom + 'px' }">
-				<view class="confirm-btn" :class="{ disabled: !canSubmit }" @click="onKeyPress('ok')">
-					<text class="confirm-text">{{ isEdit ? '保存修改' : '记一笔' }}</text>
+				<text v-if="!canSubmit && missingHint" class="confirm-hint">{{ missingHint }}</text>
+				<view class="confirm-btn" :class="{ disabled: !canSubmit || submitting }" @click="onKeyPress('ok')">
+					<text class="confirm-text">{{ submitLabel }}</text>
 				</view>
 			</view>
 		</view>
@@ -110,6 +114,7 @@ export default {
 			categories: [],
 			showKeyboard: true,
 			showSuccess: false,
+			submitting: false,
 			safeBottom: 0,
 			keyboardLayout: [
 				['1', '2', '3'],
@@ -125,6 +130,17 @@ export default {
 		},
 		canSubmit() {
 			return this.form.amount && Number(this.form.amount) > 0 && this.form.categoryId && this.form.recordDate
+		},
+		/** 置灰确认键的缺项原因，让「不能提交」可被理解 */
+		missingHint() {
+			if (!this.form.amount || Number(this.form.amount) <= 0) return '请输入金额'
+			if (!this.form.categoryId) return '请选择分类'
+			if (!this.form.recordDate) return '请选择日期'
+			return ''
+		},
+		submitLabel() {
+			if (this.submitting) return '保存中…'
+			return this.isEdit ? '保存修改' : '记一笔'
 		},
 		displayAmount() {
 			return this.form.amount || ''
@@ -148,9 +164,33 @@ export default {
 			this.recordId = options.id
 			uni.setNavigationBarTitle({ title: '编辑账单' })
 		} else {
-			this.form.recordDate = this.getToday()
+			// 恢复上次未提交的记账草稿（切出去回消息、误退出的场景不再丢内容）
+			const draft = uni.getStorageSync('record_draft')
+			if (draft) {
+				try {
+					const d = JSON.parse(draft)
+					if (d && typeof d === 'object') {
+						this.formType = d.formType === 1 ? 1 : 0
+						this.form.amount = d.amount || ''
+						this.form.categoryId = d.categoryId || null
+						this.form.recordDate = d.recordDate || ''
+						this.form.remark = d.remark || ''
+					}
+				} catch (e) {}
+			}
+			if (!this.form.recordDate) this.form.recordDate = this.getToday()
 		}
 		this.fetchCategories()
+	},
+	watch: {
+		// 新增模式随时落草稿；编辑模式不落（避免覆盖成编辑中的旧账数据）
+		form: {
+			handler() {
+				if (this.isEdit) return
+				uni.setStorageSync('record_draft', JSON.stringify({ ...this.form, formType: this.formType }))
+			},
+			deep: true,
+		},
 	},
 	methods: {
 		getToday() {
@@ -168,9 +208,6 @@ export default {
 		},
 		selectCategory(id) {
 			this.form.categoryId = id
-		},
-		showDatePicker() {
-			// 使用原生日期选择
 		},
 		onKeyPress(key) {
 			if (key === 'del') {
@@ -209,6 +246,11 @@ export default {
 				const res = await getCategoryList()
 				if (res.code === 200) {
 					this.categories = res.data
+					// 草稿里存的分类可能已被删除，避免提交到不存在的分类
+					if (!this.isEdit && this.form.categoryId) {
+						const exists = this.categories.some(c => c.id === this.form.categoryId)
+						if (!exists) this.form.categoryId = null
+					}
 					if (this.isEdit) this.fetchRecord()
 				}
 			} catch (e) {
@@ -231,7 +273,9 @@ export default {
 			}
 		},
 		async handleSubmit() {
-			if (!this.canSubmit) return
+			// 防重：请求在途时忽略再次点击，避免慢网双击记两笔
+			if (!this.canSubmit || this.submitting) return
+			this.submitting = true
 			const data = {
 				amount: this.form.amount,
 				categoryId: this.form.categoryId,
@@ -243,12 +287,15 @@ export default {
 					? await updateRecord(this.recordId, data)
 					: await addRecord(data)
 				if (res.code === 200) {
+					if (!this.isEdit) uni.removeStorageSync('record_draft')
 					this.showSuccess = true
 				} else {
 					uni.showToast({ title: res.message, icon: 'none' })
 				}
 			} catch (e) {
 				uni.showToast({ title: '操作失败', icon: 'none' })
+			} finally {
+				this.submitting = false
 			}
 		},
 		onSuccessDone() {
@@ -261,7 +308,8 @@ export default {
 
 <style scoped>
 .page {
-	height: 100vh;
+	/* H5 端 100vh 含原生导航栏高度，会裁掉底部确认键；--window-top 由 uni-app 注入，小程序端缺省回退 0 */
+	height: calc(100vh - var(--window-top, 0px));
 	background-color: var(--color-bg);
 	display: flex;
 	flex-direction: column;
@@ -277,8 +325,8 @@ export default {
 .type-tabs {
 	display: flex;
 	margin: var(--space-lg) var(--space-xl) 0;
-	padding: 6rpx;
-	gap: 8rpx;
+	padding: var(--space-xs);
+	gap: var(--space-xs);
 	border-radius: var(--radius-full);
 	background-color: var(--color-surface-raised);
 }
@@ -331,7 +379,7 @@ export default {
 }
 
 .amount-integer {
-	font-size: 108rpx;
+	font-size: var(--font-keypad);
 	font-weight: var(--weight-extrabold);
 	color: var(--color-text-heading);
 	letter-spacing: -2rpx;
@@ -359,8 +407,8 @@ export default {
 	width: 6rpx;
 	height: 88rpx;
 	background-color: var(--color-accent);
-	border-radius: 3rpx;
-	margin-left: 8rpx;
+	border-radius: var(--radius-full);
+	margin-left: var(--space-xs);
 }
 
 .amount-cursor.blink {
@@ -424,7 +472,7 @@ export default {
 .category-icon {
 	width: 96rpx;
 	height: 96rpx;
-	border-radius: 32rpx;
+	border-radius: var(--radius-2xl);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -457,6 +505,10 @@ export default {
 .category-item.active .category-name {
 	color: var(--color-text-heading);
 	font-weight: var(--weight-bold);
+}
+
+.date-picker {
+	display: block;
 }
 
 .form-row {
@@ -547,7 +599,7 @@ export default {
 }
 
 .key-text {
-	font-size: 44rpx;
+	font-size: var(--font-2xl);
 	font-weight: var(--weight-normal);
 	color: var(--color-text);
 	font-family: var(--font-amount);
@@ -555,6 +607,14 @@ export default {
 
 .confirm-area {
 	padding: var(--space-sm) var(--space-xl) var(--space-md);
+}
+
+.confirm-hint {
+	display: block;
+	text-align: center;
+	font-size: var(--font-xs);
+	color: var(--color-text-tertiary);
+	margin-bottom: var(--space-xs);
 }
 
 /* 设计稿02：黑色胶囊「完成」按钮 */

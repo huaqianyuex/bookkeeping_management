@@ -1,8 +1,3 @@
-"""LLM 客户端构造 — ChatOpenAI / Embeddings"""
-
-# TODO: 实现见 06-AI模块.md
-# from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-# from config.settings import CHAT_MODEL, ANALYZE_MODEL, EMBEDDING_MODEL, OPENAI_BASE_URL, AGNES_API_KEY
 
 """LLM 客户端构造"""
 from langchain_openai import ChatOpenAI

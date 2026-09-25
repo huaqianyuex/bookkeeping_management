@@ -28,10 +28,24 @@
 				<skeleton-card :lines="2"></skeleton-card>
 			</view>
 
+			<!-- 加载失败 ≠ 没有分类 -->
+			<empty-state
+				v-else-if="loadError"
+				mode="error"
+				title="分类加载失败"
+				description="网络似乎不太顺畅，稍后再试试"
+			>
+				<template #action>
+					<view class="empty-btn" @click="fetchList">
+						<text class="empty-btn-text">重新加载</text>
+					</view>
+				</template>
+			</empty-state>
+
 			<!-- Empty state -->
 			<empty-state
 				v-else-if="filteredList.length === 0"
-				icon="📂"
+				icon="compose"
 				title="暂无分类"
 				description="点击右上角添加分类"
 			></empty-state>
@@ -39,14 +53,14 @@
 			<!-- 设计稿05：粉彩四列分类网格，点击编辑、长按删除 -->
 			<view v-else>
 				<view class="category-grid">
-					<view
-						v-for="(item, idx) in filteredList"
-						:key="item.id"
-						class="category-cell"
-						@click="showEdit(item)"
-						@longpress="handleDelete(item.id)"
-					>
-						<view class="category-icon" :class="'cat-palette-' + (idx % 7)">
+				<view
+					v-for="item in filteredList"
+					:key="item.id"
+					class="category-cell"
+					@click="showEdit(item)"
+					@longpress="handleDelete(item.id)"
+				>
+						<view class="category-icon" :class="'cat-palette-' + (item.id % 7)">
 							<text class="category-icon-text">{{ getCategoryEmoji(item.name) }}</text>
 						</view>
 						<text class="category-name">{{ item.name }}</text>
@@ -86,8 +100,8 @@
 					<view class="cancel-btn" @click="modalOpen = false">
 						<text class="cancel-btn-text">取消</text>
 					</view>
-					<view class="confirm-btn" @click="handleOk">
-						<text class="confirm-btn-text">确定</text>
+					<view class="confirm-btn" :class="{ 'confirm-btn-disabled': submitting }" @click="handleOk">
+						<text class="confirm-btn-text">{{ submitting ? '提交中…' : '确定' }}</text>
 					</view>
 				</view>
 			</view>
@@ -96,29 +110,31 @@
 </template>
 
 <script>
-import { getCategoryList, addCategory, updateCategory, deleteCategory } from '../../api/category'
-import EmptyState from '../../components/EmptyState.vue'
-import SkeletonCard from '../../components/SkeletonCard.vue'
+	import { getCategoryList, addCategory, updateCategory, deleteCategory } from '../../api/category'
+	import EmptyState from '../../components/EmptyState.vue'
+	import SkeletonCard from '../../components/SkeletonCard.vue'
 
-export default {
-	components: {
-		EmptyState,
-		SkeletonCard,
-	},
-	data() {
-		return {
-			statusBarHeight: 20,
-			list: [],
-			loading: false,
-			modalOpen: false,
-			editing: null,
-			viewType: 0,
-			form: {
-				name: '',
-				type: 0,
+	export default {
+		components: {
+			EmptyState,
+			SkeletonCard,
+		},
+		data() {
+			return {
+				statusBarHeight: 20,
+				list: [],
+				loading: false,
+				loadError: false,
+				submitting: false,
+				modalOpen: false,
+				editing: null,
+				viewType: 0,
+				form: {
+					name: '',
+					type: 0,
+				}
 			}
-		}
-	},
+		},
 	computed: {
 		// 仅视图筛选，不改变任何请求与数据流
 		filteredList() {
@@ -156,8 +172,9 @@ export default {
 			try {
 				const res = await getCategoryList()
 				if (res.code === 200) this.list = res.data
+				this.loadError = false
 			} catch (e) {
-				console.error(e)
+				this.loadError = true
 			} finally {
 				this.loading = false
 			}
@@ -173,10 +190,13 @@ export default {
 			this.modalOpen = true
 		},
 		async handleOk() {
+			// 防重：请求在途时忽略再次点击
+			if (this.submitting) return
 			if (!this.form.name) {
 				uni.showToast({ title: '请输入分类名称', icon: 'none' })
 				return
 			}
+			this.submitting = true
 			try {
 				let res
 				if (this.editing) {
@@ -193,6 +213,8 @@ export default {
 				}
 			} catch (e) {
 				uni.showToast({ title: '操作失败', icon: 'none' })
+			} finally {
+				this.submitting = false
 			}
 		},
 		handleDelete(id) {
@@ -259,7 +281,7 @@ export default {
 }
 
 .page-title {
-	font-size: 52rpx;
+	font-size: var(--font-3xl);
 	font-weight: var(--weight-extrabold);
 	color: var(--color-text-heading);
 }
@@ -268,8 +290,8 @@ export default {
 .type-tabs {
 	display: flex;
 	margin: 0 var(--space-2xl) var(--space-md);
-	padding: 6rpx;
-	gap: 8rpx;
+	padding: var(--space-xs);
+	gap: var(--space-xs);
 	border-radius: var(--radius-full);
 	background-color: var(--color-surface-raised);
 	width: 360rpx;
@@ -336,7 +358,7 @@ export default {
 .category-icon {
 	width: 96rpx;
 	height: 96rpx;
-	border-radius: 32rpx;
+	border-radius: var(--radius-2xl);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -381,7 +403,7 @@ export default {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	background-color: rgba(0, 0, 0, 0.45);
+	background-color: var(--color-overlay);
 	display: flex;
 	align-items: flex-end;
 	z-index: var(--z-modal);
@@ -422,6 +444,12 @@ export default {
 .modal-close {
 	font-size: var(--font-2xl);
 	color: var(--color-text-secondary);
+	width: 56rpx;
+	height: 56rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-right: -12rpx;
 }
 
 .form-group {
@@ -454,7 +482,7 @@ export default {
 .type-options {
 	display: flex;
 	gap: var(--space-md);
-	padding: 6rpx;
+	padding: var(--space-xs);
 	border-radius: var(--radius-full);
 	background-color: var(--color-surface-raised);
 }
@@ -516,6 +544,32 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+}
+
+.confirm-btn-disabled {
+	opacity: 0.5;
+	box-shadow: none;
+}
+
+/* 错误态重试按钮（设计稿10 黄色胶囊 action） */
+.empty-btn {
+	display: inline-flex;
+	align-items: center;
+	background: var(--color-accent);
+	padding: var(--space-lg) var(--space-3xl);
+	border-radius: var(--radius-full);
+	box-shadow: var(--shadow-accent);
+	transition: opacity var(--transition-fast);
+}
+
+.empty-btn:active {
+	opacity: 0.88;
+}
+
+.empty-btn-text {
+	color: var(--color-text-heading);
+	font-size: var(--font-base);
+	font-weight: var(--weight-semibold);
 }
 
 .confirm-btn-text {

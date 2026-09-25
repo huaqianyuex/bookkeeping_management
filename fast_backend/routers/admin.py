@@ -13,7 +13,15 @@ from starlette import status
 
 from config.db_config import get_db
 from crud import admin, user
-from schemas.admin import AdminRecordOut, AdminUserOut, IdsIn, UserStatusUpdate
+from models.chat import Faq
+from schemas.admin import (
+    AdminRecordOut,
+    AdminUserOut,
+    FaqIn,
+    FaqOut,
+    IdsIn,
+    UserStatusUpdate,
+)
 from utils.auth import get_current_admin
 from utils.response import success_response
 
@@ -172,3 +180,65 @@ async def overview(
 ):
     """管理后台首页统计卡片（用户数/账单数/分类数/全站收支）"""
     return success_response(message="获取成功", data=await admin.get_overview(db))
+
+
+# ---------- FAQ 管理 ----------
+
+
+@router.get("/faq", summary="FAQ 列表")
+async def list_faq(
+    _: int = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """FAQ 全量列表（知识库条目少，不分页）"""
+    rows = await admin.list_faq(db)
+    return success_response(
+        message="获取成功", data=[FaqOut.model_validate(r) for r in rows]
+    )
+
+
+@router.post("/faq", summary="新增 FAQ")
+async def create_faq(
+    body: FaqIn,
+    _: int = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """新增 FAQ（三字段必填校验在 Pydantic 层完成）"""
+    if not (body.question and body.answer and body.category):
+        raise HTTPException(status_code=422, detail="question/answer/category 均必填")
+    faq = await admin.create_faq(
+        db, Faq(question=body.question, answer=body.answer, category=body.category)
+    )
+    await db.commit()
+    return success_response(message="创建成功", data=FaqOut.model_validate(faq))
+
+
+@router.put("/faq/{faq_id}", summary="修改 FAQ")
+async def update_faq(
+    faq_id: int,
+    body: FaqIn,
+    _: int = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改 FAQ（仅更新传入字段）"""
+    fields = body.model_dump(exclude_none=True)
+    if not fields:
+        raise HTTPException(status_code=422, detail="缺少修改内容")
+    faq = await admin.update_faq(db, faq_id, **fields)
+    if faq is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="FAQ 不存在")
+    await db.commit()
+    return success_response(message="更新成功", data=FaqOut.model_validate(faq))
+
+
+@router.delete("/faq/{faq_id}", summary="删除 FAQ")
+async def delete_faq(
+    faq_id: int,
+    _: int = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除 FAQ（物理删除）"""
+    if not await admin.delete_faq(db, faq_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="FAQ 不存在")
+    await db.commit()
+    return success_response(message="删除成功")

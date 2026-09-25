@@ -1,12 +1,24 @@
 """对话记忆管理 — 控制历史消息 token 数"""
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-# TODO: 实现见 06-AI模块.md
+from sqlalchemy.ext.asyncio import AsyncSession
+
+MAX_TOKENS = 2000  # 近似：中文 1 字 ≈ 1 token，毕设够用
+KEEP_RECENT = 6  # 最近 N 条
 
 
-async def get_history_messages(session_id: str, max_tokens: int = 2000):
+async def build_history(db: AsyncSession, session_id: str) -> list[BaseMessage]:
+    """取历史消息窗口：从尾部往前累计，超 token 或超条数即停"""
     from crud import ai as ai_crud
-    from config.db_config import get_db  # 或把 db 会话传进来
-    ...
-    # 思路：list_messages 按时间升序取全量 → 从尾部往前累计
-    # 估算 token：len(content) 即可近似（中文 1 字 ≈ 1 token 足够毕设用）
-    # 超出 max_tokens 或超过 KEEP_RECENT_MESSAGES(6) 条就停
+
+    msgs = await ai_crud.list_messages(db, session_id)  # 升序
+    picked: list[BaseMessage] = []
+    used = 0
+    for m in reversed(msgs):
+        used += len(m.content)
+        if used > MAX_TOKENS or len(picked) >= KEEP_RECENT:
+            break
+        cls = HumanMessage if m.role == "user" else AIMessage
+        picked.append(cls(content=m.content))
+    picked.reverse()  # 恢复升序
+    return picked

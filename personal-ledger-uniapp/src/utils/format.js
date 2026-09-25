@@ -1,5 +1,8 @@
 export const formatAmount = (amount) => {
-	return Number(amount).toFixed(2)
+	const num = Number(amount) || 0
+	const [int, dec] = Math.abs(num).toFixed(2).split('.')
+	const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+	return (num < 0 ? '-' : '') + grouped + '.' + dec
 }
 
 export const formatDate = (dateStr) => {

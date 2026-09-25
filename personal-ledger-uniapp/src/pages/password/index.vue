@@ -3,10 +3,10 @@
 		<view class="form-card">
 			<view class="form-header">
 				<view class="form-icon-wrap">
-					<text class="form-icon">🔒</text>
+					<app-icon name="lock-ink" :size="48"></app-icon>
 				</view>
 				<text class="form-title">修改密码</text>
-				<text class="form-subtitle">请填写您的新密码</text>
+				<text class="form-subtitle">验证原密码后，设置新的 6 位数字密码</text>
 			</view>
 
 			<view class="input-group">
@@ -53,8 +53,10 @@
 
 <script>
 import { updatePassword } from '../../api/user'
+import AppIcon from '../../components/AppIcon.vue'
 
 export default {
+	components: { AppIcon },
 	data() {
 		return {
 			oldPassword: '',
@@ -108,7 +110,7 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: 60rpx var(--space-3xl);
+	padding: var(--space-4xl) var(--space-3xl);
 }
 
 .form-card {
@@ -132,18 +134,13 @@ export default {
 .form-icon-wrap {
 	width: 104rpx;
 	height: 104rpx;
-	border-radius: 28rpx;
+	border-radius: var(--radius-xl);
 	background-color: var(--color-accent);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	box-shadow: var(--shadow-accent);
 	margin-bottom: var(--space-lg);
-}
-
-.form-icon {
-	font-size: 52rpx;
-	line-height: 1;
 }
 
 .form-title {

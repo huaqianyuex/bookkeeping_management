@@ -68,16 +68,22 @@ class ChatMessage(Base):
 class Feedback(Base):
     """AI 回复反馈表
 
-    注意：本表按旧 Express 结构**没有 user_id**，无法按用户维度隔离反馈。
-    如需「谁反馈的」分析，需先给表加列并同步 02 / 08 文档。
+    user_id 已补（反馈人，关联 users.id），支持按用户维度隔离/统计反馈。
     """
     __tablename__ = "feedback"
 
     __table_args__ = (
         Index("idx_feedback_message", "message_id"),
+        Index("idx_feedback_user", "user_id"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, comment="反馈ID，feedback_{毫秒}_{随机}")
+    user_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="反馈人 ID",
+    )
     message_id: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("messages.id", ondelete="CASCADE"),

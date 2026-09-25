@@ -305,14 +305,18 @@ CREATE TABLE IF NOT EXISTS `messages` (
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `feedback` (
     `id`         VARCHAR(64) NOT NULL                          COMMENT '主键，格式 feedback_{毫秒}_{随机≤9位}',
+    `user_id`    BIGINT      NOT NULL                          COMMENT '反馈人 ID，关联 users.id',
     `message_id` VARCHAR(64) NOT NULL                          COMMENT '被评价的消息 ID',
     `rating`     TINYINT     NOT NULL                          COMMENT '评分，1~5',
     `comment`    TEXT        NULL                              COMMENT '文字反馈内容，可为空',
     `timestamp`  BIGINT      NOT NULL                          COMMENT '反馈时间（毫秒时间戳）',
     PRIMARY KEY (`id`),
     KEY `idx_feedback_message` (`message_id`),
+    KEY `idx_feedback_user` (`user_id`),
     CONSTRAINT `fk_feedback_message` FOREIGN KEY (`message_id`)
-        REFERENCES `messages` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+        REFERENCES `messages` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_feedback_user` FOREIGN KEY (`user_id`)
+        REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci

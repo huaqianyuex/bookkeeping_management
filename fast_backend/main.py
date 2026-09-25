@@ -5,6 +5,7 @@
 """
 
 import os
+import sys
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,12 @@ from config.settings import CORS_ORIGINS
 from routers import admin, ai, category, record, statistics, user
 from utils.exception_handlers import register_exception_handlers
 from utils.response import success_response
+
+# Windows 控制台默认 GBK，日志里的 emoji（📊 等）会触发 UnicodeEncodeError。
+# 统一切到 UTF-8 且不可编码字符降级为占位符，保证日志永不中断业务流程。
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 app = FastAPI()
 

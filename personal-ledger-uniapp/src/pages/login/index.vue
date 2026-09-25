@@ -3,7 +3,7 @@
 		<!-- 设计稿01 品牌区：黄色圆角 Logo + 品牌名 + slogan -->
 		<view class="brand">
 			<view class="brand-logo">
-				<text class="brand-logo-icon">🧾</text>
+				<app-icon name="receipt" :size="80"></app-icon>
 			</view>
 			<text class="brand-name">简记</text>
 			<text class="brand-slogan">简单记录每一笔</text>
@@ -54,8 +54,10 @@
 <script>
 import { login } from '../../api/user'
 import { useUserStore } from '../../utils/store'
+import AppIcon from '../../components/AppIcon.vue'
 
 export default {
+	components: { AppIcon },
 	data() {
 		return {
 			username: '',
@@ -65,42 +67,38 @@ export default {
 	},
 		onLoad() {
 			// 已登录则直接跳主页，避免在登录页卡住
-			const token = uni.getStorageSync('token')
-			console.log('[Login] onLoad, token存在:', !!token, ', token值:', token ? token.substring(0, 20) + '...' : '无')
-			if (token) {
-				console.log('[Login] 检测到已有token，自动跳转到 dashboard')
+			if (uni.getStorageSync('token')) {
 				uni.reLaunch({ url: '/pages/dashboard/index' })
+				return
+			}
+			// 注册成功后回填用户名，省一次输入
+			const prefill = uni.getStorageSync('login_prefill_username')
+			if (prefill) {
+				this.username = prefill
+				uni.removeStorageSync('login_prefill_username')
 			}
 		},
 		methods: {
 			async handleLogin() {
-				console.log('[Login] handleLogin 被调用, username:', this.username, ', password长度:', this.password?.length)
 				if (!this.username || !this.password) {
 					uni.showToast({ title: '请输入用户名和密码', icon: 'none' })
 					return
 				}
 				this.submitting = true
-				console.log('[Login] 开始请求登录接口...')
 				try {
 					const res = await login({
 						username: this.username,
 						password: this.password
 					})
-					console.log('[Login] 登录接口返回:', JSON.stringify(res))
 					if (res.code === 200) {
-						console.log('[Login] 登录成功，设置 token...')
 						const store = useUserStore()
 						store.setToken(res.data?.token || '')
-						console.log('[Login] 获取用户信息...')
 						await store.fetchUserInfo()
-						console.log('[Login] 跳转到 dashboard...')
 						uni.reLaunch({ url: '/pages/dashboard/index' })
 					} else {
-						console.log('[Login] 登录失败:', res.message)
 						uni.showToast({ title: res.message || '登录失败', icon: 'none' })
 					}
 				} catch (e) {
-					console.error('[Login] 登录异常:', e)
 					uni.showToast({ title: e?.message || '网络连接失败', icon: 'none' })
 				} finally {
 					this.submitting = false
@@ -120,7 +118,7 @@ export default {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	padding: 80rpx var(--space-3xl);
+	padding: var(--space-5xl) var(--space-3xl);
 }
 
 /* ── 品牌区（设计稿01：黄色圆角 Logo 居中 + 品牌名 + slogan） ── */
@@ -134,7 +132,7 @@ export default {
 .brand-logo {
 	width: 152rpx;
 	height: 152rpx;
-	border-radius: 40rpx;
+	border-radius: var(--radius-3xl);
 	background-color: var(--color-accent);
 	display: flex;
 	align-items: center;
@@ -143,13 +141,8 @@ export default {
 	margin-bottom: var(--space-xl);
 }
 
-.brand-logo-icon {
-	font-size: 76rpx;
-	line-height: 1;
-}
-
 .brand-name {
-	font-size: 56rpx;
+	font-size: var(--font-3xl);
 	font-weight: var(--weight-extrabold);
 	color: var(--color-text-heading);
 	line-height: var(--leading-tight);

@@ -3,8 +3,8 @@
 		class="record-card"
 		:class="typeClass"
 		@click="handleClick"
-		@touchstart="onTouchStart"
-		@touchmove="onTouchMove"
+		@touchstart.passive="onTouchStart"
+		@touchmove.passive="onTouchMove"
 		@touchend="onTouchEnd"
 	>
 		<view class="record-main" :style="{ transform: 'translateX(' + moveX + 'rpx)' }">
@@ -18,7 +18,7 @@
 			</view>
 			<view class="record-amount-wrap">
 				<text class="record-amount" :class="typeClass">
-					{{ record.categoryType === 0 ? '−' : '+' }}<text class="record-currency">¥</text><text class="record-num">{{ integerPart }}</text><text class="record-dot">.</text><text class="record-cent">{{ decimalPart }}</text>
+					{{ record.categoryType === 0 ? '−' : '+' }}<text class="record-currency">¥</text><text v-if="parts.sign" class="record-sign">{{ parts.sign }}</text><text class="record-num">{{ integerPart }}</text><text class="record-dot">.</text><text class="record-cent">{{ decimalPart }}</text>
 				</text>
 			</view>
 		</view>
@@ -50,8 +50,12 @@ export default {
 		},
 		parts() {
 			const num = Number(this.record.amount) || 0
-			const p = num.toFixed(2).split('.')
-			return { integer: p[0], decimal: p[1] }
+			const p = Math.abs(num).toFixed(2).split('.')
+			return {
+				sign: num < 0 ? '−' : '',
+				integer: p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ','),
+				decimal: p[1],
+			}
 		},
 		integerPart() { return this.parts.integer },
 		decimalPart() { return this.parts.decimal },
@@ -112,13 +116,14 @@ export default {
 	z-index: 1;
 	transition: transform 0.35s var(--ease-out-back), box-shadow 0.2s ease;
 	border-radius: var(--radius-xl);
-	box-shadow: var(--shadow-card);
+	border: var(--hairline) solid var(--color-border);
+	box-shadow: none;
 	width: 100%;
 	box-sizing: border-box;
 }
 
 .record-main:active {
-	box-shadow: var(--shadow-sm);
+	background-color: var(--color-bg);
 }
 
 /* 左侧色条 — 设计稿03 列表行无色条，隐藏（保留结构兼容） */
@@ -129,11 +134,11 @@ export default {
 .record-accent.type-expense { background: var(--color-danger); }
 .record-accent.type-income { background: var(--color-success); }
 
-/* 图标区 — 设计稿03：粉彩圆角方块图标 */
+/* 图标区 — 收支语义符号块 */
 .record-icon-wrap {
-	width: 72rpx;
-	height: 72rpx;
-	border-radius: var(--radius-lg);
+	width: 64rpx;
+	height: 64rpx;
+	border-radius: var(--radius-md);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -197,9 +202,13 @@ export default {
 	font-variant-numeric: tabular-nums;
 }
 
-/* 金额颜色 — 设计稿03：支出墨黑、收入绿 */
+/* 金额颜色 — 支出墨黑、收入绿 */
 .record-amount.type-expense { color: var(--color-text); }
 .record-amount.type-income { color: var(--color-success); }
+
+.record-sign {
+	font-size: var(--font-sm);
+}
 
 .record-currency {
 	font-size: var(--font-sm);
@@ -234,7 +243,7 @@ export default {
 	align-items: center;
 	justify-content: center;
 	z-index: 0;
-	border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
+	border-radius: 0 var(--radius-2xl) var(--radius-2xl) 0;
 }
 
 .record-delete-icon {

@@ -21,10 +21,15 @@ DATABASE_URL = os.getenv(
     "mysql+aiomysql://root:***@localhost:3306/bookkeeping_fastapi?charset=utf8mb4",
 )
 
+# SQL 回显：默认关闭。开启后 SQLAlchemy 会把每条 SQL 连同参数打进日志，
+# Windows GBK 控制台遇到参数里的 emoji（如 📊）会抛 UnicodeEncodeError；
+# 需要调试 SQL 时在 .env 设 SQL_ECHO=true，并确保控制台为 UTF-8。
+SQL_ECHO = os.getenv("SQL_ECHO", "false").lower() == "true"
+
 # 创建异步数据库连接池
 async_engine = create_async_engine(
     DATABASE_URL,
-    echo=True,
+    echo=SQL_ECHO,
     pool_size=5,
     max_overflow=15,
 )

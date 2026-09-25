@@ -13,6 +13,7 @@ import {
   SafetyOutlined,
   TeamOutlined,
   FileTextOutlined,
+  QuestionCircleOutlined,
   RobotOutlined,
   HomeOutlined,
   PlusCircleOutlined,
@@ -38,6 +39,7 @@ const adminMenuItems = [
   { key: '/admin/dashboard', icon: <SafetyOutlined />,   label: '系统概览' },
   { key: '/admin/users',    icon: <TeamOutlined />,      label: '用户管理' },
   { key: '/admin/records',  icon: <FileTextOutlined />,  label: '全量账单' },
+  { key: '/admin/faq',      icon: <QuestionCircleOutlined />, label: 'FAQ管理' },
 ]
 
 const breadcrumbMap = {
@@ -50,6 +52,7 @@ const breadcrumbMap = {
   '/admin/dashboard': '系统概览',
   '/admin/users': '用户管理',
   '/admin/records': '全量账单',
+  '/admin/faq': 'FAQ管理',
 }
 
 export default function MainLayout() {

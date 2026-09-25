@@ -34,6 +34,21 @@ class AdminUserOut(OrmBase):
     updated_at: Optional[datetime.datetime] = Field(None, alias="updateTime")
 
 
+class FaqIn(BaseModel):
+    """FAQ 新增/更新请求体（更新时字段可省略）"""
+    question: Optional[str] = Field(None, min_length=1, description="问题")
+    answer: Optional[str] = Field(None, min_length=1, description="回答")
+    category: Optional[str] = Field(None, min_length=1, max_length=50, description="分类标签")
+
+
+class FaqOut(OrmBase):
+    """FAQ 出参"""
+    id: int
+    question: str
+    answer: str
+    category: str
+
+
 class AdminRecordOut(OrmBase):
     """管理端账单出参（AdminRecordVO）
 

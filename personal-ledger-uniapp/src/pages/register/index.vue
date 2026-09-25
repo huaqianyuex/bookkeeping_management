@@ -3,7 +3,7 @@
 		<!-- 设计稿01 品牌区（注册页同风格） -->
 		<view class="brand">
 			<view class="brand-logo">
-				<text class="brand-logo-icon">🧾</text>
+				<app-icon name="receipt" :size="64"></app-icon>
 			</view>
 			<text class="brand-name">创建账号</text>
 			<text class="brand-slogan">加入简记，开始记录</text>
@@ -58,8 +58,10 @@
 
 <script>
 import { register } from '../../api/user'
+import AppIcon from '../../components/AppIcon.vue'
 
 export default {
+	components: { AppIcon },
 	data() {
 		return {
 			username: '',
@@ -93,6 +95,8 @@ export default {
 					password: this.password
 				})
 				if (res.code === 200) {
+					// 回填用户名到登录页，注册→登录零重复输入
+					uni.setStorageSync('login_prefill_username', this.username)
 					uni.showToast({ title: '注册成功', icon: 'success' })
 					setTimeout(() => {
 						uni.navigateBack()
@@ -120,7 +124,7 @@ export default {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	padding: 60rpx var(--space-3xl);
+	padding: var(--space-4xl) var(--space-3xl);
 }
 
 /* ── 品牌区（设计稿01 同款，缩小版） ── */
@@ -134,18 +138,13 @@ export default {
 .brand-logo {
 	width: 120rpx;
 	height: 120rpx;
-	border-radius: 32rpx;
+	border-radius: var(--radius-2xl);
 	background-color: var(--color-accent);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	box-shadow: var(--shadow-accent);
 	margin-bottom: var(--space-lg);
-}
-
-.brand-logo-icon {
-	font-size: 60rpx;
-	line-height: 1;
 }
 
 .brand-name {

@@ -20,6 +20,7 @@ from models.chat import Faq
 from models.category import Category
 from models.record import Record
 from models.user import User
+from utils.security import escape_like
 
 
 async def list_users(db: AsyncSession, page: int = 1, size: int = 20, keyword: str | None = None):
@@ -29,7 +30,9 @@ async def list_users(db: AsyncSession, page: int = 1, size: int = 20, keyword: s
     """
     conditions = []
     if keyword and keyword.strip():
-        conditions.append(User.username.like(f"%{keyword.strip()}%"))
+        # 转义 LIKE 通配符，防用户输入 % / _ 导致全量匹配（P2-4.2）
+        kw = f"%{escape_like(keyword.strip())}%"
+        conditions.append(User.username.like(kw, escape="\\"))
 
     total = (
         await db.execute(select(func.count(User.id)).where(*conditions))
@@ -181,8 +184,8 @@ async def list_all_categories(db: AsyncSession):
 
 
 async def list_faq(db: AsyncSession):
-    """查询 FAQ 列表"""
-    result = await db.execute(select(Faq).where(Faq.status == 1))
+    """查询 FAQ 全量列表（faq 表无 status 列，物理删除）"""
+    result = await db.execute(select(Faq))
     return result.scalars().all()
 
 
@@ -194,10 +197,21 @@ async def create_faq(db: AsyncSession, faq: Faq):
 
 
 async def update_faq(db: AsyncSession, faq_id: int, **fields):
-    """更新 FAQ"""
-    ...
+    """更新 FAQ（fields 仅含调用方传入的非空字段）"""
+    faq = await db.get(Faq, faq_id)
+    if faq is None:
+        return None
+    for key, value in fields.items():
+        setattr(faq, key, value)
+    await db.flush()
+    return faq
 
 
 async def delete_faq(db: AsyncSession, faq_id: int):
-    """删除 FAQ"""
-    ...
+    """物理删除 FAQ（faq 表无 status 列，D32 口径在此为物理删），返回是否命中"""
+    faq = await db.get(Faq, faq_id)
+    if faq is None:
+        return False
+    await db.delete(faq)
+    await db.flush()
+    return True

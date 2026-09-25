@@ -40,3 +40,19 @@ def create_access_token(subject, expires_delta: timedelta | None = None) -> str:
 def decode_access_token(token: str) -> dict:
     """解码并校验 JWT，失败抛异常"""
     return jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+
+
+def escape_like(keyword: str) -> str:
+    r"""转义 LIKE/ILIKE 中的元字符：\% 、\_ 以及 \ 自身。
+
+    使用方式：`Model.col.like(f"%{escape_like(kw)}%", escape="\\")`。
+    不转义时，用户输入 `%` 会命中全部行、`_` 会命中任意单字符，
+    导致过滤失效或与预期不符。
+    """
+    if not keyword:
+        return ""
+    return (
+        keyword.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )

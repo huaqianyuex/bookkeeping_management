@@ -6,7 +6,7 @@
     <!-- 顶部栏 -->
     <view class="header">
       <view class="header-left" @click="uni.navigateBack()">
-        <text class="header-icon">←</text>
+        <AppIcon name="back" :size="36" />
       </view>
       <text class="title">历史对话</text>
       <view class="header-right" />
@@ -21,17 +21,14 @@
         confirm-type="search"
         @confirm="fetchList(1)"
       />
+      <!-- 排序切换：与全局选中态语言统一（灰底胶囊 + 墨黑选中） -->
       <view class="sort-tabs">
-        <text
-          class="sort-tab"
-          :class="{ 'sort-tab--active': sort === 'updated' }"
-          @click="sort = 'updated'"
-        >最近更新</text>
-        <text
-          class="sort-tab"
-          :class="{ 'sort-tab--active': sort === 'created' }"
-          @click="sort = 'created'"
-        >创建时间</text>
+        <view class="sort-tab" :class="{ 'sort-tab--active': sort === 'updated' }" @click="sort = 'updated'">
+          <text class="sort-tab-text" :class="{ active: sort === 'updated' }">最近更新</text>
+        </view>
+        <view class="sort-tab" :class="{ 'sort-tab--active': sort === 'created' }" @click="sort = 'created'">
+          <text class="sort-tab-text" :class="{ active: sort === 'created' }">创建时间</text>
+        </view>
       </view>
     </view>
 
@@ -44,7 +41,28 @@
       :refresher-triggered="refreshing"
       @refresherrefresh="onRefresh"
     >
-      <view v-if="items.length === 0 && !listLoading" class="empty">
+      <!-- 首次加载先出骨架，避免白屏一闪 -->
+      <view v-if="items.length === 0 && listLoading" class="skeleton-list">
+        <skeleton-card :lines="2" style="margin-bottom: 16rpx;"></skeleton-card>
+        <skeleton-card :lines="2" style="margin-bottom: 16rpx;"></skeleton-card>
+        <skeleton-card :lines="2"></skeleton-card>
+      </view>
+
+      <!-- 加载失败 ≠ 没有对话 -->
+      <empty-state
+        v-else-if="loadError && items.length === 0"
+        mode="error"
+        title="对话加载失败"
+        description="网络似乎不太顺畅，稍后再试试"
+      >
+        <template #action>
+          <view class="empty-btn" @click="fetchList(1)">
+            <text class="empty-btn-text">重新加载</text>
+          </view>
+        </template>
+      </empty-state>
+
+      <view v-else-if="items.length === 0" class="empty">
         <text class="empty-icon">📋</text>
         <text class="empty-text">暂无历史对话</text>
       </view>
@@ -78,6 +96,9 @@
 import { ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { listSessions, renameSession, deleteSession, getMessages } from '@/api/ai.js'
+import SkeletonCard from '@/components/SkeletonCard.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import AppIcon from '@/components/AppIcon.vue'
 
 const statusBarHeight = ref(20)
 const keyword = ref('')
@@ -86,6 +107,7 @@ const items = ref([])
 const page = ref(1)
 const hasMore = ref(false)
 const listLoading = ref(false)
+const loadError = ref(false)
 const refreshing = ref(false)
 const PAGE_SIZE = 20
 
@@ -122,8 +144,11 @@ async function fetchList(p = 1, append = false) {
     }
     page.value = p
     hasMore.value = p * PAGE_SIZE < (res.total || 0)
+    loadError.value = false
   } catch (e) {
     console.error('加载会话列表失败:', e)
+    // 首屏失败标记错误态（追加加载失败保持原列表，仅 toast）
+    if (p === 1) loadError.value = true
     uni.showToast({ title: '加载失败', icon: 'none' })
   } finally {
     listLoading.value = false
@@ -202,7 +227,8 @@ function handleDelete(item) {
   uni.showModal({
     title: '删除该对话？',
     content: `「${item.title || '新对话'}」及其全部消息将被永久移除，无法恢复。`,
-    confirmColor: '#C43D3D',
+    // 原生弹窗只接受字面量色值，取 --color-danger 令牌的实际值
+    confirmColor: '#E5484D',
     success: async (res) => {
       if (res.confirm) {
         try {
@@ -236,7 +262,7 @@ onShow(() => {
 }
 
 .list-bottom-space {
-  height: calc(240rpx + env(safe-area-inset-bottom));
+  height: var(--page-bottom-space);
   flex-shrink: 0;
 }
 
@@ -268,17 +294,11 @@ onShow(() => {
   justify-content: center;
 }
 
-.header-icon {
-  font-size: var(--font-lg);
-  color: var(--color-text-secondary);
-}
-
 .title {
-  color: var(--color-text-heading);
-  font-size: 44rpx;
-  font-weight: var(--weight-extrabold);
+	color: var(--color-text-heading);
+	font-size: var(--font-2xl);
+	font-weight: var(--weight-extrabold);
 }
-
 /* 设计稿08：灰底胶囊搜索框 */
 .toolbar {
   padding: var(--space-sm) var(--space-2xl) var(--space-md);
@@ -295,26 +315,64 @@ onShow(() => {
   margin-bottom: var(--space-md);
 }
 
+/* 排序切换：灰底胶囊 + 墨黑选中，与全局选中态语言一致 */
 .sort-tabs {
-  display: flex;
-  gap: var(--space-lg);
+	display: inline-flex;
+	align-items: center;
+	background-color: var(--color-surface-raised);
+	border-radius: var(--radius-full);
+	padding: var(--space-2xs);
+	gap: var(--space-2xs);
 }
 
 .sort-tab {
-  font-size: var(--font-sm);
-  color: var(--color-text-tertiary);
-  padding-bottom: var(--space-xs);
+	padding: var(--space-xs) var(--space-lg);
+	border-radius: var(--radius-full);
+	transition: background-color var(--transition-fast);
 }
 
 .sort-tab--active {
-  color: var(--color-text-heading);
-  font-weight: var(--weight-semibold);
-  border-bottom: 4rpx solid var(--color-accent);
+	background: var(--color-primary);
+}
+
+.sort-tab-text {
+	font-size: var(--font-sm);
+	color: var(--color-text-secondary);
+	font-weight: var(--weight-medium);
+}
+
+.sort-tab-text.active {
+	color: var(--color-text-inverse);
+	font-weight: var(--weight-semibold);
 }
 
 .list {
   flex: 1;
   padding: var(--space-md) var(--space-lg);
+}
+
+.skeleton-list {
+  padding-top: var(--space-md);
+}
+
+.empty-btn {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-accent);
+  padding: var(--space-lg) var(--space-3xl);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-accent);
+  transition: opacity var(--transition-fast);
+}
+
+.empty-btn:active {
+  opacity: 0.88;
+}
+
+.empty-btn-text {
+  color: var(--color-text-heading);
+  font-size: var(--font-base);
+  font-weight: var(--weight-semibold);
 }
 
 .empty {
@@ -325,7 +383,7 @@ onShow(() => {
 }
 
 .empty-icon {
-  font-size: 80rpx;
+  font-size: var(--font-5xl);
   margin-bottom: var(--space-xl);
 }
 

@@ -1,22 +1,19 @@
 <script>
 export default {
 	onLaunch() {
-		console.log('App Launch')
 		// 启动时检查登录态，未登录则跳转到登录页。
 		// 注意：dashboard 页面的 onShow 也会做同样的检查，但启动瞬间只会有一个页面被加载，
 		// 这里负责首次进入时的全局跳转，避免与子页面跳转冲突导致"do not operate continuously"。
 		const token = uni.getStorageSync('token')
 		if (!token) {
-			uni.reLaunch({ url: '/pages/login/index' })
+			// 注册页允许未登录直达（分享/刷新场景），其余页面一律回登录页
+			const launchPath = (uni.getLaunchOptionsSync() || {}).path || ''
+			if (!launchPath.includes('pages/register/index')) {
+				uni.reLaunch({ url: '/pages/login/index' })
+			}
 		}
 		// 有 token 则正常进入 tabBar 首页（pages.json 第一个页面即 dashboard）
 	},
-	onShow() {
-		console.log('App Show')
-	},
-	onHide() {
-		console.log('App Hide')
-	}
 }
 </script>
 
@@ -60,8 +57,31 @@ h1, h2, h3, h4 {
 	display: none;
 }
 
+/* 浏览器表面也属于设计：选区、光标取自调色板 */
+::selection {
+	background: rgba(var(--color-accent-rgb), 0.24);
+}
+
+input,
+textarea {
+	caret-color: var(--color-accent-deep);
+}
+
 page, .scroll-content {
 	scroll-behavior: smooth;
+}
+
+/* H5 宽屏预览：内容按手机宽度居中，rpx 基准由 rpxCalcMaxDeviceWidth 锁定（App 端媒体查询不生效） */
+@media (min-width: 560px) {
+	uni-page-body {
+		max-width: 480px;
+		margin-left: auto;
+		margin-right: auto;
+	}
+
+	.tab-bar-wrap {
+		max-width: 480px;
+	}
 }
 
 /* 全局过渡 */

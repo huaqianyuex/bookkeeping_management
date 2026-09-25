@@ -1,7 +1,7 @@
 <template>
-	<view class="stat-card" :class="[typeClass, { compact: compact }]" @click="$emit('click')">
+	<view class="stat-card" :class="[typeClass, { compact: compact }]">
 		<view class="stat-accent" :class="typeClass"></view>
-		<view class="stat-icon-wrap" :class="typeClass">
+		<view v-if="icon" class="stat-icon-wrap" :class="typeClass">
 			<text class="stat-icon-text">{{ icon }}</text>
 		</view>
 		<view class="stat-body">
@@ -24,7 +24,6 @@ export default {
 		type: { type: String, default: 'balance' },
 		icon: { type: String, default: '' },
 		compact: { type: Boolean, default: false },
-		prefix: { type: String, default: '¥' },
 	},
 	computed: {
 		typeClass() {
@@ -56,11 +55,6 @@ export default {
 	flex-direction: column;
 	align-items: center;
 	overflow: hidden;
-	transition: background-color 0.15s ease;
-}
-
-.stat-card:active {
-	background-color: var(--color-surface-raised);
 }
 
 /* 顶部色条 — 收支语义标记 */

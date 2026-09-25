@@ -4,7 +4,7 @@ from datetime import datetime
 from starlette import status
 
 from crud import user
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +20,10 @@ from schemas.users import (
 from utils import security
 from utils.auth import get_current_user
 from utils.response import success_response
+from utils.throttle import login_throttle
 from utils.upload import save_avatar, delete_old_avatar
+
+PASSWORD_MIN_LEN, PASSWORD_MAX_LEN = 6, 6  # 与 schemas 同口径：6 位数字
 
 router = APIRouter(prefix="/api/user", tags=["user"])
 
@@ -39,11 +42,22 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login")
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """用户登录"""
+async def login(data: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """用户登录（P2-4.1：同 IP+用户名 5 分钟内失败 5 次则锁 15 分钟）"""
+    # 限流 key：IP + 用户名，避免分布式场景下同一人换 IP 绕过
+    client_ip = request.client.host if request.client else "unknown"
+    throttle_key = f"{client_ip}|{data.username}"
+    locked, retry_after = login_throttle.is_locked(throttle_key)
+    if locked:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"尝试过于频繁，请 {retry_after} 秒后重试",
+        )
+
     # 查用户；不存在与密码错误统一文案，避免泄露用户是否存在
     user_obj = await user.get_user_by_username(db, data.username)
     if not user_obj or not security.verify_password(data.password, user_obj.password):
+        login_throttle.record_fail(throttle_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
@@ -54,6 +68,8 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="账号已被禁用",
         )
+    # 登录成功：清零失败计数
+    login_throttle.reset(throttle_key)
     # 签发 JWT（无状态、不落库）
     token = await user.create_token(db, user_obj.id)
     # 记录最后登录时间
@@ -98,7 +114,7 @@ async def change_password(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """修改密码"""
+    """修改密码（新旧密码均要求 6 位数字，与注册同口径；旧密码校验不通过则拒绝）"""
     await user.update_password(db, user_id, data)
     return success_response(message="密码修改成功")
 

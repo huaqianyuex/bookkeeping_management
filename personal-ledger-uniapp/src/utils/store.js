@@ -46,3 +46,35 @@ export const useUserStore = defineStore('user', {
 		},
 	},
 })
+
+/**
+ * 账本数据缓存（stale-while-revalidate）：
+ * 自定义 TabBar 用 reLaunch 切页会销毁页面栈，这里把账单列表和仪表盘统计
+ * 缓存一份，页面 onShow 时先渲染缓存再后台刷新，避免每次切 tab 都白屏等请求。
+ */
+const emptyRecordsCache = () => ({
+	key: '',
+	records: [],
+	total: 0,
+	pages: 0,
+	current: 1,
+	size: 20,
+})
+
+export const useLedgerStore = defineStore('ledger', {
+	state: () => ({
+		records: emptyRecordsCache(),
+		dashboard: { key: '', monthlyData: null, expenseData: [], incomeData: [], monthSeries: [] },
+	}),
+	actions: {
+		setRecordsCache(payload) {
+			this.records = { ...this.records, ...payload }
+		},
+		clearRecordsCache() {
+			this.records = emptyRecordsCache()
+		},
+		setDashboardCache(payload) {
+			this.dashboard = { ...this.dashboard, ...payload }
+		},
+	},
+})

@@ -43,6 +43,32 @@ export const sendChat = (sessionId, message) => {
 	})
 }
 
+// ==================== 自然语言记账 ====================
+
+/**
+ * 语义记账（05 §6）：服务端解析口语化消息并入账。
+ * 响应为裸 JSON（HTTP 200），顶层 action 字段：
+ *   created  已入账（echo 可直接渲染）
+ *   clarify  信息不全，追问（question + draftId，下一条消息带上续写）
+ *   ignored  非消费类消息（reason 区分 not_expense/query 等，调用方应降级走对话）
+ *   duplicate 命中幂等，未重复入账（echo）
+ * {"error":"中文"} 表示记账服务失败（如 LLM 不可用），调用方降级走对话。
+ */
+export const aiBookkeeping = ({ sessionId, message, clientMsgId, draftId, dryRun, force } = {}) => {
+	const data = { message }
+	if (sessionId) data.sessionId = sessionId
+	if (clientMsgId) data.clientMsgId = clientMsgId
+	if (draftId) data.draftId = draftId
+	if (dryRun) data.dryRun = dryRun
+	if (force) data.force = force
+	return request({
+		url: AI_BASE + '/bookkeeping',
+		method: 'POST',
+		data,
+		timeout: 60000
+	})
+}
+
 // ==================== 流式对话（SSE） ====================
 
 /**

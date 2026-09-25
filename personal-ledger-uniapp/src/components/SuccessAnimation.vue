@@ -1,10 +1,12 @@
 <template>
 	<view v-if="visible" class="success-overlay" @click.stop>
 		<view class="success-panel anim-scale-in">
-			<svg class="success-svg" viewBox="0 0 100 100">
-				<circle class="success-check-circle" cx="50" cy="50" r="45" fill="none" stroke="#2E7D52" stroke-width="4" stroke-linecap="round" />
-				<path class="success-check-mark" d="M30 52 L44 66 L70 38" fill="none" stroke="#2E7D52" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-			</svg>
+			<!-- 纯 CSS 打勾：内联 <svg> 在微信小程序端不渲染，改用边框画勾保证跨端 -->
+			<view class="success-medal">
+				<view class="success-check-clip">
+					<view class="success-check"></view>
+				</view>
+			</view>
 			<text class="success-text anim-fade-in-up">{{ message }}</text>
 			<text class="success-sub anim-fade-in-up" style="animation-delay: 0.2s">{{ subMessage }}</text>
 		</view>
@@ -39,7 +41,7 @@ export default {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	background: rgba(0, 0, 0, 0.45);
+	background: var(--color-overlay);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -52,26 +54,44 @@ export default {
 	align-items: center;
 	background: var(--color-surface);
 	border-radius: var(--radius-3xl);
-	padding: 64rpx 80rpx;
+	padding: var(--space-4xl) var(--space-5xl);
 	box-shadow: var(--shadow-xl);
 }
 
-.success-svg {
-	width: 160rpx;
-	height: 160rpx;
+/* 圆章：先弹入，再从中间揭示对勾 */
+.success-medal {
+	position: relative;
+	width: 150rpx;
+	height: 150rpx;
+	border-radius: var(--radius-full);
+	border: 8rpx solid var(--color-success);
+	background: var(--color-success-light);
+	box-sizing: border-box;
 	margin-bottom: var(--space-xl);
+	animation: medalPop 0.5s var(--ease-out-back) both;
 }
 
-.success-check-circle {
-	stroke-dasharray: 314;
-	stroke-dashoffset: 314;
-	animation: checkCircle 0.6s 0.1s var(--ease-out-expo) forwards;
+.success-check-clip {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 0;
+	height: 90rpx;
+	margin: -45rpx 0 0 -45rpx;
+	overflow: hidden;
+	animation: checkReveal 0.35s 0.4s var(--ease-out-expo) forwards;
 }
 
-.success-check-mark {
-	stroke-dasharray: 100;
-	stroke-dashoffset: 100;
-	animation: checkDraw 0.4s 0.5s var(--ease-out-expo) forwards;
+.success-check {
+	position: absolute;
+	left: 24rpx;
+	top: 30rpx;
+	width: 42rpx;
+	height: 22rpx;
+	border-left: 8rpx solid var(--color-success);
+	border-bottom: 8rpx solid var(--color-success);
+	border-radius: 2rpx;
+	transform: rotate(-45deg);
 }
 
 .success-text {
@@ -88,11 +108,20 @@ export default {
 	text-align: center;
 }
 
-@keyframes checkCircle {
-  to { stroke-dashoffset: 0; }
+@keyframes medalPop {
+	from {
+		transform: scale(0.4);
+		opacity: 0;
+	}
+	to {
+		transform: scale(1);
+		opacity: 1;
+	}
 }
 
-@keyframes checkDraw {
-  to { stroke-dashoffset: 0; }
+@keyframes checkReveal {
+	to {
+		width: 90rpx;
+	}
 }
 </style>

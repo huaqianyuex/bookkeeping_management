@@ -3,202 +3,203 @@
 		<!-- 状态栏占位 -->
 		<view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
 		<scroll-view
-		scroll-y
-		class="scroll-content"
-		:enhanced="true"
-		show-scrollbar="false"
-		:lower-threshold="50"
-		@scrolltolower="loadMore"
-		:refresher-enabled="true"
-		:refresher-triggered="refreshing"
-		@refresherrefresh="onRefresh"
-		@touchmove.stop
-	>
-			<!-- 月份选择器 -->
-			<view class="month-selector">
-				<view class="month-arrow" @click="prevMonth">
-					<text class="arrow-icon">‹</text>
-				</view>
-				<view class="month-badge">
-					<text class="month-text">{{ currentMonthLabel }}</text>
-				</view>
-				<view class="month-arrow" @click="nextMonth">
-					<text class="arrow-icon">›</text>
-				</view>
-			</view>
-
-			<!-- Loading skeleton -->
-			<animated-transition v-if="loading && !monthlyData" name="fade">
-				<view class="stats-container">
-					<skeleton-card :lines="2" style="margin-bottom: 20rpx;"></skeleton-card>
-					<skeleton-card :lines="2" style="margin-bottom: 20rpx;"></skeleton-card>
+			scroll-y
+			class="scroll-content"
+			:enhanced="true"
+			show-scrollbar="false"
+			:refresher-enabled="true"
+			:refresher-triggered="refreshing"
+			@refresherrefresh="onRefresh"
+			@touchmove.stop
+		>
+			<!-- Loading skeleton：仅「当前月份还没有自己的一份数据」时显示，
+			     有缓存/旧数据时静默刷新，绝不把上个月数字伪装成当月 -->
+			<animated-transition v-if="loading && loadedKey !== currentKey" name="fade">
+				<view class="skeleton-zone">
 					<skeleton-card :lines="2"></skeleton-card>
+					<skeleton-card :lines="3"></skeleton-card>
+					<skeleton-card :lines="4"></skeleton-card>
 				</view>
 			</animated-transition>
 
 			<animated-transition v-else-if="monthlyData" name="fade">
-				<!-- 统计卡片：左右分栏 -->
-				<view class="stats-container stats-split">
-					<view class="stats-main">
-						<stat-card
-							class="stat-main-card"
-							label="结余"
-							:value="monthlyData.balance"
-							:type="monthlyData.balance >= 0 ? 'income' : 'expense'"
-							icon="◆"
-						></stat-card>
+				<!-- 账期抬头：月份切换 + AI 解读入口 -->
+				<view class="period-row">
+					<view class="period-nav">
+						<view class="period-arrow" @click="prevMonth"><text class="arrow-glyph">‹</text></view>
+						<text class="period-text">{{ currentMonthLabel }}</text>
+						<view class="period-arrow" @click="nextMonth"><text class="arrow-glyph">›</text></view>
 					</view>
-					<view class="stats-side">
-						<stat-card
-							class="stat-side-card"
-							label="收入"
-							:value="monthlyData.totalIncome"
-							type="income"
-							icon="↑"
-							:compact="true"
-						></stat-card>
-						<stat-card
-							class="stat-side-card"
-							label="支出"
-							:value="monthlyData.totalExpense"
-							type="expense"
-							icon="↓"
-							:compact="true"
-						></stat-card>
+					<view class="ai-entry" @click="goAiRead">
+						<text class="ai-entry-text">AI 解读</text>
+						<text class="ai-entry-arrow">→</text>
 					</view>
 				</view>
 
-				<!-- 收入趋势与对比分析 -->
-				<view class="income-chart-card">
-					<view class="chart-header">
-						<text class="chart-title">收入分析</text>
-						<view class="chart-mode-switch">
-							<view class="mode-item" :class="{ active: chartMode === 'trend' }" @click="chartMode = 'trend'">
-								<text class="mode-text" :class="{ active: chartMode === 'trend' }">趋势</text>
-							</view>
-							<view class="mode-item" :class="{ active: chartMode === 'compare' }" @click="chartMode = 'compare'">
-								<text class="mode-text" :class="{ active: chartMode === 'compare' }">对比</text>
-							</view>
+				<!-- 结余焦点：无盒版面，数字即主角 -->
+				<view class="balance-block">
+					<view class="balance-row">
+						<text v-if="balanceParts.sign" class="balance-sign">{{ balanceParts.sign }}</text>
+						<text class="balance-currency">¥</text>
+						<text class="balance-num">{{ balanceParts.int }}</text>
+						<text class="balance-dec">.{{ balanceParts.dec }}</text>
+					</view>
+					<view class="balance-meta">
+						<text class="balance-label">{{ monthShortLabel }}结余</text>
+						<view v-if="momBalance.text !== '—'" class="mom-chip" :class="momBalance.cls">
+							<text class="mom-arrow">{{ momBalance.arrow }}</text>
+							<text class="mom-text">{{ momBalance.text }}</text>
 						</view>
 					</view>
+				</view>
 
-					<view v-if="chartMode === 'trend' && incomeTrendData.length > 0" class="chart-panel">
-						<view class="chart-kpi-row">
-							<view class="kpi-main">
-								<text class="kpi-label">{{ selectedTrendData ? selectedTrendData.label : '--' }}</text>
-								<text class="kpi-value">¥{{ formatAmount(selectedTrendData ? selectedTrendData.amount : 0) }}</text>
-							</view>
-							<view class="kpi-side">
-								<text class="kpi-side-label">较上月</text>
-								<text class="kpi-side-value" :class="trendComparison.rate >= 0 ? 'rise' : 'down'">
-									{{ formatGrowthRate(trendComparison.rate) }}
-								</text>
-							</view>
+				<!-- 收支行情带：值 + 环比 + 六月微趋势 -->
+				<view class="tape-row">
+					<view class="tape-col">
+						<view class="tape-head">
+							<text class="tape-label">收入</text>
+							<text v-if="momIncome.text !== '—'" class="tape-mom" :class="momIncome.cls">{{ momIncome.arrow }} {{ momIncome.text }}</text>
 						</view>
-
-						<view class="trend-chart-wrap">
+						<text class="tape-amount is-income">¥{{ formatAmount(monthlyData.totalIncome) }}</text>
+						<view class="tape-spark">
 							<view
-								v-for="(item, index) in incomeTrendData"
-								:key="item.key"
-								class="trend-col"
-								:class="{ active: index === selectedTrendIndex }"
-								@click="selectTrendPoint(index)"
-							>
-								<view class="trend-bar-bg">
-									<view class="trend-bar" :class="{ active: index === selectedTrendIndex }" :style="{ height: getTrendBarHeight(item.amount) }"></view>
-								</view>
-								<text class="trend-label" :class="{ active: index === selectedTrendIndex }">{{ item.month }}<text class="trend-label-unit">月</text></text>
-							</view>
+								v-for="(p, i) in monthSeries"
+								:key="'in' + p.key"
+								class="spark-bar is-income"
+								:class="{ latest: i === monthSeries.length - 1 }"
+								:style="{ height: sparkHeight(p.income, seriesMax.income), animationDelay: i * 45 + 'ms' }"
+							></view>
 						</view>
 					</view>
-
-					<view v-else-if="chartMode === 'compare' && incomeCategoryChartData.length > 0" class="chart-panel">
-						<view class="compare-list">
+					<view class="tape-col tape-col--right">
+						<view class="tape-head">
+							<text class="tape-label">支出</text>
+							<text v-if="momExpense.text !== '—'" class="tape-mom" :class="momExpense.cls">{{ momExpense.arrow }} {{ momExpense.text }}</text>
+						</view>
+						<text class="tape-amount is-expense">¥{{ formatAmount(monthlyData.totalExpense) }}</text>
+						<view class="tape-spark">
 							<view
-								v-for="(item, index) in incomeCategoryChartData"
-								:key="item.categoryId"
-								class="compare-row"
-								@click="selectIncomeCategory(index)"
-							>
-								<view class="compare-row-left">
-									<text class="compare-name">{{ item.categoryName }}</text>
-									<view class="compare-track">
-										<view class="compare-fill" :class="{ active: index === selectedIncomeCategoryIndex }" :style="{ width: getCategoryBarWidth(item.percent) }"></view>
-									</view>
-								</view>
-								<view class="compare-row-right">
-									<text class="compare-amount">¥{{ formatAmount(item.amount) }}</text>
-									<text class="compare-percent">{{ item.percent.toFixed(1) }}%</text>
-								</view>
-							</view>
-						</view>
-
-						<view v-if="selectedIncomeCategory" class="compare-highlight">
-							<text class="compare-highlight-label">当前选中分类</text>
-							<text class="compare-highlight-value">{{ selectedIncomeCategory.categoryName }} · ¥{{ formatAmount(selectedIncomeCategory.amount) }}</text>
+								v-for="(p, i) in monthSeries"
+								:key="'ex' + p.key"
+								class="spark-bar is-expense"
+								:class="{ latest: i === monthSeries.length - 1 }"
+								:style="{ height: sparkHeight(p.expense, seriesMax.expense), animationDelay: i * 45 + 120 + 'ms' }"
+							></view>
 						</view>
 					</view>
+				</view>
 
+				<!-- 支出板块排行：钱花在哪 -->
+				<view class="section">
+					<view class="section-head">
+						<text class="section-title">支出板块</text>
+						<text class="section-sub" v-if="expenseSectors.length > 0">合计 ¥{{ formatAmount(monthlyData.totalExpense) }}</text>
+					</view>
 					<empty-state
-						v-else
-						icon="📈"
-						title="暂无收入图表数据"
-						description="请先新增收入记录后查看趋势"
+						v-if="expenseSectors.length === 0"
+						icon="receipt"
+						title="暂无支出"
+						description="本月还没有支出记录，点右下角 + 记一笔"
 					></empty-state>
+					<view v-else class="sector-list">
+						<view v-for="(row, index) in expenseSectors" :key="row.key" class="sector-row">
+							<view class="sector-chip" :style="{ background: row.bg }">
+								<text class="sector-glyph" :style="{ color: row.deep }">{{ row.glyph }}</text>
+							</view>
+							<view class="sector-main">
+								<view class="sector-line">
+									<text class="sector-name">{{ row.name }}</text>
+									<text class="sector-amount">¥{{ formatAmount(row.amount) }}</text>
+									<text class="sector-percent">{{ row.percent.toFixed(1) }}%</text>
+								</view>
+								<view class="sector-track">
+									<view
+										class="sector-fill"
+										:style="{ width: row.width + '%', background: row.deep, animationDelay: index * 55 + 'ms' }"
+									></view>
+								</view>
+							</view>
+						</view>
+					</view>
 				</view>
 
-				<!-- 分类统计 -->
-				<view class="table-card">
-					<view class="table-header">
-						<text class="table-title">支出分类统计</text>
-						<text class="table-count" v-if="expenseData.length > 0">{{ expenseData.length }} 类</text>
+				<!-- 近六月走势：收支双序列，点击月份查看结算 -->
+				<view class="section">
+					<view class="section-head">
+						<text class="section-title">近六月走势</text>
+						<text class="section-sub legend">
+							<text class="legend-dot is-income"></text>收入
+							<text class="legend-dot is-expense"></text>支出
+						</text>
 					</view>
 					<empty-state
-						v-if="expenseData.length === 0"
-						icon="📊"
-						title="暂无支出数据"
-						description="本月还没有支出记录"
+						v-if="monthSeries.length === 0"
+						icon="trend"
+						title="暂无走势数据"
+						description="记账后这里会展示近六个月的收支对比"
 					></empty-state>
 					<view v-else>
-						<view v-for="item in expenseData" :key="item.categoryId" class="table-row">
-							<view class="table-row-left">
-								<view class="category-dot type-expense"></view>
-								<text class="category-name">{{ item.categoryName }}</text>
-							</view>
-							<view class="table-row-right">
-								<view class="bar-container">
-									<view class="bar type-expense" :style="{ width: item.percentage + '%' }"></view>
+						<view class="trend-chart">
+							<view
+								v-for="(p, i) in monthSeries"
+								:key="p.key"
+								class="trend-col"
+								:class="{ active: i === selectedSeriesIndex }"
+								@click="selectSeriesPoint(i)"
+							>
+								<view class="trend-bars">
+									<view class="trend-bar is-income" :style="{ height: barHeight(p.income), animationDelay: i * 45 + 'ms' }"></view>
+									<view class="trend-bar is-expense" :style="{ height: barHeight(p.expense), animationDelay: i * 45 + 60 + 'ms' }"></view>
 								</view>
-								<text class="amount type-expense">¥{{ formatAmount(item.amount) }}</text>
-								<text class="percentage">{{ item.percentage }}%</text>
+								<text class="trend-label">{{ p.shortLabel }}</text>
+							</view>
+						</view>
+						<view v-if="selectedPoint" class="trend-detail">
+							<view class="detail-item">
+								<text class="detail-label">收入</text>
+								<text class="detail-value is-income">¥{{ formatAmount(selectedPoint.income) }}</text>
+							</view>
+							<view class="detail-item">
+								<text class="detail-label">支出</text>
+								<text class="detail-value is-expense">¥{{ formatAmount(selectedPoint.expense) }}</text>
+							</view>
+							<view class="detail-item">
+								<text class="detail-label">结余</text>
+								<text class="detail-value" :class="{ 'is-expense': selectedPoint.balance < 0 }">¥{{ formatAmount(selectedPoint.balance) }}</text>
 							</view>
 						</view>
 					</view>
 				</view>
 
-				<view class="table-card">
-					<view class="table-header">
-						<text class="table-title">收入分类统计</text>
-						<text class="table-count" v-if="incomeData.length > 0">{{ incomeData.length }} 类</text>
+				<!-- 收入构成：收纳为紧凑列表 -->
+				<view class="section section--last">
+					<view class="section-head">
+						<text class="section-title">收入构成</text>
+						<text class="section-sub" v-if="incomeSectors.length > 0">合计 ¥{{ formatAmount(monthlyData.totalIncome) }}</text>
 					</view>
 					<empty-state
-						v-if="incomeData.length === 0"
-						icon="💰"
-						title="暂无收入数据"
+						v-if="incomeSectors.length === 0"
+						icon="receipt"
+						title="暂无收入"
 						description="本月还没有收入记录"
 					></empty-state>
-					<view v-else>
-						<view v-for="item in incomeData" :key="item.categoryId" class="table-row">
-							<view class="table-row-left">
-								<view class="category-dot type-income"></view>
-								<text class="category-name">{{ item.categoryName }}</text>
+					<view v-else class="sector-list">
+						<view v-for="(row, index) in incomeSectors" :key="row.key" class="sector-row">
+							<view class="sector-chip" :style="{ background: row.bg }">
+								<text class="sector-glyph" :style="{ color: row.deep }">{{ row.glyph }}</text>
 							</view>
-							<view class="table-row-right">
-								<view class="bar-container">
-									<view class="bar type-income" :style="{ width: item.percentage + '%' }"></view>
+							<view class="sector-main">
+								<view class="sector-line">
+									<text class="sector-name">{{ row.name }}</text>
+									<text class="sector-amount">¥{{ formatAmount(row.amount) }}</text>
+									<text class="sector-percent">{{ row.percent.toFixed(1) }}%</text>
 								</view>
-								<text class="amount type-income">¥{{ formatAmount(item.amount) }}</text>
-								<text class="percentage">{{ item.percentage }}%</text>
+								<view class="sector-track sector-track--thin">
+									<view
+										class="sector-fill"
+										:style="{ width: row.width + '%', background: row.deep, animationDelay: index * 55 + 'ms' }"
+									></view>
+								</view>
 							</view>
 						</view>
 					</view>
@@ -213,14 +214,14 @@
 import { getMonthlyStatistics, getCategoryStatistics } from '../../api/statistics'
 import { getWithRetry } from '../../api/request'
 import { formatAmount } from '../../utils/format'
-import StatCard from '../../components/StatCard.vue'
+import { useLedgerStore } from '../../utils/store'
+import { catColorVar, catColorDeepVar } from '../../utils/category'
 import EmptyState from '../../components/EmptyState.vue'
 import SkeletonCard from '../../components/SkeletonCard.vue'
 import AnimatedTransition from '../../components/AnimatedTransition.vue'
 
 export default {
 	components: {
-		StatCard,
 		EmptyState,
 		SkeletonCard,
 		AnimatedTransition,
@@ -234,12 +235,13 @@ export default {
 			monthlyData: null,
 			expenseData: [],
 			incomeData: [],
-			incomeTrendData: [],
-			selectedTrendIndex: -1,
-			chartMode: 'trend',
-			selectedIncomeCategoryIndex: 0,
+			// 近六月收支序列：income / expense / balance，由月度接口前端聚合
+			monthSeries: [],
+			selectedSeriesIndex: -1,
 			loading: false,
 			refreshing: false,
+			// 已成功加载的月份 key，用于区分「当月骨架」与「静默刷新」
+			loadedKey: '',
 		}
 	},
 	onLoad() {
@@ -247,109 +249,156 @@ export default {
 		this.statusBarHeight = systemInfo.statusBarHeight || 20
 	},
 	computed: {
+		currentKey() {
+			return `${this.year}-${String(this.month).padStart(2, '0')}`
+		},
 		currentMonthLabel() {
 			return `${this.year}年${String(this.month).padStart(2, '0')}月`
 		},
-		selectedTrendData() {
-			if (this.selectedTrendIndex < 0) return null
-			return this.incomeTrendData[this.selectedTrendIndex] || null
+		monthShortLabel() {
+			return `${this.month}月`
 		},
-		trendMaxValue() {
-			if (this.incomeTrendData.length === 0) return 0
-			return Math.max(...this.incomeTrendData.map(item => Number(item.amount) || 0), 0)
+		balanceValue() {
+			return Number(this.monthlyData?.balance ?? 0)
 		},
-		trendComparison() {
-			if (this.selectedTrendIndex < 0 || this.incomeTrendData.length === 0) {
-				return { current: 0, previous: 0, rate: 0 }
-			}
-			const current = Number(this.incomeTrendData[this.selectedTrendIndex]?.amount || 0)
-			const previous = Number(this.incomeTrendData[this.selectedTrendIndex - 1]?.amount || 0)
-			if (previous <= 0) {
-				return { current, previous, rate: current > 0 ? 100 : 0 }
-			}
+		balanceParts() {
+			const num = this.balanceValue
+			const [int, dec] = Math.abs(num).toFixed(2).split('.')
 			return {
-				current,
-				previous,
-				rate: ((current - previous) / previous) * 100,
+				sign: num < 0 ? '−' : '',
+				int: int.replace(/\B(?=(\d{3})+(?!\d))/g, ','),
+				dec,
 			}
 		},
-		incomeCategoryChartData() {
-			const totalIncome = Number(this.monthlyData?.totalIncome || 0)
-			if (totalIncome <= 0 || this.incomeData.length === 0) return []
-			return this.incomeData
-				.map(item => ({
-					categoryId: item.categoryId,
-					categoryName: item.categoryName,
-					amount: Number(item.amount) || 0,
-					percent: ((Number(item.amount) || 0) / totalIncome) * 100,
-				}))
-				.sort((a, b) => b.amount - a.amount)
-				.slice(0, 6)
+		curPoint() {
+			return this.monthSeries[this.monthSeries.length - 1] || null
 		},
-		selectedIncomeCategory() {
-			return this.incomeCategoryChartData[this.selectedIncomeCategoryIndex] || null
+		prevPoint() {
+			return this.monthSeries[this.monthSeries.length - 2] || null
+		},
+		// 环比：与序列内上一月比较；上月基数为 0 时不编造百分比
+		momBalance() {
+			return this.buildMom(this.balanceValue, this.prevPoint?.balance, true)
+		},
+		momIncome() {
+			return this.buildMom(this.curPoint?.income, this.prevPoint?.income, true)
+		},
+		momExpense() {
+			return this.buildMom(this.curPoint?.expense, this.prevPoint?.expense, false)
+		},
+		seriesMax() {
+			let income = 0
+			let expense = 0
+			this.monthSeries.forEach((p) => {
+				income = Math.max(income, Number(p.income) || 0)
+				expense = Math.max(expense, Number(p.expense) || 0)
+			})
+			return { income, expense }
+		},
+		selectedPoint() {
+			return this.monthSeries[this.selectedSeriesIndex] || null
+		},
+		expenseSectors() {
+			const rows = this.buildSectorRows(this.expenseData)
+			if (rows.length === 0) return []
+			const top = rows.slice(0, 6)
+			const rest = rows.slice(6)
+			if (rest.length > 0) {
+				const amount = rest.reduce((sum, r) => sum + r.amount, 0)
+				const percent = rest.reduce((sum, r) => sum + r.percent, 0)
+				top.push({
+					key: 'other',
+					name: `其他 ${rest.length} 类`,
+					amount,
+					percent,
+					width: Math.max(4, Math.min(100, percent)),
+					bg: 'var(--cat-gray)',
+					deep: 'var(--cat-gray-deep)',
+					glyph: '他',
+				})
+			}
+			return top
+		},
+		incomeSectors() {
+			return this.buildSectorRows(this.incomeData).slice(0, 6)
 		},
 	},
 	watch: {
-		year() { this.fetchData() },
-		month() { this.fetchData() },
+		year() { this.onMonthChange() },
+		month() { this.onMonthChange() },
 	},
 	onShow() {
 		const token = uni.getStorageSync('token')
-		// 这里不再主动 reLaunch 到登录页：
-		// 1) App.vue 的 onLaunch 已在启动时处理过未登录跳转；
-		// 2) 若 token 过期，下方请求会统一触发 request.js 的全局 401 跳转（已做去重），
-		//    避免启动瞬间多个页面同时 reLaunch 造成 "do not operate continuously" 卡死。
+		// 未登录跳转统一由 App.vue 启动时与 request.js 的全局 401 处理，这里只做静默返回
 		if (!token) {
 			return
 		}
-		this.fetchData()
+		// stale-while-revalidate：切 tab 回来先渲染缓存，再静默刷新
+		const cache = useLedgerStore().dashboard
+		if (cache.key === this.currentKey && cache.monthlyData) {
+			this.monthlyData = cache.monthlyData
+			this.expenseData = cache.expenseData
+			this.incomeData = cache.incomeData
+			this.monthSeries = cache.monthSeries || []
+			this.selectedSeriesIndex = this.monthSeries.length - 1
+			this.loadedKey = this.currentKey
+			this.fetchData(true)
+		} else {
+			this.fetchData()
+		}
 	},
-		methods: {
-			formatAmount,
-			async fetchData() {
-				this.loading = true
-				try {
-					const [monthlyRes, expenseRes, incomeRes] = await Promise.all([
-						getWithRetry(getMonthlyStatistics, { year: this.year, month: this.month }),
-						getWithRetry(getCategoryStatistics, { year: this.year, month: this.month, type: 0 }),
-						getWithRetry(getCategoryStatistics, { year: this.year, month: this.month, type: 1 }),
-					])
-					if (monthlyRes.code === 200) this.monthlyData = monthlyRes.data
-					if (expenseRes.code === 200) this.expenseData = expenseRes.data
-					if (incomeRes.code === 200) this.incomeData = incomeRes.data
+	methods: {
+		formatAmount,
+		async fetchData(silent = false) {
+			if (!silent) this.loading = true
+			try {
+				// 四组请求并发：月度统计、支出分类、收入分类、近 6 个月序列
+				const trendPromise = this.fetchMonthSeries()
+				const [monthlyRes, expenseRes, incomeRes] = await Promise.all([
+					getWithRetry(getMonthlyStatistics, { year: this.year, month: this.month }),
+					getWithRetry(getCategoryStatistics, { year: this.year, month: this.month, type: 0 }),
+					getWithRetry(getCategoryStatistics, { year: this.year, month: this.month, type: 1 }),
+					trendPromise,
+				])
+				if (monthlyRes.code === 200) this.monthlyData = monthlyRes.data
+				if (expenseRes.code === 200) this.expenseData = expenseRes.data
+				if (incomeRes.code === 200) this.incomeData = incomeRes.data
+				this.loadedKey = this.currentKey
 
-					await this.fetchIncomeTrendData()
-
-					if (this.selectedIncomeCategoryIndex > this.incomeCategoryChartData.length - 1) {
-						this.selectedIncomeCategoryIndex = 0
-					}
-				} catch (e) {
-					console.error('[Dashboard] 加载数据失败:', e)
-					uni.showToast({ title: '加载数据失败，请检查网络连接', icon: 'none' })
-				} finally {
-					this.loading = false
-					this.refreshing = false
-				}
-			},
-		async fetchIncomeTrendData() {
+				useLedgerStore().setDashboardCache({
+					key: this.currentKey,
+					monthlyData: this.monthlyData,
+					expenseData: this.expenseData,
+					incomeData: this.incomeData,
+					monthSeries: this.monthSeries,
+				})
+			} catch (e) {
+				console.error('[Dashboard] 加载数据失败:', e)
+				uni.showToast({ title: '加载数据失败，请检查网络连接', icon: 'none' })
+			} finally {
+				this.loading = false
+				this.refreshing = false
+			}
+		},
+		// 近六月收支序列：复用月度汇总接口，前端聚合出收入/支出/结余三条信息
+		async fetchMonthSeries() {
 			const recentMonths = this.buildRecentMonths(6)
 			try {
 				const responses = await Promise.all(
 					recentMonths.map(point => getWithRetry(getMonthlyStatistics, { year: point.year, month: point.month }))
 				)
-				this.incomeTrendData = recentMonths.map((point, index) => {
+				this.monthSeries = recentMonths.map((point, index) => {
 					const res = responses[index]
-					return {
-						...point,
-						amount: res?.code === 200 ? Number(res.data?.totalIncome || 0) : 0,
-					}
+					const data = res?.code === 200 ? res.data || {} : {}
+					const income = Number(data.totalIncome ?? data.total_income ?? 0) || 0
+					const expense = Number(data.totalExpense ?? data.total_expense ?? 0) || 0
+					return { ...point, income, expense, balance: income - expense }
 				})
-				this.selectedTrendIndex = this.incomeTrendData.length > 0 ? this.incomeTrendData.length - 1 : -1
+				this.selectedSeriesIndex = this.monthSeries.length - 1
 			} catch (e) {
-				console.error('[Dashboard] 收入趋势加载失败:', e)
-				this.incomeTrendData = []
-				this.selectedTrendIndex = -1
+				console.error('[Dashboard] 月度序列加载失败:', e)
+				this.monthSeries = []
+				this.selectedSeriesIndex = -1
 			}
 		},
 		buildRecentMonths(length = 6) {
@@ -368,27 +417,73 @@ export default {
 			}
 			return points
 		},
-		selectTrendPoint(index) {
-			this.selectedTrendIndex = index
+		buildSectorRows(list) {
+			return (list || [])
+				.map(item => {
+					const id = item.categoryId ?? item.category_id
+					const name = item.categoryName ?? item.category_name ?? ''
+					const amount = Number(item.amount) || 0
+					const percent = Number(item.percentage ?? item.percent) || 0
+					return {
+						key: String(id),
+						id,
+						name,
+						amount,
+						percent,
+						width: Math.max(4, Math.min(100, percent)),
+						bg: catColorVar(id),
+						deep: catColorDeepVar(id),
+						glyph: (name || '·').slice(0, 1),
+					}
+				})
+				.filter(row => row.name)
+				.sort((a, b) => b.amount - a.amount)
 		},
-		selectIncomeCategory(index) {
-			this.selectedIncomeCategoryIndex = index
+		buildMom(value, prev, goodWhenUp) {
+			const current = Number(value)
+			const base = Number(prev)
+			if (!Number.isFinite(current) || !Number.isFinite(base) || base <= 0) {
+				return { text: '—', cls: 'flat', arrow: '' }
+			}
+			const rate = ((current - base) / base) * 100
+			if (Math.abs(rate) < 0.05) {
+				return { text: '持平', cls: 'flat', arrow: '' }
+			}
+			const up = rate > 0
+			return {
+				text: `${up ? '+' : ''}${rate.toFixed(1)}%`,
+				cls: up === goodWhenUp ? 'rise' : 'down',
+				arrow: up ? '▲' : '▼',
+			}
 		},
-		getTrendBarHeight(amount) {
-			const max = this.trendMaxValue
-			if (!max || max <= 0) return '16%'
+		selectSeriesPoint(index) {
+			this.selectedSeriesIndex = index
+		},
+		sparkHeight(amount, max) {
+			if (!max || max <= 0) return '12%'
 			const ratio = (Number(amount) || 0) / max
-			const value = Math.max(16, Math.round(ratio * 100))
-			return `${value}%`
+			return `${Math.max(10, Math.round(ratio * 100))}%`
 		},
-		getCategoryBarWidth(percent) {
-			const safePercent = Number(percent) || 0
-			return `${Math.max(8, Math.min(100, safePercent))}%`
+		barHeight(amount) {
+			const max = Math.max(this.seriesMax.income, this.seriesMax.expense)
+			if (!max || max <= 0) return '4%'
+			const ratio = (Number(amount) || 0) / max
+			return `${Math.max(4, Math.round(ratio * 100))}%`
 		},
-		formatGrowthRate(rate) {
-			const safeRate = Number(rate) || 0
-			const sign = safeRate > 0 ? '+' : ''
-			return `${sign}${safeRate.toFixed(1)}%`
+		// 切月：命中缓存先渲染再静默刷；没缓存的月份走骨架屏
+		onMonthChange() {
+			const cache = useLedgerStore().dashboard
+			if (cache.key === this.currentKey && cache.monthlyData) {
+				this.monthlyData = cache.monthlyData
+				this.expenseData = cache.expenseData
+				this.incomeData = cache.incomeData
+				this.monthSeries = cache.monthSeries || []
+				this.selectedSeriesIndex = this.monthSeries.length - 1
+				this.loadedKey = this.currentKey
+				this.fetchData(true)
+			} else {
+				this.fetchData()
+			}
 		},
 		prevMonth() {
 			if (this.month === 1) {
@@ -406,12 +501,16 @@ export default {
 				this.month++
 			}
 		},
+		// 带着当前账期跳转 AI 助手，由 ai-chat 页预填问题
+		goAiRead() {
+			const q = encodeURIComponent(`帮我解读${this.currentMonthLabel}的收支情况`)
+			uni.navigateTo({ url: `/pages/ai-chat/index?q=${q}` })
+		},
 		onRefresh() {
 			this.refreshing = true
 			this.fetchData()
 		},
-		loadMore() {}
-	}
+	},
 }
 </script>
 
@@ -426,635 +525,578 @@ export default {
 
 .status-bar {
 	width: 100%;
-	background-color: var(--color-surface);
+	background-color: var(--color-bg);
 }
 
 .scroll-content {
 	flex: 1;
 	box-sizing: border-box;
-	padding: var(--space-lg) var(--space-xl) calc(var(--space-xl) + 180rpx);
+	padding: var(--space-lg) var(--space-2xl) var(--page-bottom-space);
 	-webkit-overflow-scrolling: touch;
 	overflow: hidden;
 }
 
-/* ── 月份选择器（设计稿03：白色胶囊月份切换） ── */
-.month-selector {
+.skeleton-zone {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-lg);
+	padding-top: var(--space-lg);
+}
+
+/* ── 进场动效：数据从基线生长（全页唯一编排的动效时刻） ── */
+.grow-y {
+	transform-origin: bottom;
+	animation: growY 0.7s var(--ease-out-expo) backwards;
+}
+
+@keyframes growY {
+	from { transform: scaleY(0.04); }
+	to { transform: scaleY(1); }
+}
+
+.grow-x {
+	transform-origin: left;
+	animation: growX 0.7s var(--ease-out-expo) backwards;
+}
+
+@keyframes growX {
+	from { transform: scaleX(0.02); }
+	to { transform: scaleX(1); }
+}
+
+/* ── 账期抬头 ── */
+.period-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: var(--space-sm);
+}
+
+.period-nav {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+	margin-left: calc(-1 * var(--space-lg));
+}
+
+.period-arrow {
+	width: 88rpx;
+	height: 88rpx;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 100%;
-	max-width: 100%;
-	box-sizing: border-box;
-	padding: 0 20rpx;
-	margin-bottom: 32rpx;
-	gap: 16rpx;
+	border-radius: var(--radius-md);
+	transition: background-color var(--transition-fast), transform var(--transition-fast);
 }
 
-.month-arrow {
-	width: 60rpx;
-	height: 60rpx;
-	flex-shrink: 0;
-	border-radius: var(--radius-full);
-	background-color: var(--color-surface);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	box-shadow: var(--shadow-xs);
-	border: none;
-	transition:
-		background-color var(--transition-fast),
-		transform var(--transition-spring),
-		box-shadow var(--transition-fast);
-}
-
-.month-arrow:active {
+.period-arrow:active {
 	background-color: var(--color-surface-raised);
 	transform: scale(0.92);
 }
 
-.arrow-icon {
-	font-size: var(--font-xl);
+.arrow-glyph {
+	font-size: var(--font-2xl);
 	color: var(--color-text-secondary);
 	font-weight: var(--weight-semibold);
 	line-height: 1;
 	display: block;
+	transform: translateY(-2rpx);
 }
 
-.month-badge {
-	flex: 1;
-	min-width: 0;
-	max-width: none;
-	background: var(--color-surface);
-	border: none;
-	padding: var(--space-md) 32rpx;
-	border-radius: var(--radius-full);
-	box-shadow: var(--shadow-xs);
-}
-
-.month-text {
-	display: block;
-	text-align: center;
+.period-text {
+	font-family: var(--font-numeric-mixed);
 	font-size: var(--font-base);
 	font-weight: var(--weight-semibold);
 	color: var(--color-text-heading);
-	letter-spacing: 1rpx;
+	letter-spacing: var(--tracking-caption);
+	white-space: nowrap;
+}
+
+.ai-entry {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	padding: var(--space-sm) var(--space-md);
+	border-radius: var(--radius-md);
+	min-height: 88rpx;
+	box-sizing: border-box;
+	transition: background-color var(--transition-fast);
+}
+
+.ai-entry:active {
+	background-color: var(--color-accent-light);
+}
+
+.ai-entry-text {
+	font-size: var(--font-sm);
+	font-weight: var(--weight-semibold);
+	color: var(--color-accent-deep);
+}
+
+.ai-entry-arrow {
+	font-size: var(--font-sm);
+	color: var(--color-accent-deep);
+	font-family: var(--font-amount);
+}
+
+/* ── 结余焦点：紧凑报告版面，数字即主角 ── */
+.balance-block {
+	margin-top: 96rpx;
+}
+
+.balance-row {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-sm);
+}
+
+.balance-sign {
+	font-family: var(--font-amount);
+	font-size: var(--font-3xl);
+	font-weight: var(--weight-semibold);
+	color: var(--color-text-heading);
+}
+
+.balance-currency {
+	font-family: var(--font-amount);
+	font-size: var(--font-3xl);
+	font-weight: var(--weight-semibold);
+	color: var(--color-text-tertiary);
+}
+
+.balance-num {
+	font-family: var(--font-amount);
+	font-size: var(--font-hero);
+	font-weight: var(--weight-bold);
+	color: var(--color-text-heading);
+	line-height: 1.05;
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	max-width: 100%;
 }
 
-/* ── 统计卡片容器 ── */
-.stats-container {
-	margin-bottom: 28rpx;
+.balance-dec {
+	font-family: var(--font-amount);
+	font-size: var(--font-2xl);
+	font-weight: var(--weight-semibold);
+	color: var(--color-text-tertiary);
+	font-variant-numeric: tabular-nums;
 }
 
-.stats-split {
-	display: grid;
-	grid-template-columns: 1.2fr 1fr;
-	gap: 16rpx;
-	align-items: stretch;
+.balance-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--space-md);
+	margin-top: var(--space-lg);
 }
 
-.stats-main,
-.stats-side {
+.balance-label {
+	font-size: var(--font-sm);
+	color: var(--color-text-secondary);
+	font-weight: var(--weight-medium);
+}
+
+.mom-chip {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+	padding: var(--space-2xs) var(--space-md);
+	border-radius: var(--radius-full);
+	font-family: var(--font-amount);
+	font-variant-numeric: tabular-nums;
+}
+
+.mom-chip.rise {
+	background: var(--color-success-light);
+	color: var(--color-success);
+}
+
+.mom-chip.down {
+	background: var(--color-danger-light);
+	color: var(--color-danger);
+}
+
+.mom-chip.flat {
+	background: var(--color-surface-raised);
+	color: var(--color-text-tertiary);
+}
+
+.mom-arrow {
+	font-size: var(--font-2xs);
+	line-height: 1;
+}
+
+.mom-text {
+	font-size: var(--font-xs);
+	font-weight: var(--weight-semibold);
+	line-height: 1;
+}
+
+/* ── 收支行情带 ── */
+.tape-row {
+	display: flex;
+	margin-top: 120rpx;
+	padding: var(--space-2xl) 0;
+	border-top: var(--hairline) solid var(--color-border);
+	border-bottom: var(--hairline) solid var(--color-border);
+}
+
+.tape-col {
+	flex: 1;
 	min-width: 0;
 }
 
-.stats-side {
-	display: grid;
-	grid-template-rows: 1fr 1fr;
-	gap: 12rpx;
+.tape-col--right {
+	border-left: var(--hairline) solid var(--color-border);
+	padding-left: var(--space-2xl);
 }
 
-.stat-main-card {
-	height: 100%;
-	min-height: 220rpx;
-	background: var(--color-surface);
-	border: none;
-	box-shadow: var(--shadow-card);
-}
-
-.stat-side-card {
-	min-height: 106rpx;
-	background: var(--color-surface);
-	border: none;
-	box-shadow: var(--shadow-card);
-}
-
-::v-deep(.stat-main-card .stat-body) {
-	text-align: left;
-	width: 100%;
-}
-
-::v-deep(.stat-main-card .stat-label) {
-	font-size: var(--font-base);
-	font-weight: var(--weight-semibold);
+.tape-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-sm);
 	margin-bottom: var(--space-sm);
 }
 
-::v-deep(.stat-main-card .stat-value) {
-	font-size: 46rpx;
-	font-weight: var(--weight-extrabold);
-	line-height: 1.15;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	font-variant-numeric: tabular-nums;
+.tape-label {
+	font-size: var(--font-sm);
+	color: var(--color-text-secondary);
+	font-weight: var(--weight-medium);
 }
 
-::v-deep(.stat-side-card .stat-label) {
+.tape-mom {
+	font-family: var(--font-amount);
 	font-size: var(--font-xs);
-	margin-bottom: 4rpx;
+	font-weight: var(--weight-semibold);
+	font-variant-numeric: tabular-nums;
 }
 
-::v-deep(.stat-side-card .stat-value) {
-	font-size: 34rpx;
+.tape-mom.rise {
+	color: var(--color-success);
+}
+
+.tape-mom.down {
+	color: var(--color-danger);
+}
+
+.tape-amount {
+	display: block;
+	font-family: var(--font-amount);
+	font-size: var(--font-stat-lg);
 	font-weight: var(--weight-bold);
+	line-height: 1.2;
 	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.01em;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-::v-deep(.stat-side-card .stat-icon-wrap) {
-	margin-right: var(--space-sm);
+.tape-amount.is-income {
+	color: var(--color-success);
 }
 
-/* ── 收入图表卡片（设计稿03：白卡无边框 + 黄色高亮柱） ── */
-.income-chart-card {
-	background-color: var(--color-surface);
-	border-radius: var(--radius-2xl);
-	padding: var(--space-lg) var(--space-xl) var(--space-md);
-	margin-bottom: 24rpx;
-	box-shadow: var(--shadow-card);
-	border: none;
+.tape-amount.is-expense {
+	color: var(--color-danger);
 }
 
-.chart-header {
+.tape-spark {
 	display: flex;
-	align-items: center;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 8rpx;
+	height: 150rpx;
+	margin-top: var(--space-lg);
+}
+
+.spark-bar {
+	width: 20rpx;
+	border-radius: 4rpx;
+	animation: growY 0.6s var(--ease-out-expo) backwards;
+}
+
+.spark-bar.is-income {
+	background: var(--color-success);
+}
+
+.spark-bar.is-expense {
+	background: var(--color-danger);
+}
+
+.spark-bar {
+	opacity: 0.22;
+}
+
+.spark-bar.latest {
+	opacity: 1;
+}
+
+/* ── 通用分区 ── */
+.section {
+	margin-top: 96rpx;
+}
+
+.section--last {
+	margin-bottom: var(--space-lg);
+}
+
+.section-head {
+	display: flex;
+	align-items: baseline;
 	justify-content: space-between;
 	gap: var(--space-md);
 	margin-bottom: var(--space-lg);
 }
 
-.chart-title {
-	font-size: var(--font-md);
+.section-title {
+	font-size: var(--font-base);
 	font-weight: var(--weight-bold);
 	color: var(--color-text-heading);
+	letter-spacing: var(--tracking-heading);
 }
 
-.chart-mode-switch {
-	display: inline-flex;
-	align-items: center;
-	background-color: var(--color-surface-raised);
-	border-radius: var(--radius-full);
-	padding: 4rpx;
-	gap: 4rpx;
-	flex-shrink: 0;
-}
-
-.mode-item {
-	padding: 10rpx 24rpx;
-	border-radius: var(--radius-full);
-	transition: all var(--transition-fast);
-}
-
-/* 设计稿02/03：选中墨黑胶囊 */
-.mode-item.active {
-	background: var(--color-primary);
-	box-shadow: none;
-}
-
-.mode-text {
+.section-sub {
 	font-size: var(--font-xs);
-	color: var(--color-text-secondary);
-	font-weight: var(--weight-medium);
-}
-
-.mode-text.active {
-	color: var(--color-text-inverse);
-}
-
-.chart-panel {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-lg);
-}
-
-.chart-kpi-row {
-	display: flex;
-	justify-content: space-between;
-	align-items: flex-end;
-	gap: var(--space-md);
-	padding-bottom: var(--space-md);
-	border-bottom: 1rpx solid var(--color-divider);
-}
-
-.kpi-label {
-	display: block;
-	font-size: var(--font-2xs);
 	color: var(--color-text-tertiary);
-	margin-bottom: 8rpx;
-	letter-spacing: 1rpx;
-}
-
-.kpi-value {
-	display: block;
-	font-size: 48rpx;
-	font-weight: var(--weight-extrabold);
-	color: var(--color-text-heading);
-	line-height: 1.1;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 	font-variant-numeric: tabular-nums;
 }
 
-.kpi-side {
+.legend {
+	display: flex;
+	align-items: center;
+	gap: var(--space-xs);
+}
+
+.legend-dot {
+	width: 16rpx;
+	height: 16rpx;
+	border-radius: var(--radius-xs);
+	display: inline-block;
+}
+
+.legend-dot.is-income {
+	background: var(--color-success);
+}
+
+.legend-dot.is-expense {
+	background: var(--color-danger);
+}
+
+/* ── 板块排行行 ── */
+.sector-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xl);
+}
+
+.sector-row {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-lg);
+}
+
+.sector-chip {
+	width: 60rpx;
+	height: 60rpx;
+	border-radius: var(--radius-md);
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	flex-shrink: 0;
-	text-align: right;
+	margin-top: 2rpx;
 }
 
-.kpi-side-label {
-	display: block;
-	font-size: var(--font-2xs);
-	color: var(--color-text-tertiary);
-	margin-bottom: 6rpx;
-}
-
-.kpi-side-value {
-	display: block;
-	font-size: var(--font-sm);
+.sector-glyph {
+	font-size: var(--font-md);
 	font-weight: var(--weight-bold);
+	line-height: 1;
 }
 
-.kpi-side-value.rise {
-	color: var(--color-success);
+.sector-main {
+	flex: 1;
+	min-width: 0;
 }
 
-.kpi-side-value.down {
-	color: var(--color-danger);
+.sector-line {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-md);
+	margin-bottom: var(--space-sm);
 }
 
-.trend-chart-wrap {
-	height: 180rpx;
+.sector-name {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--font-sm);
+	color: var(--color-text);
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.sector-amount {
+	font-family: var(--font-amount);
+	font-size: var(--font-sm);
+	font-weight: var(--weight-semibold);
+	color: var(--color-text-heading);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.sector-percent {
+	font-family: var(--font-amount);
+	font-size: var(--font-xs);
+	color: var(--color-text-tertiary);
+	width: 96rpx;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.sector-track {
+	height: 12rpx;
+	border-radius: var(--radius-full);
+	background: var(--color-surface-raised);
+	overflow: hidden;
+}
+
+.sector-track--thin {
+	height: 8rpx;
+}
+
+.sector-fill {
+	height: 100%;
+	border-radius: var(--radius-full);
+	animation: growX 0.7s var(--ease-out-expo) backwards;
+}
+
+/* ── 走势图 ── */
+.trend-chart {
 	display: flex;
 	align-items: flex-end;
-	justify-content: space-between;
-	gap: 10rpx;
-	padding: var(--space-sm) 16rpx 0;
-	overflow: hidden;
+	gap: var(--space-sm);
+	height: 260rpx;
 }
 
 .trend-col {
 	flex: 1;
 	min-width: 0;
+	height: 100%;
 	display: flex;
 	flex-direction: column;
-	align-items: center;
+	justify-content: flex-end;
+	border-radius: var(--radius-sm);
+	transition: background-color var(--transition-fast);
 }
 
-/* 设计稿03：灰色柱 + 黄色高亮当前柱 */
-.trend-bar-bg {
-	width: 100%;
-	height: 120rpx;
-	border-radius: var(--radius-sm);
-	background: transparent;
+.trend-col:active {
+	background: var(--color-surface-raised);
+}
+
+.trend-bars {
+	flex: 1;
 	display: flex;
 	align-items: flex-end;
 	justify-content: center;
-	padding: 8rpx 6rpx;
-	box-sizing: border-box;
+	gap: 8rpx;
+	min-height: 0;
 }
 
 .trend-bar {
-	width: 100%;
-	margin: 0 auto;
-	border-radius: var(--radius-sm);
-	background: var(--color-surface-raised);
-	opacity: 1;
-	min-height: 8rpx;
-	transition: all var(--transition-normal);
+	width: 18rpx;
+	border-radius: 4rpx;
+	animation: growY 0.6s var(--ease-out-expo) backwards;
+	opacity: 0.35;
+	transition: opacity var(--transition-normal);
 }
 
-.trend-bar.active {
-	background: var(--color-accent);
+.trend-bar.is-income {
+	background: var(--color-success);
+}
+
+.trend-bar.is-expense {
+	background: var(--color-danger);
+}
+
+.trend-col.active .trend-bar {
 	opacity: 1;
 }
 
 .trend-label {
 	display: block;
-	width: 100%;
 	text-align: center;
-	margin-top: 10rpx;
-	padding: 0;
-	box-sizing: border-box;
-	font-size: 20rpx;
-	line-height: 1.3;
+	margin-top: var(--space-sm);
+	font-size: var(--font-xs);
 	color: var(--color-text-tertiary);
 	font-weight: var(--weight-medium);
 	white-space: nowrap;
-	overflow: visible;
 }
 
-.trend-label-unit {
-	font-size: 18rpx;
-}
-
-.trend-label.active {
+.trend-col.active .trend-label {
 	color: var(--color-text-heading);
 	font-weight: var(--weight-bold);
 }
 
-.compare-list {
+.trend-detail {
+	display: flex;
+	margin-top: var(--space-lg);
+	padding-top: var(--space-lg);
+	border-top: var(--hairline) solid var(--color-divider);
+}
+
+.detail-item {
+	flex: 1;
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-md);
+	gap: var(--space-2xs);
 }
 
-.compare-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-md);
-}
-
-.compare-row-left {
-	flex: 1;
-	min-width: 0;
-}
-
-.compare-name {
-	display: block;
-	font-size: var(--font-sm);
-	color: var(--color-text);
-	margin-bottom: 10rpx;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	font-weight: var(--weight-medium);
-}
-
-.compare-track {
-	height: 10rpx;
-	border-radius: var(--radius-full);
-	background-color: var(--color-surface-raised);
-	overflow: hidden;
-}
-
-.compare-fill {
-	height: 100%;
-	border-radius: var(--radius-full);
-	background: var(--color-surface-raised);
-	opacity: 1;
-	transition: all var(--transition-normal);
-}
-
-/* 设计稿03：选中项黄色高亮 */
-.compare-fill.active {
-	background: var(--color-accent);
-	opacity: 1;
-}
-
-.compare-row-right {
-	width: 160rpx;
-	text-align: right;
-	flex-shrink: 0;
-}
-
-.compare-amount {
-	display: block;
-	font-size: var(--font-sm);
-	font-weight: var(--weight-bold);
-	color: var(--color-text-heading);
-	font-variant-numeric: tabular-nums;
-}
-
-.compare-percent {
-	display: block;
+.detail-label {
 	font-size: var(--font-2xs);
 	color: var(--color-text-tertiary);
-	margin-top: 6rpx;
 }
 
-.compare-highlight {
-	margin-top: var(--space-md);
-	padding: var(--space-lg);
-	border-radius: var(--radius-md);
-	background: var(--color-success-light);
-	border: 1rpx solid rgba(46, 125, 82, 0.18);
-}
-
-.compare-highlight-label {
-	display: block;
-	font-size: var(--font-2xs);
-	color: var(--color-text-secondary);
-	margin-bottom: 8rpx;
-}
-
-.compare-highlight-value {
-	display: block;
-	font-size: var(--font-sm);
+.detail-value {
+	font-family: var(--font-amount);
+	font-size: var(--font-lg);
 	font-weight: var(--weight-semibold);
 	color: var(--color-text-heading);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-@media screen and (max-width: 360px) {
-	.month-selector {
-		padding: 0 12rpx;
-		gap: 12rpx;
-	}
-
-	.month-arrow {
-		width: 56rpx;
-		height: 56rpx;
-	}
-
-	.month-badge {
-		padding: 12rpx 20rpx;
-	}
-
-	.stats-split {
-		grid-template-columns: 1fr;
-		gap: var(--space-md);
-	}
-
-	.stats-side {
-		grid-template-rows: none;
-		grid-template-columns: 1fr 1fr;
-		gap: var(--space-sm);
-	}
-
-	::v-deep(.stat-main-card .stat-value) {
-		font-size: 40rpx;
-	}
-
-	::v-deep(.stat-side-card .stat-value) {
-		font-size: 28rpx;
-	}
-
-	.kpi-value {
-		font-size: 36rpx;
-	}
-
-	.trend-chart-wrap {
-		padding: 8rpx 8rpx 0;
-		gap: 8rpx;
-	}
-
-	.trend-label {
-		font-size: 18rpx;
-	}
-
-	.compare-row-right {
-		width: 140rpx;
-	}
-}
-
-/* ── 分类表格卡片（设计稿03：白卡无边框） ── */
-.table-card {
-	background-color: var(--color-surface);
-	border-radius: var(--radius-2xl);
-	margin-bottom: 20rpx;
-	overflow: hidden;
-	box-shadow: var(--shadow-card);
-	border: none;
-}
-
-.table-header {
-	padding: var(--space-md) var(--space-xl);
-	border-bottom: 1rpx solid var(--color-divider);
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-}
-
-.table-title {
-	font-size: var(--font-md);
-	font-weight: var(--weight-bold);
-	color: var(--color-text-heading);
-	letter-spacing: var(--tracking-heading);
-	line-height: var(--leading-tight);
-}
-
-.table-count {
-	font-size: var(--font-2xs);
-	color: var(--color-text-tertiary);
-	font-weight: var(--weight-medium);
-	background: var(--color-surface-raised);
-	padding: 6rpx 16rpx;
-	border-radius: var(--radius-full);
-}
-
-/* ── 表格行 ── */
-.table-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: var(--space-lg) var(--space-xl);
-	border-bottom: 1rpx solid var(--color-divider);
-	transition: background-color var(--transition-fast);
-}
-
-.table-row:last-child {
-	border-bottom: none;
-}
-
-.table-row:active {
-	background-color: var(--color-surface-raised);
-}
-
-.table-row-left {
-	display: flex;
-	align-items: center;
-	flex: 1;
-	min-width: 0;
-}
-
-.category-dot {
-	width: 12rpx;
-	height: 12rpx;
-	border-radius: var(--radius-xs);
-	margin-right: var(--space-lg);
-	flex-shrink: 0;
-}
-
-.category-dot.type-expense {
-	background: var(--color-danger);
-}
-
-.category-dot.type-income {
-	background: var(--color-success);
-}
-
-.category-name {
-	font-size: var(--font-sm);
-	color: var(--color-text);
-	font-weight: var(--weight-medium);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.table-row-right {
-	display: flex;
-	align-items: center;
-	flex-shrink: 0;
-}
-
-.bar-container {
-	width: 80rpx;
-	height: 8rpx;
-	background-color: var(--color-surface-raised);
-	border-radius: var(--radius-full);
-	margin: 0 var(--space-lg);
-	overflow: hidden;
-}
-
-.bar {
-	height: 100%;
-	border-radius: var(--radius-full);
-	transition: width var(--transition-normal) cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* 设计稿03：支出灰、收入绿 */
-.bar.type-expense {
-	background: var(--color-text-tertiary);
-	opacity: 0.6;
-}
-
-.bar.type-income {
-	background: var(--color-success);
-	opacity: 0.6;
-}
-
-.amount {
-	font-size: var(--font-sm);
-	font-weight: var(--weight-bold);
-	min-width: 120rpx;
-	text-align: right;
 	font-variant-numeric: tabular-nums;
 }
 
-.amount.type-expense {
-	color: var(--color-text);
-}
-
-.amount.type-income {
+.detail-value.is-income {
 	color: var(--color-success);
 }
 
-.percentage {
-	font-size: var(--font-2xs);
-	color: var(--color-text-tertiary);
-	width: 72rpx;
-	text-align: right;
-	font-weight: var(--weight-medium);
-	font-variant-numeric: tabular-nums;
+.detail-value.is-expense {
+	color: var(--color-danger);
 }
 
+/* ── 窄屏适配 ── */
+@media screen and (max-width: 360px) {
+	.scroll-content {
+		padding: var(--space-md) var(--space-lg) var(--page-bottom-space);
+	}
+
+	.balance-num {
+		font-size: var(--font-4xl);
+	}
+
+	.tape-col--right {
+		padding-left: var(--space-xl);
+	}
+
+	.tape-amount {
+		font-size: var(--font-2xl);
+	}
+
+	.sector-percent {
+		width: 84rpx;
+	}
+}
 </style>

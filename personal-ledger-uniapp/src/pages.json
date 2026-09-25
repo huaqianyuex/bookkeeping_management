@@ -32,7 +32,7 @@
 			"path": "pages/login/index",
 			"style": {
 				"navigationBarTitleText": "登录",
-				"navigationBarBackgroundColor": "#ffffff",
+				"navigationBarBackgroundColor": "#F4F4F0",
 				"navigationBarTextStyle": "black"
 			}
 		},
@@ -40,7 +40,7 @@
 			"path": "pages/register/index",
 			"style": {
 				"navigationBarTitleText": "注册",
-				"navigationBarBackgroundColor": "#ffffff",
+				"navigationBarBackgroundColor": "#F4F4F0",
 				"navigationBarTextStyle": "black"
 			}
 		},
@@ -48,7 +48,7 @@
 			"path": "pages/password/index",
 			"style": {
 				"navigationBarTitleText": "修改密码",
-				"navigationBarBackgroundColor": "#ffffff",
+				"navigationBarBackgroundColor": "#F4F4F0",
 				"navigationBarTextStyle": "black"
 			}
 		},
@@ -56,7 +56,7 @@
 			"path": "pages/records/add-edit",
 			"style": {
 				"navigationBarTitleText": "记账",
-				"navigationBarBackgroundColor": "#ffffff",
+				"navigationBarBackgroundColor": "#F4F4F0",
 				"navigationBarTextStyle": "black"
 			}
 		},
@@ -77,10 +77,12 @@
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "记账本",
-		"navigationBarBackgroundColor": "#ffffff",
-		"backgroundColor": "#F4F6F8",
-		"backgroundTextStyle": "dark"
+		"navigationBarTitleText": "简记",
+		"navigationBarBackgroundColor": "#F4F4F0",
+		"backgroundColor": "#F4F4F0",
+		"backgroundTextStyle": "dark",
+		"rpxCalcMaxDeviceWidth": 480,
+		"rpxCalcBaseDeviceWidth": 390
 	},
 
 	"easycom": {

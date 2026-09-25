@@ -18,65 +18,34 @@
 					<view v-else class="avatar-placeholder">
 						<text class="avatar-emoji">{{ (userInfo?.username || '记').slice(0, 1) }}</text>
 					</view>
-						<view class="avatar-badge">
-							<text class="badge-icon">📷</text>
+					<view class="avatar-badge">
+						<app-icon name="camera" :size="24"></app-icon>
+					</view>
+				</view>
+
+					<!-- 用户名 + 编辑 -->
+					<view class="profile-info">
+						<view class="username-row">
+							<text class="username">{{ userInfo?.username || '加载中...' }}</text>
+							<view class="edit-btn" @click="openUsernameEditor">
+								<app-icon name="edit" :size="28"></app-icon>
+							</view>
 						</view>
-					</view>
 
-				<!-- 用户名 + 编辑 -->
-				<view class="profile-info">
-					<view class="username-row">
-						<text class="username">{{ userInfo?.username || '加载中...' }}</text>
-						<view class="edit-btn" @click="openUsernameEditor">
-							<text class="edit-icon">✏️</text>
+						<view class="user-id-badge">
+							<text class="user-id">ID: {{ userInfo?.id || '-' }}</text>
 						</view>
+						<text class="avatar-hint">点击头像更换</text>
 					</view>
+				</view>
 
-					<view class="user-id-badge">
-						<text class="user-id">ID: {{ userInfo?.id || '-' }}</text>
-					</view>
-					<text class="avatar-hint">点击头像更换</text>
-				</view>
-			</view>
-
-			<!-- 信息卡片 -->
-			<view class="info-card">
-				<text class="card-title">个人信息</text>
-				<view class="info-row">
-					<view class="info-left">
-						<view class="info-icon">🔑</view>
-						<text class="info-label">用户ID</text>
-					</view>
-					<text class="info-value">{{ userInfo?.id || '-' }}</text>
-				</view>
-				<view class="info-row">
-					<view class="info-left">
-						<view class="info-icon">👤</view>
-						<text class="info-label">用户名</text>
-					</view>
-					<text class="info-value">{{ userInfo?.username || '-' }}</text>
-				</view>
-				<view class="info-row">
-					<view class="info-left">
-						<view class="info-icon">⏰</view>
-						<text class="info-label">创建时间</text>
-					</view>
-					<text class="info-value">{{ formatDate(userInfo?.created_at) }}</text>
-				</view>
-				<view class="info-row last">
-					<view class="info-left">
-						<view class="info-icon">🔄</view>
-						<text class="info-label">更新时间</text>
-					</view>
-					<text class="info-value">{{ formatDate(userInfo?.updated_at) }}</text>
-				</view>
-			</view>
-
-		<!-- 功能菜单 -->
+			<!-- 功能菜单 -->
 		<view class="menu-card">
 			<view class="menu-item" @click="goPassword">
 				<view class="menu-left">
-					<view class="menu-icon">🔒</view>
+					<view class="menu-icon">
+						<app-icon name="lock" :size="32"></app-icon>
+					</view>
 					<text class="menu-text">修改密码</text>
 				</view>
 				<text class="menu-arrow">›</text>
@@ -85,7 +54,7 @@
 
 			<!-- 退出按钮 -->
 			<view class="logout-btn" @click="handleLogout">
-				<text class="logout-icon">🚪</text>
+				<app-icon name="logout" :size="32"></app-icon>
 				<text class="logout-text">退出登录</text>
 			</view>
 		</scroll-view>
@@ -127,15 +96,15 @@
 
 <script>
 import { useUserStore } from '../../utils/store'
-import { formatDate } from '../../utils/format'
 import { updateUserInfo, uploadAvatar } from '../../api/user'
 import { getBaseUrl } from '../../api/config'
+import AppIcon from '../../components/AppIcon.vue'
 
 const USERNAME_REGEX = /^[A-Za-z0-9\u4e00-\u9fa5]{2,20}$/
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024 // 2MB
 
 export default {
-	components: {},
+	components: { AppIcon },
 	data() {
 		return {
 			statusBarHeight: 20,
@@ -173,8 +142,6 @@ export default {
 		this.fetchUserInfo()
 	},
 	methods: {
-		formatDate,
-
 		// ── 获取用户信息 ──
 		async fetchUserInfo() {
 			const store = useUserStore()
@@ -342,21 +309,20 @@ export default {
 /* 设计稿06：顶部大标题 */
 .page-title {
 	display: block;
-	font-size: 52rpx;
+	font-size: var(--font-3xl);
 	font-weight: var(--weight-extrabold);
 	color: var(--color-text-heading);
 	margin-bottom: var(--space-xl);
 }
 
 /* ── 用户卡（设计稿06：白卡内头像左 + 信息右） ── */
+/* ── 用户区：纸面上的发丝线分组，无卡片盒 ── */
 .profile-card {
 	display: flex;
 	align-items: center;
-	padding: var(--space-2xl);
-	background: var(--color-surface);
-	border-radius: var(--radius-2xl);
+	padding: var(--space-lg) 0 var(--space-2xl);
+	border-bottom: var(--hairline) solid var(--color-border);
 	margin-bottom: var(--space-lg);
-	box-shadow: var(--shadow-card);
 }
 
 .avatar-container {
@@ -380,11 +346,10 @@ export default {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: var(--shadow-accent);
 }
 
 .avatar-emoji {
-	font-size: 56rpx;
+	font-size: var(--font-3xl);
 	font-weight: var(--weight-bold);
 	color: var(--color-text-heading);
 }
@@ -393,18 +358,14 @@ export default {
 	position: absolute;
 	bottom: 0;
 	right: 0;
-	width: 40rpx;
-	height: 40rpx;
+	width: 44rpx;
+	height: 44rpx;
 	border-radius: var(--radius-full);
 	background-color: var(--color-surface);
 	box-shadow: var(--shadow-xs);
 	display: flex;
 	align-items: center;
 	justify-content: center;
-}
-
-.badge-icon {
-	font-size: var(--font-sm);
 }
 
 .profile-info {
@@ -429,8 +390,8 @@ export default {
 }
 
 .edit-btn {
-	width: 48rpx;
-	height: 48rpx;
+	width: 56rpx;
+	height: 56rpx;
 	border-radius: var(--radius-full);
 	background-color: var(--color-surface-raised);
 	display: flex;
@@ -442,10 +403,6 @@ export default {
 
 .edit-btn:active {
 	background-color: var(--color-border);
-}
-
-.edit-icon {
-	font-size: var(--font-base);
 }
 
 .user-id-badge {
@@ -469,69 +426,12 @@ export default {
 	color: var(--color-text-tertiary);
 }
 
-/* ── 信息卡片（设计稿06：白卡无边框） ── */
-.info-card {
-	background-color: var(--color-surface);
-	border-radius: var(--radius-2xl);
-	padding: var(--space-lg) var(--space-xl);
-	margin-bottom: var(--space-lg);
-	box-shadow: var(--shadow-card);
-}
-
-.card-title {
-	font-size: var(--font-md);
-	font-weight: var(--weight-bold);
-	color: var(--color-text-heading);
-	margin-bottom: var(--space-xs);
-	display: block;
-	letter-spacing: var(--tracking-heading);
-	padding-bottom: var(--space-md);
-	border-bottom: 1rpx solid var(--color-divider);
-}
-
-.info-row {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: var(--space-lg) 0;
-	border-bottom: 1rpx solid var(--color-divider);
-	transition: background-color var(--transition-fast);
-}
-
-.info-row.last {
-	border-bottom: none;
-}
-
-.info-left {
-	display: flex;
-	align-items: center;
-	gap: var(--space-md);
-}
-
-.info-icon {
-	font-size: var(--font-base);
-	opacity: 0.8;
-}
-
-.info-label {
-	font-size: var(--font-md);
-	color: var(--color-text-secondary);
-	font-weight: var(--weight-medium);
-}
-
-.info-value {
-	font-size: var(--font-md);
-	color: var(--color-text);
-	font-weight: var(--weight-semibold);
-}
-
 /* ── 功能菜单（设计稿06：白卡菜单行 + 右箭头） ── */
 .menu-card {
-	background-color: var(--color-surface);
-	border-radius: var(--radius-2xl);
-	margin-bottom: var(--space-xl);
 	overflow: hidden;
-	box-shadow: var(--shadow-card);
+	margin-bottom: var(--space-xl);
+	border-top: var(--hairline) solid var(--color-border);
+	border-bottom: var(--hairline) solid var(--color-border);
 }
 
 .menu-item {
@@ -562,9 +462,10 @@ export default {
 }
 
 .menu-icon {
-	font-size: var(--font-xl);
-	opacity: 0.85;
 	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .menu-text {
@@ -603,10 +504,6 @@ export default {
 	background-color: var(--color-danger-light);
 }
 
-.logout-icon {
-	font-size: var(--font-lg);
-}
-
 .logout-text {
 	font-size: var(--font-base);
 	font-weight: var(--weight-medium);
@@ -620,7 +517,7 @@ export default {
 	left: 0;
 	right: 0;
 	bottom: 0;
-	background-color: rgba(0, 0, 0, 0.45);
+	background-color: var(--color-overlay);
 	display: flex;
 	align-items: center;
 	justify-content: center;

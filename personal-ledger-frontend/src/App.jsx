@@ -16,6 +16,7 @@ import ChangePassword from './pages/ChangePassword'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminUsers from './pages/AdminUsers'
 import AdminRecords from './pages/AdminRecords'
+import AdminFaq from './pages/AdminFaq'
 import AiChatPage from './pages/AiChat'
 
 function AppContent() {
@@ -37,6 +38,7 @@ function AppContent() {
         <Route path="admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
         <Route path="admin/records" element={<AdminRoute><AdminRecords /></AdminRoute>} />
+        <Route path="admin/faq" element={<AdminRoute><AdminFaq /></AdminRoute>} />
         <Route path="ai-chat" element={<AiChatPage />} />
       </Route>
     </Routes>

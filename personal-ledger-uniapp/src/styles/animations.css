@@ -58,55 +58,7 @@
   animation: scaleIn 0.35s var(--ease-out-back) both;
 }
 
-/* ── 记账成功打勾动画 ── */
-@keyframes checkDraw {
-  0% {
-    stroke-dashoffset: 100;
-    opacity: 0;
-  }
-  40% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-}
-
-@keyframes checkCircle {
-  0% {
-    stroke-dashoffset: 314;
-    opacity: 0;
-  }
-  20% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-}
-
-@keyframes successBounce {
-  0% { transform: scale(0); }
-  50% { transform: scale(1.15); }
-  70% { transform: scale(0.95); }
-  100% { transform: scale(1); }
-}
-
-.success-check-circle {
-  animation: checkCircle 0.6s var(--ease-out-expo) both;
-}
-
-.success-check-mark {
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  animation: checkDraw 0.4s 0.3s var(--ease-out-expo) both;
-}
-
-.success-bounce {
-  animation: successBounce 0.5s var(--ease-out-back) both;
-}
+/* ── 记账成功动画已内聚到 SuccessAnimation.vue（纯 CSS 实现，跨端一致） ── */
 
 /* ── 数字滚动（金额变化） ── */
 @keyframes countUp {

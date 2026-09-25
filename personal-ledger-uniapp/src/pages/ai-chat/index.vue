@@ -7,10 +7,10 @@
       <text class="title">AI 助手</text>
       <view class="header-actions">
         <view class="header-left" @click="handleNewChat">
-          <text class="header-icon">＋</text>
+          <AppIcon name="compose" :size="36" />
         </view>
         <view class="header-right" @click="goHistory">
-          <text class="header-icon">📋</text>
+          <AppIcon name="history" :size="36" />
         </view>
       </view>
     </view>
@@ -23,7 +23,9 @@
       :scroll-with-animation="!streaming"
     >
       <view v-if="messages.length === 0" class="empty">
-        <text class="empty-icon">🤖</text>
+        <view class="empty-glyph">
+          <AppIcon name="bot" :size="72" />
+        </view>
         <text class="empty-text">你好！我是AI记账助手</text>
         <text class="empty-desc">可以问我关于记账、财务分析等问题</text>
 
@@ -35,7 +37,6 @@
             class="quick-btn"
             @tap="handleQuickAction(item)"
           >
-            <text class="quick-icon">{{ item.icon }}</text>
             <text class="quick-label">{{ item.label }}</text>
           </view>
         </view>
@@ -48,11 +49,6 @@
         class="message-row"
         :class="{ 'message-row--right': msg.role === 'user' }"
       >
-        <!-- 助手头像 -->
-        <view v-if="msg.role === 'assistant'" class="avatar avatar-ai">🤖</view>
-        <!-- 用户头像 -->
-        <view v-if="msg.role === 'user'" class="avatar avatar-user">👤</view>
-
         <!-- 消息气泡 -->
         <view class="bubble" :class="'bubble--' + msg.role">
           <text class="bubble-text">{{ msg.content }}</text>
@@ -62,7 +58,6 @@
 
       <!-- 加载中 -->
       <view v-if="loading" class="message-row">
-        <view class="avatar avatar-ai">🤖</view>
         <view class="bubble bubble--assistant">
           <view class="loading-dots">
             <text class="dot"></text>
@@ -108,7 +103,8 @@
 <script setup>
 import { ref, nextTick, computed } from 'vue'
 import { onLoad, onUnload, onShow } from '@dcloudio/uni-app'
-import { createSession, sendChatStream, getMessages } from '@/api/ai.js'
+import { createSession, sendChatStream, getMessages, aiBookkeeping } from '@/api/ai.js'
+import AppIcon from '@/components/AppIcon.vue'
 
 const statusBarHeight = ref(20)
 // 页面可视高度 + 底部自定义 TabBar 占位高度（避免输入框被 TabBar 遮挡）
@@ -123,6 +119,8 @@ const sessionId = ref('')
 const scrollAnchor = ref('scroll-anchor-a')
 let streamTask = null           // 当前流式请求控制器（用于中断）
 let lastScrollAt = 0
+// 语义记账的追问草稿：clarify 返回 draftId，用户补金额的下一条消息带上续写
+const pendingDraftId = ref(null)
 
 // 计算页面可用高度与底部安全距离
 function calcLayout() {
@@ -147,10 +145,10 @@ const sendBtnText = computed(() => {
 
 // 快捷分析选项
 const quickActions = [
-  { icon: '📊', label: '分析本月支出', text: '请帮我分析一下本月的支出情况，给出消费建议' },
-  { icon: '💰', label: '储蓄建议', text: '根据我的收支情况，帮我制定一个储蓄计划' },
-  { icon: '📈', label: '消费习惯分析', text: '从我的账单数据中分析我的消费习惯和模式' },
-  { icon: '🎯', label: '预算规划', text: '根据我最近的消费记录，帮我做一个下月预算规划' }
+  { label: '分析本月支出', text: '请帮我分析一下本月的支出情况，给出消费建议' },
+  { label: '储蓄建议', text: '根据我的收支情况，帮我制定一个储蓄计划' },
+  { label: '消费习惯分析', text: '从我的账单数据中分析我的消费习惯和模式' },
+  { label: '预算规划', text: '根据我最近的消费记录，帮我做一个下月预算规划' }
 ]
 
 // 快捷按钮点击：自动填入预设问题并发送
@@ -189,6 +187,7 @@ function handleNewChat() {
 	sessionId.value = ''
 	messages.value = []
 	inputText.value = ''
+	pendingDraftId.value = null
 }
 
 // 滚动到列表底部（切换锚点 id 以触发 scroll-into-view 重新滚动）
@@ -240,7 +239,59 @@ async function handleNewSession(title) {
 	}
 }
 
-// 发送消息（合并创建会话 + 流式输出）
+// 生成客户端幂等键（同一条消息弱网重发时，后端 5 分钟窗口内只记一笔）
+function genClientMsgId() {
+	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+		const r = (Math.random() * 16) | 0
+		const v = c === 'x' ? r : (r & 0x3) | 0x8
+		return v.toString(16)
+	})
+}
+
+/**
+ * 先走语义记账（05 §6：前端据 action 分支渲染，非记账才降级对话）：
+ * - created / duplicate / clarify（及部分 ignored 提示）→ 返回要展示的助手文案
+ * - 纯聊天/查询（ignored: not_expense/query）或记账服务异常 → 返回 null，走对话流
+ */
+async function tryBookkeeping(text) {
+	try {
+		const res = await aiBookkeeping({
+			sessionId: sessionId.value,
+			message: text,
+			clientMsgId: genClientMsgId(),
+			draftId: pendingDraftId.value || undefined
+		})
+		if (!res || res.error) {
+			// 会话失效（被删/过期清理）时重置，让对话流重建新会话
+			if (res && res.error === '会话不存在') sessionId.value = ''
+			pendingDraftId.value = null
+			return null
+		}
+		if (res.action === 'created' || res.action === 'duplicate') {
+			pendingDraftId.value = null
+			return res.echo || (res.action === 'created' ? '已记下这笔消费。' : '这条已经记过啦，没有重复记账。')
+		}
+		if (res.action === 'clarify') {
+			// 缺金额：展示追问，draftId 挂起，用户下一句「500块」自动续写
+			pendingDraftId.value = res.draftId || null
+			return res.question || '这笔消费的金额是多少？比如「35元」。'
+		}
+		if (res.action === 'ignored') {
+			pendingDraftId.value = null
+			// 找不到要修正/撤销的目标记录等服务端提示，比闲聊回复更有用
+			const hintReasons = ['no_recent_record', 'income_unsupported', 'too_ambiguous']
+			if (hintReasons.includes(res.reason) && res.echo) return res.echo
+			return null   // not_expense / query → 降级为对话
+		}
+		pendingDraftId.value = null
+		return null
+	} catch (e) {
+		// 网络失败/登录过期：交由对话流统一展示错误（其内含 401 弹窗逻辑）
+		return null
+	}
+}
+
+// 发送消息（先语义记账，未命中再走流式对话）
 async function handleSend() {
 	const text = inputText.value.trim()
 	if (!text || loading.value || streaming.value) return
@@ -266,7 +317,7 @@ async function handleSend() {
 	scrollToBottom()
 	loading.value = true
 
-	// 如果还没有 session，先懒创建
+	// 如果还没有 session，先懒创建（bookkeeping 也会把消息写进会话，历史可回看）
 	if (!sessionId.value) {
 		const ok = await handleNewSession(text.slice(0, 20))
 		if (!ok) {
@@ -276,7 +327,16 @@ async function handleSend() {
 		}
 	}
 
-	// 占位助手消息，后续逐字追加
+	// ① 语义记账：命中（created/clarify/duplicate 等）直接渲染服务端回显
+	const handled = await tryBookkeeping(text)
+	if (handled) {
+		loading.value = false
+		messages.value.push({ role: 'assistant', content: handled })
+		scrollToBottom()
+		return
+	}
+
+	// ② 非记账消息 → 占位助手消息，走原流式对话
 	messages.value.push({ role: 'assistant', content: '', streaming: true })
 	loading.value = false
 	streaming.value = true
@@ -352,6 +412,14 @@ onLoad((options) => {
 		sessionId.value = options.sessionId
 		loadHistoryMessages(options.sessionId)
 	}
+	// 概览「AI 解读」入口带问题跳入：预填输入框，由用户确认发送
+	if (options && options.q) {
+		try {
+			inputText.value = decodeURIComponent(options.q)
+		} catch (e) {
+			inputText.value = options.q
+		}
+	}
 })
 
 // 加载历史会话的消息
@@ -413,20 +481,20 @@ onUnload(() => {
 	height: 72rpx;
 	border-radius: var(--radius-full);
 	background: var(--color-surface);
-	box-shadow: var(--shadow-xs);
+	border: var(--hairline) solid var(--color-border);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
 
-.header-icon {
-	font-size: var(--font-lg);
-	color: var(--color-text-secondary);
+.header-left:active,
+.header-right:active {
+	background: var(--color-surface-raised);
 }
 
 .title {
 	color: var(--color-text-heading);
-	font-size: 48rpx;
+	font-size: var(--font-3xl);
 	font-weight: var(--weight-extrabold);
 }
 
@@ -445,8 +513,16 @@ onUnload(() => {
 	padding-top: 160rpx;
 }
 
-.empty-icon {
-	font-size: 100rpx;
+/* 空态字形：绘制图标置于纸面浅盒 */
+.empty-glyph {
+	width: 140rpx;
+	height: 140rpx;
+	border-radius: var(--radius-full);
+	background: var(--color-surface-raised);
+	border: var(--hairline) solid var(--color-border);
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	margin-bottom: var(--space-xl);
 }
 
@@ -475,20 +551,15 @@ onUnload(() => {
 .quick-btn {
 	display: flex;
 	align-items: center;
-	gap: 10rpx;
-	padding: 18rpx var(--space-lg);
+	gap: var(--space-sm);
+	padding: var(--space-md) var(--space-lg);
 	background: var(--color-surface);
-	border: none;
+	border: var(--hairline) solid var(--color-border);
 	border-radius: var(--radius-full);
-	box-shadow: var(--shadow-xs);
 }
 
 .quick-btn:active {
 	background: var(--color-surface-raised);
-}
-
-.quick-icon {
-	font-size: var(--font-lg);
 }
 
 .quick-label {
@@ -507,20 +578,7 @@ onUnload(() => {
 	flex-direction: row-reverse;
 }
 
-/* 设计稿04：无头像，气泡承载语义 */
-.avatar {
-	display: none;
-}
-
-.avatar-ai {
-	background: var(--color-primary);
-}
-
-.avatar-user {
-	background: var(--color-text-secondary);
-}
-
-/* 用户气泡：墨黑胶囊；助手气泡：白色卡片 */
+/* 用户气泡：墨黑胶囊；助手气泡：白面 + 发丝线 */
 .bubble {
 	max-width: 82%;
 	padding: var(--space-lg) var(--space-xl);
@@ -531,12 +589,15 @@ onUnload(() => {
 .bubble--user {
 	background: var(--color-primary);
 	border-radius: var(--radius-full);
+	border-bottom-right-radius: var(--radius-xs);
 }
 
 .bubble--assistant {
 	background: var(--color-surface);
-	border: none;
-	box-shadow: var(--shadow-xs);
+	border: var(--hairline) solid var(--color-border);
+	box-shadow: none;
+	border-radius: var(--radius-xl);
+	border-bottom-left-radius: var(--radius-xs);
 }
 
 .bubble-text {
@@ -587,9 +648,9 @@ onUnload(() => {
 .dot {
 	width: 12rpx;
 	height: 12rpx;
-	border-radius: 50%;
+	border-radius: var(--radius-full);
 	background: var(--color-text-secondary);
-	animation: dot-bounce 1.4s ease-in-out infinite;
+	animation: dot-pulse 1.4s ease-in-out infinite;
 }
 
 .dot:nth-child(2) {
@@ -600,7 +661,8 @@ onUnload(() => {
 	animation-delay: 0.4s;
 }
 
-@keyframes dot-bounce {
+/* 实为缩放+透明度脉冲（无位移），命名与动画一致 */
+@keyframes dot-pulse {
 	0%, 80%, 100% {
 		transform: scale(0.6);
 		opacity: 0.4;
@@ -611,13 +673,13 @@ onUnload(() => {
 	}
 }
 
-/* 设计稿04：透明输入条 + 灰色胶囊输入框 + 黑色圆形发送 */
+/* 输入条：纸面 + 顶部结构线 */
 .input-bar {
 	display: flex;
 	align-items: center;
 	padding: var(--space-md) var(--space-2xl) var(--space-md);
-	background: transparent;
-	border-top: none;
+	background: var(--color-bg);
+	border-top: var(--hairline) solid var(--color-border);
 	flex-shrink: 0;
 }
 

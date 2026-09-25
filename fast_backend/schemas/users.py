@@ -13,6 +13,11 @@ USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9\u4e00-\u9fa5]{2,20}$")
 PASSWORD_PATTERN = re.compile(r"^\d{6}$")
 
 
+def normalize_username(v: str) -> str:
+    """用户名规范化：去除首尾空白（前端输入常见空格；统一 DB 存储与查询口径）"""
+    return v.strip()
+
+
 class RegisterRequest(BaseModel):
     """注册请求"""
     username: str = Field(min_length=2, max_length=20)
@@ -22,6 +27,7 @@ class RegisterRequest(BaseModel):
     @field_validator("username")
     @classmethod
     def _check_username(cls, v: str) -> str:
+        v = normalize_username(v)
         if not USERNAME_PATTERN.match(v):
             raise ValueError("用户名需为2-20位中英文或数字组合")
         return v
@@ -29,6 +35,7 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def _check_password(cls, v: str) -> str:
+        v = v.strip()
         if not PASSWORD_PATTERN.match(v):
             raise ValueError("密码需为6位数字")
         return v
@@ -36,8 +43,19 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     """登录请求"""
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=100, description="用户名（限长防恶意超长输入）")
+    password: str = Field(min_length=1, max_length=100, description="密码")
+
+    @field_validator("username")
+    @classmethod
+    def _check_username(cls, v: str) -> str:
+        # 只规范化、不校验格式：格式合法与否由「用户不存在」统一 401 兜住，避免探测用户名
+        return normalize_username(v)
+
+    @field_validator("password")
+    @classmethod
+    def _check_password(cls, v: str) -> str:
+        return v.strip()
 
 
 class UserUpdateRequest(BaseModel):
@@ -50,7 +68,11 @@ class UserUpdateRequest(BaseModel):
     @field_validator("username")
     @classmethod
     def _check_username(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not USERNAME_PATTERN.match(v):
+        # 与注册同口径：先规范化再校验 pattern，保证落库值一致
+        if v is None:
+            return v
+        v = normalize_username(v)
+        if not USERNAME_PATTERN.match(v):
             raise ValueError("用户名需为2-20位中英文或数字组合")
         return v
 
@@ -58,9 +80,16 @@ class UserUpdateRequest(BaseModel):
 class PasswordChangeRequest(BaseModel):
     """修改密码请求"""
     old_password: str = Field(..., alias="oldPassword", description="旧密码")
-    new_password: str = Field(..., min_length=6, alias="newPassword", description="新密码")
+    new_password: str = Field(..., min_length=6, max_length=6, alias="newPassword", description="新密码，需为 6 位数字（与注册同口径）")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("new_password")
+    @classmethod
+    def _check_new_password(cls, v: str) -> str:
+        if not PASSWORD_PATTERN.match(v):
+            raise ValueError("新密码需为6位数字")
+        return v
 
 
 class UserOut(OrmBase):

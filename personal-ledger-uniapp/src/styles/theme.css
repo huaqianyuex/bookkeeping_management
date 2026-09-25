@@ -1,96 +1,131 @@
 /* ============================================
-   Design Tokens — 「简记」设计系统（设计稿 01-11）
-   浅灰底 + 白卡大圆角 + 黄色强调 + 墨黑主按钮，
-   收入绿仅用于收入语义，分类图标用粉彩色板。
-   变量名与旧版保持一致，页面零改动即可继承。
+   Design Tokens — 「简记」设计系统 v2 · 纸面结算 × 行情看板
+   暖纸白底 + 墨黑正文 + 琥珀唯一强调 + 收支双语义色，
+   发丝线分区代替卡片阴影；数字一律等宽排版（Saira）。
+   分类图标沿用 7 色粉彩功能编码板（同分类恒同色）。
+   变量名与上一版保持一致，未重写页面零改动即可继承。
    ============================================ */
 
+/* page 选择器承载同一份令牌：微信小程序 WXSS 不支持 :root，
+   H5 端由 :root 兜底，两端共用同一套变量。 */
+
+/* ── 数字字体：Saira（DIN 血统，结算/仪表数字的印刷载体）──
+   App / H5 webview 走本地 woff2；小程序端自动回退系统字体栈。 */
+@font-face {
+  font-family: "Saira";
+  src: url("/static/fonts/saira-latin-500-normal.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Saira";
+  src: url("/static/fonts/saira-latin-600-normal.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Saira";
+  src: url("/static/fonts/saira-latin-700-normal.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+page,
 :root {
-  /* ── Brand ── 墨黑为主控色（主按钮/选中态），黄为品牌强调色 */
-  --color-primary: #1A1A1A;
-  --color-primary-light: #333333;
-  --color-primary-lighter: #4D4D4D;
-  --color-primary-rgb: 26, 26, 26;
+  /* ── Brand ── 墨黑主控（正文/主按钮/选中态），琥珀为唯一强调色 */
+  --color-primary: #1a1c1a;
+  --color-primary-light: #3a3d3a;
+  --color-primary-lighter: #5a5d58;
+  --color-primary-rgb: 26, 28, 26;
 
-  /* Accent — 简记黄，用于 Logo/选中分类/FAB/进度条/高亮 pill */
-  --color-accent: #FACC15;
-  --color-accent-light: #FEF3C0;
-  --color-accent-rgb: 250, 204, 21;
-  --color-accent-deep: #EAB308;
+  /* Accent — 结算琥珀：账期/选中态/FAB/活跃数据；小号文字用 deep 保证对比度 */
+  --color-accent: #d97706;
+  --color-accent-light: #fbeedb;
+  --color-accent-rgb: 217, 119, 6;
+  --color-accent-deep: #b45309;
 
-  /* Semantic — 收支语义色 */
-  --color-success: #22A45D;
-  --color-success-light: #E3F5EB;
-  --color-success-rgb: 34, 164, 93;
-  --color-danger: #E5484D;
-  --color-danger-light: #FDE8E8;
-  --color-danger-rgb: 229, 72, 77;
-  --color-warning: #EAB308;
-  --color-warning-light: #FEF3C0;
-  --color-warning-text: #A16207;
-  --color-info: #6366F1;
-  --color-info-light: #E0E7FF;
+  /* Semantic — 财务语义色，只给数据，不做装饰 */
+  --color-success: #12805c;
+  --color-success-light: #e4f3ed;
+  --color-success-rgb: 18, 128, 92;
+  --color-danger: #c93a3a;
+  --color-danger-light: #faeaea;
+  --color-danger-rgb: 201, 58, 58;
+  --color-warning: #b45309;
+  --color-warning-light: #fbeedb;
+  --color-warning-text: #92400e;
+  --color-info: #4c5fd5;
+  --color-info-light: #e7eafb;
 
-  /* Surface */
-  --color-bg: #F5F6F7;
-  --color-surface: #FFFFFF;
-  --color-surface-raised: #EFEFEF;
+  /* Surface — 暖纸白场 */
+  --color-bg: #f4f4f0;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ecebe4;
 
-  /* Text — 中性灰阶 */
-  --color-text: #1A1A1A;
-  --color-text-secondary: #71717A;
-  --color-text-tertiary: #A1A1AA;
-  --color-text-inverse: #FFFFFF;
-  --color-text-heading: #111111;
+  /* Text — 中性暖灰阶（均满足纸面底 AA 对比） */
+  --color-text: #232522;
+  --color-text-secondary: #5d5c54;
+  --color-text-tertiary: #717065;
+  --color-text-inverse: #f8f8f5;
+  --color-text-heading: #161815;
 
-  /* Border — 卡片基本无边框，分隔线极浅 */
-  --color-border: #ECECEE;
-  --color-border-input: #E4E4E7;
-  --color-divider: #F2F2F4;
+  /* Border — 发丝线分区系统 */
+  --color-border: #e5e3da;
+  --color-border-input: #dddad0;
+  --color-divider: #e8e6de;
+  --hairline: 1rpx;
+
+  /* Overlay / 语义色描边 */
+  --color-overlay: rgba(22, 24, 21, 0.45);
+  --color-success-border: rgba(var(--color-success-rgb), 0.2);
+  --color-warning-border: rgba(var(--color-warning-rgb), 0.24);
 
   /* Disabled */
-  --color-disabled-bg: #EFEFF1;
-  --color-disabled-text: #BDBDC4;
+  --color-disabled-bg: #ecebe4;
+  --color-disabled-text: #a3a298;
 
-  /* ── Radius — 大圆角胶囊语言 ── */
-  --radius-xs: 8rpx;
-  --radius-sm: 12rpx;
-  --radius-md: 16rpx;
-  --radius-lg: 24rpx;
-  --radius-xl: 28rpx;
-  --radius-2xl: 32rpx;
-  --radius-3xl: 40rpx;
+  /* ── Radius — 收敛的圆角：编辑排版感，不再是气泡感 ── */
+  --radius-xs: 6rpx;
+  --radius-sm: 8rpx;
+  --radius-md: 12rpx;
+  --radius-lg: 16rpx;
+  --radius-xl: 20rpx;
+  --radius-2xl: 24rpx;
+  --radius-3xl: 28rpx;
   --radius-full: 999rpx;
 
-  /* ── Shadows — 柔和弥散，卡片层次靠阴影而非边框 ── */
-  --shadow-xs: 0 2rpx 6rpx rgba(24, 24, 27, 0.03);
-  --shadow-sm: 0 4rpx 12rpx rgba(24, 24, 27, 0.04);
-  --shadow-md: 0 8rpx 24rpx rgba(24, 24, 27, 0.06);
-  --shadow-lg: 0 12rpx 32rpx rgba(24, 24, 27, 0.08);
-  --shadow-xl: 0 16rpx 48rpx rgba(24, 24, 27, 0.12);
-  --shadow-primary: 0 8rpx 20rpx rgba(26, 26, 26, 0.16);
-  --shadow-accent: 0 8rpx 20rpx rgba(250, 204, 21, 0.35);
-  --shadow-success: 0 2rpx 8rpx rgba(34, 164, 93, 0.12);
-  --shadow-danger: 0 2rpx 8rpx rgba(229, 72, 77, 0.12);
-  --shadow-glass: 0 8rpx 24rpx rgba(24, 24, 27, 0.06);
-  --shadow-card: 0 4rpx 16rpx rgba(24, 24, 27, 0.04);
-  --shadow-tabbar: 0 8rpx 32rpx rgba(24, 24, 27, 0.12);
+  /* ── Shadows — 阴影只属于悬浮物（TabBar/FAB/弹窗），版面层次靠发丝线 ── */
+  --shadow-xs: 0 2rpx 6rpx rgba(22, 24, 21, 0.03);
+  --shadow-sm: 0 2rpx 10rpx rgba(22, 24, 21, 0.05);
+  --shadow-md: 0 8rpx 24rpx rgba(22, 24, 21, 0.08);
+  --shadow-lg: 0 12rpx 32rpx rgba(22, 24, 21, 0.1);
+  --shadow-xl: 0 16rpx 48rpx rgba(22, 24, 21, 0.16);
+  --shadow-primary: 0 8rpx 20rpx rgba(26, 28, 26, 0.18);
+  --shadow-accent: 0 8rpx 20rpx rgba(217, 119, 6, 0.28);
+  --shadow-success: none;
+  --shadow-danger: none;
+  --shadow-glass: 0 8rpx 24rpx rgba(22, 24, 21, 0.06);
+  --shadow-card: 0 2rpx 8rpx rgba(22, 24, 21, 0.04);
+  --shadow-tabbar: 0 12rpx 36rpx rgba(22, 24, 21, 0.14);
 
-  /* ── 分类粉彩色板（设计稿02/05/08 图标底色） ── */
-  --cat-yellow: #FDF0C0;
-  --cat-yellow-deep: #A16207;
-  --cat-pink: #FBD9D9;
-  --cat-pink-deep: #C0392B;
-  --cat-blue: #DBE4FD;
-  --cat-blue-deep: #4C5FD5;
-  --cat-orange: #FDE8CC;
-  --cat-orange-deep: #B45309;
-  --cat-green: #D9F2E4;
-  --cat-green-deep: #0F766E;
-  --cat-purple: #E7E0FB;
-  --cat-purple-deep: #6D28D9;
-  --cat-gray: #EFEFEF;
-  --cat-gray-deep: #52525B;
+  /* ── 分类粉彩功能色板（同分类恒同色，id 取色） ── */
+  --cat-yellow: #f6e7b8;
+  --cat-yellow-deep: #92610a;
+  --cat-pink: #f8dbd6;
+  --cat-pink-deep: #b33b2e;
+  --cat-blue: #dce3f8;
+  --cat-blue-deep: #3d51b8;
+  --cat-orange: #f9e3c8;
+  --cat-orange-deep: #a05208;
+  --cat-green: #d8eedf;
+  --cat-green-deep: #197a5a;
+  --cat-purple: #e8e2f8;
+  --cat-purple-deep: #5f35b8;
+  --cat-gray: #ecebe4;
+  --cat-gray-deep: #55544c;
 
   /* ── Spacing ── */
   --space-2xs: 4rpx;
@@ -102,6 +137,11 @@
   --space-2xl: 40rpx;
   --space-3xl: 48rpx;
   --space-4xl: 64rpx;
+  --space-5xl: 80rpx;
+
+  /* ── Layout — 悬浮 TabBar 让位 ── */
+  --tabbar-height: 124rpx;
+  --page-bottom-space: calc(var(--tabbar-height) + var(--space-3xl) + env(safe-area-inset-bottom));
 
   /* ── Typography ── */
   --font-2xs: 18rpx;
@@ -116,6 +156,13 @@
   --font-4xl: 64rpx;
   --font-5xl: 76rpx;
   --font-6xl: 96rpx;
+
+  /* 数字/展示专用字号（财务排版档位，勿用于正文） */
+  --font-kpi: 56rpx;       /* 区块主数字 */
+  --font-hero: 144rpx;     /* 页面焦点数字（结余，结算报告版面） */
+  --font-stat-sm: 34rpx;   /* 紧凑卡片金额 */
+  --font-stat-lg: 56rpx;   /* 行情带金额 */
+  --font-keypad: 108rpx;   /* 记账页金额显示区 */
 
   /* Weight */
   --weight-normal: 400;
@@ -133,16 +180,16 @@
   --tracking-heading: 0rpx;
   --tracking-body: 0rpx;
   --tracking-caption: 0.5rpx;
-  --tracking-amount: -1rpx;
+  --tracking-amount: -0.5rpx;
 
-  /* ── Transitions — 平缓，无回弹 ── */
+  /* ── Transitions — 统一平滑减速曲线；按压反馈用轻微缩放而非回弹 ── */
   --ease-out-expo: cubic-bezier(0.2, 0, 0, 1);
-  --ease-out-back: cubic-bezier(0.2, 0, 0, 1);
-  --ease-spring: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out-back: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --transition-fast: 0.15s var(--ease-out-expo);
   --transition-normal: 0.2s var(--ease-out-expo);
   --transition-slow: 0.3s var(--ease-out-expo);
-  --transition-spring: 0.2s var(--ease-out-expo);
+  --transition-spring: 0.35s var(--ease-out-back);
 
   /* ── Z-index ── */
   --z-dropdown: 100;
@@ -151,123 +198,21 @@
   --z-modal: 999;
   --z-toast: 1000;
 
-  /* ── Financial Typography ── */
-  --font-amount: "DIN Alternate", "Tabular Nums", "SF Mono", "Menlo", "Consolas", monospace;
+  /* ── Financial Typography ── 结算数字用 Saira，正文用系统中文栈；
+     中英混排（年月等）用 mixed 栈：数字落 Saira，中文落系统黑体 */
+  --font-amount: "Saira", "DIN Alternate", "Bahnschrift", "Helvetica Neue", "Arial", sans-serif;
+  --font-numeric-mixed: "Saira", "DIN Alternate", "Bahnschrift", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", -apple-system, sans-serif;
 }
 
-/* ============================================
-   Dark Mode
-   ============================================ */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-primary: #F5F5F4;
-    --color-primary-light: #E7E7E4;
-    --color-primary-lighter: #D6D6D2;
-    --color-primary-rgb: 245, 245, 244;
-
-    --color-accent: #FACC15;
-    --color-accent-light: rgba(250, 204, 21, 0.16);
-    --color-accent-rgb: 250, 204, 21;
-    --color-accent-deep: #FDE047;
-
-    --color-success: #4ADE80;
-    --color-success-light: rgba(74, 222, 128, 0.14);
-    --color-danger: #F87171;
-    --color-danger-light: rgba(248, 113, 113, 0.14);
-    --color-warning: #FACC15;
-    --color-warning-light: rgba(250, 204, 21, 0.14);
-    --color-warning-text: #FDE047;
-    --color-info: #A5B4FC;
-    --color-info-light: rgba(165, 180, 252, 0.14);
-
-    --color-bg: #131316;
-    --color-surface: #1C1C1F;
-    --color-surface-raised: #26262A;
-
-    --color-text: #F4F4F5;
-    --color-text-secondary: #A1A1AA;
-    --color-text-tertiary: #71717A;
-    --color-text-inverse: #131316;
-    --color-text-heading: #FAFAFA;
-
-    --color-border: #2C2C30;
-    --color-border-input: #3F3F46;
-    --color-divider: #26262A;
-
-    --color-disabled-bg: #2C2C30;
-    --color-disabled-text: #52525B;
-
-    --shadow-xs: 0 2rpx 6rpx rgba(0, 0, 0, 0.3);
-    --shadow-sm: 0 4rpx 12rpx rgba(0, 0, 0, 0.35);
-    --shadow-md: 0 8rpx 24rpx rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 12rpx 32rpx rgba(0, 0, 0, 0.45);
-    --shadow-xl: 0 16rpx 48rpx rgba(0, 0, 0, 0.5);
-    --shadow-primary: 0 8rpx 20rpx rgba(0, 0, 0, 0.4);
-    --shadow-accent: 0 8rpx 20rpx rgba(250, 204, 21, 0.2);
-    --shadow-card: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
-    --shadow-glass: 0 8rpx 24rpx rgba(0, 0, 0, 0.35);
-    --shadow-tabbar: 0 8rpx 32rpx rgba(0, 0, 0, 0.5);
-
-    --cat-yellow: rgba(250, 204, 21, 0.16);
-    --cat-pink: rgba(248, 113, 113, 0.16);
-    --cat-blue: rgba(129, 140, 248, 0.16);
-    --cat-orange: rgba(251, 146, 60, 0.16);
-    --cat-green: rgba(52, 211, 153, 0.16);
-    --cat-purple: rgba(167, 139, 250, 0.16);
-    --cat-gray: rgba(161, 161, 170, 0.16);
-  }
+/* 浏览器表面同属设计：选区与输入光标取自调色板，杜绝 webview 默认件 */
+::selection {
+	background: rgba(var(--color-accent-rgb), 0.24);
 }
 
-/* UniApp dark mode class toggle */
-.dark {
-  --color-primary: #F5F5F4;
-  --color-primary-light: #E7E7E4;
-  --color-primary-lighter: #D6D6D2;
-  --color-primary-rgb: 245, 245, 244;
-
-  --color-accent: #FACC15;
-  --color-accent-light: rgba(250, 204, 21, 0.16);
-  --color-accent-deep: #FDE047;
-
-  --color-success: #4ADE80;
-  --color-success-light: rgba(74, 222, 128, 0.14);
-  --color-danger: #F87171;
-  --color-danger-light: rgba(248, 113, 113, 0.14);
-  --color-warning: #FACC15;
-  --color-warning-light: rgba(250, 204, 21, 0.14);
-  --color-warning-text: #FDE047;
-
-  --color-bg: #131316;
-  --color-surface: #1C1C1F;
-  --color-surface-raised: #26262A;
-
-  --color-text: #F4F4F5;
-  --color-text-secondary: #A1A1AA;
-  --color-text-tertiary: #71717A;
-  --color-text-inverse: #131316;
-  --color-text-heading: #FAFAFA;
-
-  --color-border: #2C2C30;
-  --color-border-input: #3F3F46;
-  --color-divider: #26262A;
-
-  --color-disabled-bg: #2C2C30;
-  --color-disabled-text: #52525B;
-
-  --shadow-xs: 0 2rpx 6rpx rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 4rpx 12rpx rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8rpx 24rpx rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12rpx 32rpx rgba(0, 0, 0, 0.45);
-  --shadow-card: 0 4rpx 16rpx rgba(0, 0, 0, 0.3);
-  --shadow-glass: 0 8rpx 24rpx rgba(0, 0, 0, 0.35);
-  --shadow-tabbar: 0 8rpx 32rpx rgba(0, 0, 0, 0.5);
-
-  --cat-yellow: rgba(250, 204, 21, 0.16);
-  --cat-pink: rgba(248, 113, 113, 0.16);
-  --cat-blue: rgba(129, 140, 248, 0.16);
-  --cat-orange: rgba(251, 146, 60, 0.16);
-  --cat-green: rgba(52, 211, 153, 0.16);
-  --cat-purple: rgba(167, 139, 250, 0.16);
-  --cat-gray: rgba(161, 161, 170, 0.16);
+input,
+textarea {
+	caret-color: var(--color-accent-deep);
 }
+
+/* 暗色模式已明确移除（既有决定），全局锁定浅色纸面。 */

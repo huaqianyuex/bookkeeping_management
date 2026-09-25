@@ -93,7 +93,7 @@ export default {
 	background-color: var(--color-surface);
 	border-radius: var(--radius-full);
 	box-shadow: var(--shadow-tabbar);
-	padding: 10rpx;
+	padding: var(--space-xs);
 }
 
 /* 5 个 tab 等宽等高对齐 */
@@ -109,7 +109,7 @@ export default {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 4rpx;
+	gap: var(--space-2xs);
 	border-radius: var(--radius-full);
 	-webkit-tap-highlight-color: transparent;
 	transition: background-color var(--transition-fast);
@@ -128,10 +128,10 @@ export default {
 .fab-add {
 	pointer-events: auto;
 	position: absolute;
-	right: 40rpx;
+	right: var(--space-2xl);
 	width: 108rpx;
 	height: 108rpx;
-	border-radius: 50%;
+	border-radius: var(--radius-full);
 	background-color: var(--color-accent);
 	box-shadow: var(--shadow-accent);
 	display: flex;
@@ -146,7 +146,7 @@ export default {
 }
 
 .fab-plus {
-	font-size: 60rpx;
+	font-size: var(--font-4xl);
 	font-weight: var(--weight-bold);
 	color: var(--color-text-heading);
 	line-height: 1;

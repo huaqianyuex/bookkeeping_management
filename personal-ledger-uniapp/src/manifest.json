@@ -1,5 +1,5 @@
 {
-    "name" : "记账本",
+    "name" : "简记",
     "appid" : "__UNI__1BED206",
     "description" : "个人记账管理系统",
     "versionName" : "1.0.0",
@@ -101,13 +101,13 @@
             "disableHostCheck" : true,
             "proxy" : {
                 "/api" : {
-                    "target" : "http://localhost:8080",
+                    "target" : "http://127.0.0.1:8000",
                     "changeOrigin" : true,
                     "secure" : false
                 }
             }
         },
-        "title" : "记账本",
+        "title" : "简记",
         "router" : {
             "mode" : "hash"
         }
