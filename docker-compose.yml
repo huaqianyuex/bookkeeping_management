@@ -1,0 +1,46 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me}
+      MYSQL_DATABASE: bookkeeping_fastapi
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动建库建表 + 种子数据（脚本可重复执行）
+      - ./sql/init_mysql.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./fast_backend
+    environment:
+      DATABASE_URL: mysql+aiomysql://root:${MYSQL_ROOT_PASSWORD:-change-me}@mysql:3306/bookkeeping_fastapi?charset=utf8mb4
+      # 必填：在根目录 .env 中提供 32 位以上随机字符串（compose 自动读取）
+      JWT_SECRET: ${JWT_SECRET:?请在项目根目录 .env 中设置 JWT_SECRET（至少 32 位随机字符串）}
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174
+      TZ: Asia/Shanghai
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - backend-uploads:/app/uploads
+    ports:
+      - "8000:8000"
+
+  web:
+    build: ./personal-ledger-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  mysql-data:
+  backend-uploads:
