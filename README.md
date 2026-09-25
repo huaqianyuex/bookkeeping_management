@@ -26,7 +26,7 @@
 
 ### AI 智能记账与助手（需配置 API Key）
 - **自然语言记账**：如「早餐花了 15 元」即可完成记账，支持对刚记的记录继续「修改 / 删除」
-- **AI 对话**：多会话管理、SSE 流式对话、会话历史记录
+- **AI 对话**：多会话管理、SSE 流式对话、会话历史记录；对话已实时接入账单数据（自动查询当月收支、环比与分类构成），可直接询问「本月花了多少」「分析我的消费」并得到基于真实数据的回答
 - **消费分析 / 预算规划**：基于账单数据的智能分析
 - **FAQ 语义检索**：基于 Embedding 的常见问题检索，支持消息点赞 / 点踩反馈
 
@@ -92,6 +92,9 @@ DATABASE_URL=mysql+aiomysql://root:***@localhost:3306/bookkeeping_fastapi?charse
 APP_HOST=0.0.0.0
 CORS_ORIGINS=http://localhost:5173,http://localhost:5174
 
+# SQL 回显（调试用，默认关闭；开启后 SQLAlchemy 会把 SQL 连同参数打进控制台）
+SQL_ECHO=false
+
 # JWT（上线前务必更换为随机字符串）
 JWT_SECRET=***REMOVED***
 JWT_EXPIRE_SECONDS=86400
@@ -126,6 +129,8 @@ npm run dev:h5        # H5 版（端口 5174，/api 同样代理到 8000）
 
 **真机 / 模拟器调试**：需将 `personal-ledger-uniapp/src/api/config.js` 中非 H5 平台的 `BASE_URL` 改为电脑的局域网 IP（如 `http://192.168.x.x:8000/api`），并保证手机与电脑在同一 WiFi 下。
 
+**移动端设计体系**：移动端采用「纸面结算 × 行情看板」视觉体系（暖纸白底、墨黑正文、琥珀强调色、发丝线分区、Saira 等宽数字字体），完整设计规范见 [personal-ledger-uniapp/DESIGN.md](personal-ledger-uniapp/DESIGN.md)，产品定位与约束见 [PRODUCT.md](personal-ledger-uniapp/PRODUCT.md)。
+
 ## 目录结构
 
 ```
@@ -149,16 +154,19 @@ accounting-management-system/
 │       ├── context/               # 登录态管理
 │       └── pages/                 # Dashboard / Records / AiChat / AdminUsers / AdminRecords 等
 ├── personal-ledger-uniapp/        # 移动端（uni-app + Vue 3）
+│   ├── PRODUCT.md                 # 产品定位与约束（impeccable 设计流程用）
+│   ├── DESIGN.md                  # 设计系统规范（配色 / 字体 / 组件）
 │   └── src/
 │       ├── api/                   # 请求封装与后端地址配置（config.js）
-│       ├── components/            # RecordCard、StatCard、TabBar 等
+│       ├── components/            # RecordCard、TabBar、AppIcon（自绘 SVG 图标）等
 │       ├── pages/                 # 首页 / 账单 / 记账编辑 / 分类 / 我的 / AI 对话 / AI 历史
-│       └── styles/                # 主题与动画样式
+│       ├── static/fonts/          # Saira 数字字体（App / H5 端加载）
+│       ├── utils/                 # 金额格式化、分类功能色板、状态缓存
+│       └── styles/                # 主题令牌与动画样式
 ├── sql/
 │   ├── init_mysql.sql             # 建库建表 + 种子数据（可重复执行）
 │   └── create_tables_from_models.sql
 ├── docs/                          # 设计文档（数据库设计、接口规范、AI 模块设计等）
-├── API文档.md                     # 全量接口文档
 ├── 记账App设计稿/                  # UI 设计稿
 └── 开题报告/                       # 毕业设计开题报告
 ```
@@ -170,7 +178,7 @@ accounting-management-system/
 3. **普通用户流程**：注册账号 → 登录 → 在「记账」页新增收支记录（手动填写或使用 AI 自然语言记账）→ 在「分类」页管理自定义分类 → 在「首页 / 统计」查看月度收支与分类统计。
 4. **AI 记账**：在 AI 对话页直接输入「早餐花了 15 元」「把刚才那笔改成 20 元」「删掉刚才那笔」即可完成记账操作；也可发起自由对话、请求「分析一下我本月的消费」或「帮我做一份预算规划」。
 5. **管理员操作**：使用 `admin` 账号登录 Web 端，左侧导航会出现「用户管理 / 账单管理 / 系统概览」等入口，可对全平台用户与账单进行管理。
-6. **接口调试**：完整接口说明见根目录 [API文档.md](API文档.md)，或启动后端后访问 Swagger 页面。
+6. **接口调试**：启动后端后访问 Swagger 页面（<http://localhost:8000/docs>）；AI 模块的链路与数据流说明见 `fast_backend/docs/AI模块讲解.md`。
 
 ## 注意事项
 
