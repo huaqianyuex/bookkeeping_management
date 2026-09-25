@@ -50,3 +50,23 @@ venv/
 
 # Runtime user uploads
 fast_backend/uploads/
+
+# ── 开源化清理（2026-09）：个人/内部/垃圾文件不入库 ──
+.claude/
+**/.hbuilderx/
+personal-ledger-uniapp/.impeccable/
+CLAUDE.md
+fast_backend/notes.md
+fast_backend/task_plan.md
+question_text.txt
+fast_backend_接口完整版/
+nul
+fast_backend/nul
+开题报告/_build/
+开题报告/_build_export/
+开题报告/scispark/
+开题报告/research-baseline/
+面试准备_*.md
+
+# .env 模板需要入库
+!.env.example
