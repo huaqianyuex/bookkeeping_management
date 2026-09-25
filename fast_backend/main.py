@@ -44,7 +44,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # 健康检查
 @app.get("/api/health")
 async def health():
-    return success_response(data={"status": "ok", "version": "2.0.0"})
+    return success_response(data={"status": "ok", "version": "1.0.0"})
 
 
 # 挂载路由（每个 router 自带 prefix="/api/<resource>" 与 tags）
