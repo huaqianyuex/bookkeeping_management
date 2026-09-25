@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  backend-tests:
+    name: 后端测试（pytest）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fast_backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 安装依赖
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: 运行测试
+        run: pytest
+
+  web-build:
+    name: Web 端构建（React + Vite）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: personal-ledger-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: personal-ledger-frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  mobile-build:
+    name: 移动端构建（uni-app H5）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: personal-ledger-uniapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: personal-ledger-uniapp/package-lock.json
+      - run: npm ci
+      - run: npm run build:h5
