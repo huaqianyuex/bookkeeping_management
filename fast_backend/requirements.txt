@@ -19,6 +19,10 @@ PyJWT>=2.8.0
 # 文件上传（头像）
 python-multipart>=0.0.6
 
-# 以下为 AI / 定时任务的可选依赖，实现对应模块时再安装：
-# langchain-openai
+# AI 能力（对话 / 消费分析 / Embedding 检索——核心功能依赖，务必安装；
+# routers/ai.py 与 ai/ 模块在顶层 import，缺失将导致应用无法启动）
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+
+# 以下为定时任务的可选依赖，实现对应模块时再安装：
 # apscheduler
