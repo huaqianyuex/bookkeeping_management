@@ -1,8 +1,29 @@
 # 智能个人记账管理系统（FastAPI 版）
 
+![License](https://img.shields.io/badge/license-MIT-green)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![uni-app](https://img.shields.io/badge/uni--app-Vue%203-2B9939)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
+
 一个前后端分离的个人记账管理系统，提供 **Web 端**、**移动端（uni-app）** 与 **FastAPI 后端** 三端完整实现，并集成 AI 能力：自然语言记账、智能对话、消费分析与预算规划。
 
 > 本项目后端已由 Spring Boot 版本重构迁移至 FastAPI，历史版本可在 Git 提交记录中查看。
+
+## 项目定位
+
+- **个人 / 家庭自部署记账**：数据完全自持（自有 MySQL），不依赖第三方 SaaS；AI 助手基于你自己的真实账单回答问题，而不是通用话术。
+- **全栈与 AI 应用教学参考**：三端 + 分层后端 + LLM 应用链（结构化输出 / 流式 SSE / RAG 检索 / 幂等去重）的完整可运行样例。
+- 与市面记账工具的差异：AI 自然语言记账支持澄清追问与幂等去重，对话直连数据库实时数据，且整套系统可以私有化部署与二次开发。
+
+## 效果预览
+
+| 概览 | 账单 |
+| --- | --- |
+| ![概览](docs/screenshots/dashboard.png) | ![账单](docs/screenshots/records.png) |
+| **AI 助手** | **记账** |
+| ![AI 助手](docs/screenshots/ai-chat.png) | ![记账](docs/screenshots/add-edit.png) |
 
 ## 项目简介
 
@@ -129,6 +150,24 @@ npm run dev:h5        # H5 版（端口 5174，/api 同样代理到 8000）
 
 **真机 / 模拟器调试**：需将 `personal-ledger-uniapp/src/api/config.js` 中非 H5 平台的 `BASE_URL` 改为电脑的局域网 IP（如 `http://192.168.x.x:8000/api`），并保证手机与电脑在同一 WiFi 下。
 
+### 6. 运行测试（后端）
+
+```bash
+cd fast_backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+### 7. 一键部署（Docker Compose）
+
+```bash
+cp .env.example .env    # 至少设置 JWT_SECRET（≥32 位随机字符串）与 MYSQL_ROOT_PASSWORD
+docker compose up -d --build
+```
+
+- 首次启动自动执行 `sql/init_mysql.sql` 完成建库建表与种子数据；Web 端访问 <http://localhost:5173>，后端 API 与 Swagger 在 <http://localhost:8000>。
+- 传统部署建议：Nginx 反向代理 + systemd 托管 uvicorn + 每日 `mysqldump` 备份；生产环境务必更换默认密码与 JWT_SECRET，并启用 HTTPS。
+
 **移动端设计体系**：移动端采用「纸面结算 × 行情看板」视觉体系（暖纸白底、墨黑正文、琥珀强调色、发丝线分区、Saira 等宽数字字体），完整设计规范见 [personal-ledger-uniapp/DESIGN.md](personal-ledger-uniapp/DESIGN.md)，产品定位与约束见 [PRODUCT.md](personal-ledger-uniapp/PRODUCT.md)。
 
 ## 目录结构
@@ -166,8 +205,10 @@ accounting-management-system/
 ├── sql/
 │   ├── init_mysql.sql             # 建库建表 + 种子数据（可重复执行）
 │   └── create_tables_from_models.sql
-├── docs/                          # 设计文档（数据库设计、接口规范、AI 模块设计等）
+├── docs/                          # 设计文档与效果预览截图（screenshots/）
 ├── 记账App设计稿/                  # UI 设计稿
+├── docker-compose.yml             # 一键部署：MySQL + 后端 + Web 端
+├── .env.example                   # 环境变量模板（复制为 .env 使用）
 └── 开题报告/                       # 毕业设计开题报告
 ```
 
@@ -190,3 +231,4 @@ accounting-management-system/
 - **移动端真机调试**：手机与电脑需在同一局域网；若请求失败，可参考 `personal-ledger-uniapp/安卓运行排查指南.md` 排查（如安卓明文 HTTP 限制）。
 - **AI 功能可选**：未配置 `AGNES_API_KEY` 时，仅 AI 相关接口不可用，记账、统计、管理等其余功能均可正常使用。
 - **数据库脚本幂等**：`sql/init_mysql.sql` 使用 `CREATE IF NOT EXISTS` + `ON DUPLICATE KEY UPDATE`，可重复执行；请勿调整其中建表的依赖顺序。
+- **已知限制**：移动端依赖 `@dcloudio/*` 的 alpha 通道版本（已锁定精确版本号，升级请整组评估）；微信小程序端仅有空壳配置，尚未实际接入。
