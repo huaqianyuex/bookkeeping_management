@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import (
 # 加载 .env 配置文件
 load_dotenv()
 
-# 数据库连接地址（可用 .env 覆盖）
+# 数据库连接地址（可在 .env 中覆盖；默认口令仅为占位符，本机 MySQL 实际口令以 .env 为准）
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "mysql+aiomysql://root:***@localhost:3306/bookkeeping_fastapi?charset=utf8mb4",
+    "mysql+aiomysql://root:change-me@localhost:3306/bookkeeping_fastapi?charset=utf8mb4",
 )
 
 # SQL 回显：默认关闭。开启后 SQLAlchemy 会把每条 SQL 连同参数打进日志，

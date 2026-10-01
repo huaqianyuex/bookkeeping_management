@@ -6,6 +6,9 @@
 
 1. 按 [README](README.md) 的「安装与运行方式」把三端跑起来（或直接 `docker compose up`）。
 2. 后端测试：`cd fast_backend && pip install -r requirements-dev.txt && pytest`。
+3. 敏感信息扫描钩子（强烈建议）：`pip install pre-commit && pre-commit install`。
+   钩子基于 [gitleaks](https://github.com/gitleaks/gitleaks)，在每次提交前扫描密钥、
+   令牌、口令与连接串；数据库备份（`database_backup_*.sql` 等）已在 `.gitignore` 拦截。
 
 ## 分支与提交
 
@@ -26,6 +29,7 @@
 - [ ] `pytest` 全绿
 - [ ] 涉及三端构建的改动本地 `npm run build` / `build:h5` 通过
 - [ ] 不包含个人资料、密钥或与本功能无关的文件
+- [ ] 已安装并运行 pre-commit 钩子（gitleaks 扫描通过）
 
 ## 报告缺陷
 

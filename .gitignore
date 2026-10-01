@@ -28,6 +28,11 @@ personal-ledger-frontend/.agents/
 *.sqlite
 *.sqlite3
 
+# 数据库备份/导出（含用户数据与口令哈希，严禁入库；演示数据请脱敏后放 sql/）
+database_backup_*.sql
+*backup*.sql
+*.dump.sql
+
 # Build artifacts
 unpackage/
 

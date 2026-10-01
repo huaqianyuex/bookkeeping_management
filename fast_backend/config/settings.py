@@ -8,6 +8,7 @@
 - 设 JWT_SECRET_INSECURE_OK=1 可以跳过检查，仅用于本地开发。
 """
 
+import hashlib
 import os
 
 from dotenv import load_dotenv
@@ -32,8 +33,13 @@ MAX_AVATAR_SIZE = int(os.getenv("MAX_AVATAR_SIZE", str(2 * 1024 * 1024)))
 
 # ---- JWT ----
 # JWT_SECRET 为必填项，不提供仓库中公开的默认值；
-# 原默认 ***REMOVED*** 已去除，避免仓库访问者伪造任意 token。
+# 早期版本曾内置固定默认密钥（现已从仓库历史清除），启动校验会按指纹拒绝。
 JWT_SECRET = os.getenv("JWT_SECRET", "")
+
+# 早期版本内置默认密钥的 SHA-256 指纹（刻意不重现明文），用于启动校验拒绝该已作废值
+_BURNED_JWT_SECRET_SHA256 = (
+    "307db649133770dc57dfa40ac63c8b861e1c7fe1274d45d06b903e558a1766ba"
+)
 JWT_EXPIRE_SECONDS = int(os.getenv("JWT_EXPIRE_SECONDS", "86400"))
 
 # ---- AI ----
@@ -68,11 +74,7 @@ def _validate_security() -> None:
     开发环境如需跳过校验，设置环境变量 JWT_SECRET_INSECURE_OK=1。
     """
     insecure_ok = os.getenv("JWT_SECRET_INSECURE_OK", "").lower() in ("1", "true", "yes")
-    weak_defaults = {
-        "***REMOVED***",
-        "secret",
-        "changeme",
-    }
+    weak_defaults = {"secret", "changeme", "dev-insecure-secret-please-change-me"}
     if not JWT_SECRET:
         if insecure_ok:
             os.environ.setdefault("JWT_SECRET", "dev-insecure-secret-please-change-me")
@@ -81,7 +83,12 @@ def _validate_security() -> None:
             "JWT_SECRET 未设置：请在 .env 中提供一个至少 32 位的随机字符串。\n"
             "开发环境如需跳过检查，设置环境变量 JWT_SECRET_INSECURE_OK=1。"
         )
-    if JWT_SECRET in weak_defaults or len(JWT_SECRET) < 32:
+    burned_fingerprint = hashlib.sha256(JWT_SECRET.encode("utf-8")).hexdigest()
+    if (
+        JWT_SECRET in weak_defaults
+        or len(JWT_SECRET) < 32
+        or burned_fingerprint == _BURNED_JWT_SECRET_SHA256
+    ):
         if not insecure_ok:
             raise RuntimeError(
                 "JWT_SECRET 强度不足：不允许使用仓库公开默认值或小于 32 位的字符串。\n"

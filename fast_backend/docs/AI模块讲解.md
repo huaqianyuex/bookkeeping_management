@@ -437,7 +437,7 @@ PURGE_DELAY_DAYS = int(os.getenv("PURGE_DELAY_DAYS", "7"))
 ### 5.2 环境变量（`.env` 实测值，密钥已脱敏）
 
 ```
-DATABASE_URL=mysql+aiomysql://root:***@localhost:3306/bookkeeping_fastapi?charset=utf8mb4
+DATABASE_URL=mysql+aiomysql://root:<实测口令已脱敏>@localhost:3306/bookkeeping_fastapi?charset=utf8mb4
 CORS_ORIGINS=http://localhost:5174
 JWT_SECRET=this-i****
 AGNES_API_KEY=sk-V7F****

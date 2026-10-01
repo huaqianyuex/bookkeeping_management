@@ -107,7 +107,7 @@ uvicorn main:app --reload
 
 ```dotenv
 # 数据库（改成你的 MySQL 账号密码）
-DATABASE_URL=mysql+aiomysql://root:***@localhost:3306/bookkeeping_fastapi?charset=utf8mb4
+DATABASE_URL=mysql+aiomysql://root:change-me@localhost:3306/bookkeeping_fastapi?charset=utf8mb4
 
 # 服务
 APP_HOST=0.0.0.0
@@ -117,7 +117,7 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:5174
 SQL_ECHO=false
 
 # JWT（上线前务必更换为随机字符串）
-JWT_SECRET=***REMOVED***
+JWT_SECRET=please-generate-a-random-32-char-secret
 JWT_EXPIRE_SECONDS=86400
 
 # AI（可选；不配置则仅 AI 相关功能不可用，其余功能不受影响）
@@ -224,7 +224,7 @@ accounting-management-system/
 ## 注意事项
 
 - **端口一致性**：后端实际监听端口由 uvicorn 启动参数决定（默认 `8000`）。若修改端口，需同步修改 `personal-ledger-frontend/vite.config.js` 与 `personal-ledger-uniapp/vite.config.js` 中的代理目标地址，以及移动端 `src/api/config.js` 中的 `BASE_URL`。
-- **敏感信息**：`.env` 文件（含数据库密码、JWT 密钥、AI API Key）已加入 `.gitignore`，不会随仓库提交；克隆后需按上文模板自行创建。
+- **敏感信息**：`.env` 文件（含数据库密码、JWT 密钥、AI API Key）已加入 `.gitignore`，不会随仓库提交；克隆后需按上文模板自行创建。提交前建议启用 gitleaks 敏感信息扫描钩子（见 [CONTRIBUTING](CONTRIBUTING.md)）。
 - **默认凭据**：数据库连接示例中的 `root/change-me` 与默认管理员密码 `123456` 仅为本地开发演示，部署前请全部修改；`JWT_SECRET` 上线前务必更换。
 - **角色字段约束**：`users.role` 为 `TINYINT`（0 = 普通用户，1 = 管理员），前端 `AdminRoute.jsx`、`MainLayout.jsx` 依赖该数值判断权限，请勿改为字符串类型。
 - **金额精度**：金额字段统一使用 `DECIMAL(10,2)`，请勿改为 FLOAT / DOUBLE。

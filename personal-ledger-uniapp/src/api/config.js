@@ -23,7 +23,7 @@ function initBaseUrl() {
 
 		// #ifndef H5
 		// ⬇⬇⬇ 把下面的 IP 改成你电脑的局域网 IP ⬇⬇⬇
-		_BASE_URL = 'http://192.168.101.84:8000/api'
+		_BASE_URL = 'http://192.168.x.x:8000/api'
 		// #endif
 
 	return _BASE_URL
