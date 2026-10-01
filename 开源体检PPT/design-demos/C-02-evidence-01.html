@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>证据 ① · requirements.txt 依赖缺陷</title>
+<style>
+  :root{
+    --paper:#FFFFFF;
+    --ink:#1A1A1A;
+    --line:#DEDEDE;
+    --mute:#9AA0A6;
+    --blue:#14375E;
+    --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;
+  }
+  html,body{margin:0;height:100%;background:#2A2D33;overflow:hidden}
+
+  #stage{
+    width:1920px;height:1080px;position:absolute;left:50%;top:50%;
+    transform-origin:center center;
+    transform:translate(-50%,-50%) scale(var(--s,1));overflow:hidden;
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-weight:400;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* 内容列：1920 × 56% = 1080px，左右各 420px 余白 */
+  .page{box-sizing:border-box;height:1080px;padding:56px 420px 0}
+  .col{width:1080px}
+
+  .rule{height:1px;background:var(--line)}
+
+  .tag{
+    margin:18px 0 0;text-align:center;
+    font-size:15px;line-height:1.4;letter-spacing:.16em;color:var(--mute);
+  }
+
+  .h2{
+    margin:26px 0 0;text-align:center;
+    font-size:48px;font-weight:400;line-height:1.35;letter-spacing:.02em;
+    color:var(--ink);
+  }
+
+  .rule-mid{margin-top:30px}
+
+  /* 引文式代码：无底色、无边框、无圆角，只有一条 1px 竖线 */
+  .cap{
+    margin:18px 0 0;text-align:center;
+    font-size:15px;line-height:1.4;letter-spacing:.16em;color:var(--mute);
+  }
+  .cap-b{margin-top:16px}
+  .cap-c{margin-top:14px}
+
+  .code{
+    margin:8px 0 0;padding-left:28px;
+    border-left:1px solid var(--line);
+    font-family:var(--mono);font-size:17px;line-height:1.9;white-space:pre;
+    color:var(--ink);
+  }
+  .code .c{color:var(--mute)}
+
+  .code-b{margin-top:8px}
+
+  .rule-bot{margin-top:22px}
+
+  .finds{margin:2px 0 0;padding:0;list-style:none}
+  .finds li{
+    font-size:22px;line-height:2;letter-spacing:.01em;color:var(--ink);
+    padding-left:1.2em;text-indent:-1.2em;text-wrap:pretty;
+  }
+  .finds .hi{color:var(--blue);font-weight:500}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="page">
+    <div class="col">
+
+      <div class="rule"></div>
+
+      <p class="tag">体检快照 · 改造前</p>
+
+      <h2 class="h2">证据 ① · requirements.txt 依赖缺陷</h2>
+
+      <div class="rule rule-mid"></div>
+
+      <p class="cap">requirements.txt</p>
+      <div class="code"><div><span class="c"># fast_backend/requirements.txt</span></div><div>fastapi&gt;=0.100.0</div><div>uvicorn[standard]&gt;=0.23.0</div><div>sqlalchemy[asyncio]&gt;=2.0.0</div><div>aiomysql&gt;=0.2.0</div><div>python-dotenv&gt;=1.0.0</div><div>pydantic&gt;=2.0.0</div><div>bcrypt&gt;=4.0.0</div><div>PyJWT&gt;=2.8.0</div><div>python-multipart&gt;=0.0.6</div><div><span class="c"># langchain-openai&gt;=0.1.0   # ← 被注释，标注「可选依赖」</span></div></div>
+
+      <p class="cap cap-b">bash</p>
+      <div class="code code-b"><div><span class="c"># 严格照 README 操作</span></div><div>$ pip install -r requirements.txt</div><div>$ uvicorn main:app</div><div>ImportError: No module named 'langchain_core'</div></div>
+
+      <div class="rule rule-bot"></div>
+
+      <p class="cap cap-c">结论</p>
+      <ul class="finds">
+        <li class="hi">· 与 README 宣称的「不配 API Key 仅 AI 不可用，其余功能正常」直接矛盾</li>
+        <li>· 依赖全部 &gt;= 宽松范围，无精确锁定、无 requirements-dev.txt、无 pyproject.toml</li>
+        <li>· uni-app 依赖用了 @dcloudio/...@3.0.0-alpha-… alpha 版本</li>
+        <li>· 无 Docker / docker-compose 编排</li>
+      </ul>
+
+    </div>
+  </div>
+</div>
+<script>
+  (function(){
+    var fit=function(){
+      var s=Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      document.getElementById('stage').style.setProperty('--s', s);
+    };
+    fit(); window.addEventListener('resize', fit);
+  })();
+</script>
+</body>
+</html>

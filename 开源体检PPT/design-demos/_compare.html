@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>三方向对照</title>
+<style>
+  html,body{margin:0;background:#1C1F26;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+  #sheet{width:2480px;display:grid;grid-template-columns:repeat(3,1fr);
+         gap:36px;padding:40px 40px 48px}
+  .col{display:flex;flex-direction:column;gap:14px}
+  .hd{display:flex;align-items:baseline;gap:14px;color:#F2F4F8;padding-bottom:4px}
+  .hd .k{font-size:30px;font-weight:800;letter-spacing:.02em}
+  .hd .d{font-size:16px;color:#8B95A8}
+  .hd .c{margin-left:auto;display:flex;gap:7px}
+  .hd .c i{width:15px;height:15px;border-radius:3px;display:block}
+  .cap{font-size:15px;color:#6E7787;letter-spacing:.08em;padding:2px 0 0}
+  img{width:100%;display:block;border-radius:6px;border:1px solid #2E333D}
+</style>
+</head>
+<body>
+<div id="sheet">
+
+  <div class="col">
+    <div class="hd"><span class="k">A · 编辑部</span><span class="d">非对称双栏 · 极端字阶 · 直角细线</span>
+      <span class="c"><i style="background:#FBFBF8"></i><i style="background:#14161A"></i><i style="background:#0B5D4A"></i></span></div>
+    <img src="shots/A-01-cover.png">
+    <div class="cap">封面 · 索引栏 + 128px 主标题 + 三阶段索引行</div>
+    <img src="shots/A-02-evidence-01.png">
+    <div class="cap">证据页 · 双代码块并列 + 细线结论列表</div>
+  </div>
+
+  <div class="col">
+    <div class="hd"><span class="k">B · 产品文档</span><span class="d">12 栅格 · 工具条 · 分区卡片</span>
+      <span class="c"><i style="background:#FFFFFF;border:1px solid #444"></i><i style="background:#6D28D9"></i><i style="background:#059669"></i><i style="background:#D97706"></i></span></div>
+    <img src="shots/B-01-cover.png">
+    <div class="cap">封面 · 顶部工具条 + 三阶段色卡 + 元数据条</div>
+    <img src="shots/B-02-evidence-01.png">
+    <div class="cap">证据页 · 带文件名的代码块 + 强调结论块</div>
+  </div>
+
+  <div class="col">
+    <div class="hd"><span class="k">C · 余白</span><span class="d">56% 内容列 · 居中对称 · 只用细线</span>
+      <span class="c"><i style="background:#FFFFFF;border:1px solid #444"></i><i style="background:#1A1A1A"></i><i style="background:#14375E"></i></span></div>
+    <img src="shots/C-01-cover.png">
+    <div class="cap">封面 · 壹贰叁索引 · 80px 细字重大标题</div>
+    <img src="shots/C-02-evidence-01.png">
+    <div class="cap">证据页 · 无底色代码（仅左侧竖线）+ 松行距结论</div>
+  </div>
+
+</div>
+</body>
+</html>

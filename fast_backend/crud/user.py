@@ -5,7 +5,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User, UserToken
-from schemas.users import PasswordChangeRequest, RegisterRequest, UserUpdateRequest
+from schemas.user import PasswordChangeRequest, RegisterRequest, UserUpdateRequest
 from utils import security
 
 

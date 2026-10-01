@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 from config.db_config import get_db
-from schemas.users import (
+from schemas.user import (
     LoginRequest,
     PasswordChangeRequest,
     RegisterRequest,

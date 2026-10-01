@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>证据 ① · requirements.txt 依赖缺陷</title>
+<style>
+  :root{
+    --ink:#0E1116;
+    --ink-2:#5B6470;
+    --line:#E5E8EC;
+    --paper:#FFFFFF;
+    --panel:#F6F7F9;
+    --code:#F7F8FA;
+    --prompt:#6D28D9;
+    --context:#059669;
+    --harness:#D97706;
+    --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    --latin:Inter,"Segoe UI",system-ui,sans-serif;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;
+    --gutter:120px;
+    --r:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#2A2D33;overflow:hidden;
+    font-family:var(--sans);color:var(--ink);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  #stage{width:1920px;height:1080px;position:absolute;left:50%;top:50%;
+    transform-origin:center center;
+    transform:translate(-50%,-50%) scale(var(--s,1));
+    overflow:hidden;background:var(--paper);
+    display:flex;flex-direction:column}
+
+  /* ── 顶部工具条 ─────────────────────────────── */
+  .toolbar{flex:0 0 84px;height:84px;padding:0 var(--gutter);
+    border-bottom:1px solid var(--line);background:var(--paper);
+    display:flex;align-items:center;justify-content:space-between}
+  .brand{font-family:var(--mono);font-size:17px;font-weight:500;color:var(--ink)}
+  .toolbar-right{display:flex;align-items:center;gap:12px}
+  .marker{width:10px;height:10px;border-radius:2px;background:var(--prompt)}
+  .label{font-size:14px;letter-spacing:.08em;color:var(--ink-2);
+    text-transform:uppercase;font-family:var(--latin)}
+
+  /* ── 主内容：单栅格三区 ───────────────────────── */
+  .main{flex:1 1 auto;min-height:0;padding:56px var(--gutter);
+    display:flex;flex-direction:column}
+
+  .titlebar{flex:0 0 auto;display:flex;align-items:center;
+    justify-content:space-between;gap:48px}
+  h1{margin:0;font-size:56px;font-weight:700;line-height:1.15;
+    letter-spacing:-.015em}
+  .pill{flex:0 0 auto;border:1px solid var(--line);background:var(--panel);
+    border-radius:var(--r);padding:10px 22px;font-size:18px;color:var(--ink-2)}
+
+  /* 代码块：文档站形态 */
+  .codes{flex:1 1 auto;min-height:0;margin-top:44px;
+    display:grid;grid-template-columns:1.15fr 1fr;gap:32px}
+  .code{display:flex;flex-direction:column;height:100%;min-height:0;
+    border:1px solid var(--line);border-radius:var(--r);
+    background:var(--code);overflow:hidden}
+  .code-head{flex:0 0 auto;height:50px;padding:0 24px;background:var(--paper);
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .code-file{font-family:var(--mono);font-size:15px;color:var(--ink)}
+  .code-lang{font-family:var(--latin);font-size:14px;letter-spacing:.08em;
+    color:var(--ink-2);text-transform:uppercase}
+  .code pre{flex:1 1 auto;min-height:0;margin:0;padding:24px 28px;
+    font-family:var(--mono);font-size:17px;line-height:1.7;
+    white-space:pre;overflow:hidden}
+  .k{color:var(--prompt)}
+  .s{color:var(--context)}
+  .c{color:var(--ink-2)}
+
+  /* ── 结论区：4 条，仅第 1 条带左色条 ───────────── */
+  .findings{flex:0 0 auto;margin-top:44px;border-top:1px solid var(--line);
+    padding-top:24px}
+  .findings-label{font-size:14px;letter-spacing:.08em;color:var(--ink-2);
+    font-family:var(--latin);margin-bottom:12px}
+  .findings ol{margin:0;padding:0;list-style:none;
+    display:grid;grid-template-columns:1fr;gap:8px}
+  .findings li{display:flex;gap:14px;align-items:baseline;
+    font-size:20px;line-height:1.6;padding:10px 0;color:var(--ink);
+    text-wrap:pretty}
+  .findings li .dot{color:var(--ink-2)}
+  .findings li.hl{background:color-mix(in srgb, var(--prompt) 8%, #FFFFFF);
+    border:1px solid var(--line);border-left:3px solid var(--prompt);
+    border-radius:var(--r);padding:12px 20px 12px 24px;font-weight:600}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <header class="toolbar">
+    <div class="brand">accounting-management-system</div>
+    <div class="toolbar-right">
+      <i class="marker"></i>
+      <div class="label">证据 ①</div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <div class="titlebar">
+      <h1>证据 ① · requirements.txt 依赖缺陷</h1>
+      <div class="pill">体检快照 · 改造前</div>
+    </div>
+
+    <div class="codes">
+
+      <figure class="code">
+        <figcaption class="code-head">
+          <span class="code-file">fast_backend / requirements.txt</span>
+          <span class="code-lang">ini</span>
+        </figcaption>
+<pre><span class="c"># fast_backend/requirements.txt</span>
+fastapi&gt;=0.100.0
+uvicorn<span class="k">[standard]</span>&gt;=0.23.0
+sqlalchemy<span class="k">[asyncio]</span>&gt;=2.0.0
+aiomysql&gt;=0.2.0
+python-dotenv&gt;=1.0.0
+pydantic&gt;=2.0.0
+bcrypt&gt;=4.0.0
+PyJWT&gt;=2.8.0
+python-multipart&gt;=0.0.6
+<span class="c"># langchain-openai&gt;=0.1.0   # ← 被注释，标注「可选依赖」</span></pre>
+      </figure>
+
+      <figure class="code">
+        <figcaption class="code-head">
+          <span class="code-file">README 操作复现</span>
+          <span class="code-lang">bash</span>
+        </figcaption>
+<pre><span class="c"># 严格照 README 操作</span>
+<span class="k">$</span> pip install -r requirements.txt
+<span class="k">$</span> uvicorn main:app
+<span class="s">ImportError: No module named 'langchain_core'</span></pre>
+      </figure>
+
+    </div>
+
+    <section class="findings">
+      <div class="findings-label">结论</div>
+      <ol>
+        <li class="hl"><span class="dot">·</span><span>与 README 宣称的「不配 API Key 仅 AI 不可用，其余功能正常」直接矛盾</span></li>
+        <li><span class="dot">·</span><span>依赖全部 &gt;= 宽松范围，无精确锁定、无 requirements-dev.txt、无 pyproject.toml</span></li>
+        <li><span class="dot">·</span><span>uni-app 依赖用了 @dcloudio/...@3.0.0-alpha-… alpha 版本</span></li>
+        <li><span class="dot">·</span><span>无 Docker / docker-compose 编排</span></li>
+      </ol>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  (function(){
+    var fit=function(){
+      var s=Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      document.getElementById('stage').style.setProperty('--s', s);
+    };
+    fit(); window.addEventListener('resize', fit);
+  })();
+</script>
+</body>
+</html>

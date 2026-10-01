@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>开源项目体检 · 封面</title>
+<style>
+  :root{
+    --paper:#FFFFFF;
+    --ink:#1A1A1A;
+    --line:#DEDEDE;
+    --mute:#9AA0A6;
+    --blue:#14375E;
+    --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;
+  }
+  html,body{margin:0;height:100%;background:#2A2D33;overflow:hidden}
+
+  #stage{
+    width:1920px;height:1080px;position:absolute;left:50%;top:50%;
+    transform-origin:center center;
+    transform:translate(-50%,-50%) scale(var(--s,1));overflow:hidden;
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-weight:400;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* 内容列：1920 × 56% = 1080px，左右各 420px 余白 */
+  .page{box-sizing:border-box;height:1080px;padding:92px 420px 0}
+  .col{width:1080px}
+
+  .rule{height:1px;background:var(--line)}
+
+  .eyebrow{
+    margin:32px 0 0;text-align:center;
+    font-size:15px;line-height:1.4;letter-spacing:.16em;
+    color:var(--mute);
+  }
+
+  .title{
+    margin:100px 0 0;text-align:center;
+    font-size:80px;font-weight:300;line-height:1.35;letter-spacing:.04em;
+    color:var(--ink);
+  }
+
+  .subtitle{
+    margin:40px 0 0;text-align:center;
+    font-size:24px;font-weight:300;line-height:1.7;letter-spacing:.05em;
+    color:var(--ink);text-wrap:pretty;
+  }
+
+  .rule-mid{margin-top:46px}
+
+  .stages{margin:52px 0 0;padding:0;list-style:none}
+  .stages li{
+    display:grid;grid-template-columns:60px 1fr auto;
+    align-items:baseline;padding:11px 0;
+  }
+  .stages .no{
+    font-size:24px;font-weight:300;line-height:1.4;letter-spacing:.1em;
+    color:var(--blue);
+  }
+  .stages .nm{
+    font-size:26px;font-weight:400;line-height:1.5;letter-spacing:.02em;
+    color:var(--ink);
+  }
+  .stages .hex{
+    font-family:var(--mono);font-size:15px;line-height:1.4;letter-spacing:0;
+    color:var(--mute);
+  }
+
+  .rule-bot{margin-top:46px}
+
+  .foot{margin:30px 0 0;text-align:center}
+  .foot p{margin:0}
+  .foot .proj{
+    font-size:17px;line-height:1.6;letter-spacing:.02em;color:var(--ink);
+  }
+  .foot .cite{
+    margin-top:14px;
+    font-family:var(--mono);font-size:15px;line-height:1.7;letter-spacing:.02em;
+    color:var(--mute);
+  }
+  .foot .cite2{
+    margin-top:6px;
+    font-size:15px;line-height:1.7;letter-spacing:.04em;
+    color:var(--mute);text-wrap:pretty;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="page">
+    <div class="col">
+
+      <div class="rule"></div>
+
+      <p class="eyebrow">开源项目体检 · 工程化演进</p>
+
+      <h1 class="title">从 Prompt <br>到 Harness</h1>
+
+      <p class="subtitle">一次开源项目体检的三阶段工程化演进</p>
+
+      <div class="rule rule-mid"></div>
+
+      <ul class="stages">
+        <li><span class="no">壹</span><span class="nm">Prompt 紫</span><span class="hex">#7C3AED</span></li>
+        <li><span class="no">贰</span><span class="nm">Context 绿</span><span class="hex">#10B981</span></li>
+        <li><span class="no">叁</span><span class="nm">Harness 橙</span><span class="hex">#F59E0B</span></li>
+      </ul>
+
+      <div class="rule rule-bot"></div>
+
+      <footer class="foot">
+        <p class="proj">hechao_2024 / accounting-management-system —— 智能个人记账管理系统</p>
+        <p class="cite">docs/开源项目改进评估报告.md</p>
+        <p class="cite2">逐项核对 README / .gitignore / git 历史与远程 / 依赖文件 / 目录结构 / docs / 代码注释</p>
+      </footer>
+
+    </div>
+  </div>
+</div>
+<script>
+  (function(){
+    var fit=function(){
+      var s=Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      document.getElementById('stage').style.setProperty('--s', s);
+    };
+    fit(); window.addEventListener('resize', fit);
+  })();
+</script>
+</body>
+</html>

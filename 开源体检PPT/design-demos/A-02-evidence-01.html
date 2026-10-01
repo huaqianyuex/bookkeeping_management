@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>证据 ① · requirements.txt 依赖缺陷</title>
+<style>
+  :root{
+    --paper:#FBFBF8;
+    --ink:#14161A;
+    --pine:#0B5D4A;
+    --gray:#6B7280;
+    --rule:#DCDCD5;
+    --rule-soft:#E7E7E0;
+    --code-bg:#F1F1EC;
+    --code-c:#8A8F98;
+    --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,"Courier New",monospace;
+  }
+  html,body{margin:0;height:100%;background:#2A2D33;overflow:hidden}
+  #stage{
+    width:1920px;height:1080px;position:absolute;left:50%;top:50%;
+    transform-origin:center center;
+    transform:translate(-50%,-50%) scale(var(--s,1));
+    overflow:hidden;box-sizing:border-box;padding:80px;
+    background:var(--paper);color:var(--ink);
+    font-family:var(--sans);text-wrap:pretty;
+    -webkit-font-smoothing:antialiased;
+  }
+  .top-rule{height:1px;background:var(--ink)}
+  .cols{
+    display:grid;grid-template-columns:442px 1fr;column-gap:60px;
+    height:calc(100% - 1px);position:relative;
+  }
+  .cols::after{
+    content:"";position:absolute;left:472px;top:0;bottom:0;
+    width:1px;background:var(--rule-soft);
+  }
+
+  /* ── 窄左栏：索引卡 ─────────────────────── */
+  .idx{display:flex;flex-direction:column;justify-content:space-between;padding-top:44px}
+  .bar{width:28px;height:3px;background:var(--pine);margin-bottom:20px}
+  .sec{
+    font-family:var(--serif);font-size:19px;line-height:1.2;
+    letter-spacing:.1em;color:var(--ink);margin-bottom:14px;
+  }
+  .kick{
+    font-size:15px;line-height:1.6;letter-spacing:.16em;
+    color:var(--gray);font-weight:500;
+  }
+  .idx-foot .hr{height:1px;background:var(--rule);margin:0 0 16px}
+  .idx-foot .k1{
+    font-size:15px;line-height:1.6;letter-spacing:.1em;
+    color:var(--gray);margin-bottom:18px;
+  }
+  .idx-foot .lab{
+    font-size:13px;letter-spacing:.2em;color:var(--gray);
+    line-height:1.4;margin-bottom:8px;
+  }
+  .idx-foot .path{
+    font-family:var(--mono);font-size:14px;line-height:1.6;
+    color:var(--ink);word-break:break-all;
+  }
+
+  /* ── 宽右栏 ─────────────────────────────── */
+  .body{display:flex;flex-direction:column;padding-top:44px}
+  .h2{
+    margin:0 0 30px;font-size:62px;font-weight:700;
+    letter-spacing:-.012em;line-height:1.06;color:var(--ink);
+  }
+
+  .code-row{
+    display:grid;grid-template-columns:660px 574px;column-gap:24px;
+    margin-bottom:30px;
+  }
+  .code-label{
+    font-size:14px;line-height:1.45;letter-spacing:.18em;
+    color:var(--gray);margin-bottom:8px;
+  }
+  .code{
+    margin:0;box-sizing:border-box;
+    background:var(--code-bg);border-left:3px solid var(--ink);
+    padding:22px 24px;border-radius:0;
+    font-family:var(--mono);font-size:18px;line-height:1.75;
+    color:var(--ink);white-space:pre;overflow:hidden;
+  }
+  .code .c{color:var(--code-c)}
+
+  /* ── 结论：细线分隔的列表 ───────────────── */
+  .fhead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .fbar{width:28px;height:3px;background:var(--pine);flex:none}
+  .fhead span{font-size:20px;font-weight:700;letter-spacing:.06em;color:var(--ink)}
+  .flist{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+  .flist li{
+    font-size:22px;line-height:1.75;color:var(--ink);
+    padding:16px 0;
+  }
+  .flist li + li{border-top:1px solid var(--rule)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="top-rule"></div>
+  <div class="cols">
+
+    <aside class="idx">
+      <div class="idx-head">
+        <div class="bar"></div>
+        <div class="sec">§ 01</div>
+        <div class="kick">证据 ①</div>
+      </div>
+      <div class="idx-foot">
+        <div class="hr"></div>
+        <div class="k1">体检快照 · 改造前</div>
+        <div class="lab">文件</div>
+        <div class="path">fast_backend/requirements.txt</div>
+      </div>
+    </aside>
+
+    <main class="body">
+      <h2 class="h2">证据 ① · requirements.txt 依赖缺陷</h2>
+
+      <div class="code-row">
+        <div class="code-cell">
+          <div class="code-label">requirements.txt</div>
+<pre class="code"><span class="c"># fast_backend/requirements.txt</span>
+fastapi&gt;=0.100.0
+uvicorn[standard]&gt;=0.23.0
+sqlalchemy[asyncio]&gt;=2.0.0
+aiomysql&gt;=0.2.0
+python-dotenv&gt;=1.0.0
+pydantic&gt;=2.0.0
+bcrypt&gt;=4.0.0
+PyJWT&gt;=2.8.0
+python-multipart&gt;=0.0.6
+<span class="c"># langchain-openai&gt;=0.1.0   # ← 被注释，标注「可选依赖」</span></pre>
+        </div>
+        <div class="code-cell">
+          <div class="code-label">终端</div>
+<pre class="code"><span class="c"># 严格照 README 操作</span>
+$ pip install -r requirements.txt
+$ uvicorn main:app
+ImportError: No module named 'langchain_core'</pre>
+        </div>
+      </div>
+
+      <div class="findings">
+        <div class="fhead"><span class="fbar"></span><span>结论</span></div>
+        <ul class="flist">
+          <li>· 与 README 宣称的「不配 API Key 仅 AI 不可用，其余功能正常」直接矛盾</li>
+          <li>· 依赖全部 &gt;= 宽松范围，无精确锁定、无 requirements-dev.txt、无 pyproject.toml</li>
+          <li>· uni-app 依赖用了 @dcloudio/...@3.0.0-alpha-… alpha 版本</li>
+          <li>· 无 Docker / docker-compose 编排</li>
+        </ul>
+      </div>
+    </main>
+
+  </div>
+</div>
+<script>
+  (function(){
+    var fit=function(){
+      var s=Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      document.getElementById('stage').style.setProperty('--s', s);
+    };
+    fit(); window.addEventListener('resize', fit);
+  })();
+</script>
+</body>
+</html>

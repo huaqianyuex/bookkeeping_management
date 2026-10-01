@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>从 Prompt 到 Harness · 封面</title>
+<style>
+  :root{
+    --ink:#0E1116;
+    --ink-2:#5B6470;
+    --line:#E5E8EC;
+    --paper:#FFFFFF;
+    --panel:#F6F7F9;
+    --card:#FAFBFC;
+    --prompt:#6D28D9;
+    --context:#059669;
+    --harness:#D97706;
+    --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    --latin:Inter,"Segoe UI",system-ui,sans-serif;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;
+    --gutter:120px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#2A2D33;overflow:hidden;
+    font-family:var(--sans);color:var(--ink);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  #stage{width:1920px;height:1080px;position:absolute;left:50%;top:50%;
+    transform-origin:center center;
+    transform:translate(-50%,-50%) scale(var(--s,1));
+    overflow:hidden;background:var(--paper);
+    display:flex;flex-direction:column}
+
+  /* ── 顶部工具条：栅格系统的基准线 ───────────────── */
+  .toolbar{flex:0 0 84px;height:84px;
+    padding:0 var(--gutter);
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--paper)}
+  .brand{font-family:var(--mono);font-size:17px;font-weight:500;
+    letter-spacing:.01em;color:var(--ink)}
+  .toolbar-right{display:flex;align-items:center;gap:16px}
+  .swatches{display:flex;gap:6px}
+  .sw{width:10px;height:10px;border-radius:2px}
+  .sw.p{background:var(--prompt)}
+  .sw.c{background:var(--context)}
+  .sw.h{background:var(--harness)}
+  .label{font-size:14px;letter-spacing:.08em;color:var(--ink-2);
+    text-transform:uppercase;font-family:var(--latin)}
+
+  /* ── 主内容：三行栅格 ─────────────────────────── */
+  .main{flex:1 1 auto;min-height:0;
+    padding:96px var(--gutter) 64px;
+    display:grid;grid-template-rows:1fr auto auto}
+
+  .eyebrow{font-size:14px;letter-spacing:.08em;color:var(--ink-2);
+    padding-bottom:28px;font-family:var(--latin)}
+  .eyebrow .zh{font-family:var(--sans)}
+
+  .hero{display:flex;flex-direction:column;justify-content:center;min-height:0}
+  h1{margin:0;font-size:96px;font-weight:700;line-height:1.05;
+    letter-spacing:-.015em;font-family:var(--sans);color:var(--ink)}
+  .sub{margin:30px 0 0;font-size:22px;line-height:1.6;color:var(--ink-2);
+    text-wrap:pretty}
+
+  /* 三阶段横排小卡片 */
+  .stages{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;
+    align-self:end;margin-bottom:40px}
+  .stage-card{height:184px;border-radius:10px;
+    border:1px solid var(--line);
+    border-left:3px solid var(--c);
+    background:color-mix(in srgb, var(--c) 8%, #FFFFFF);
+    padding:32px 32px 30px;
+    display:flex;flex-direction:column;justify-content:space-between}
+  .stage-card.p{--c:var(--prompt)}
+  .stage-card.c{--c:var(--context)}
+  .stage-card.h{--c:var(--harness)}
+  .stage-name{font-family:var(--latin);font-size:28px;font-weight:600;
+    letter-spacing:-.01em;color:var(--ink)}
+  .stage-val{font-family:var(--mono);font-size:15px;color:var(--c)}
+
+  /* 底部元数据条 */
+  .meta{border:1px solid var(--line);background:var(--panel);border-radius:10px;
+    padding:24px 32px;display:grid;grid-template-columns:1.1fr 1fr;gap:56px}
+  .meta-key{font-size:14px;letter-spacing:.08em;color:var(--ink-2);
+    font-family:var(--latin);margin-bottom:10px}
+  .meta-val{font-size:19px;line-height:1.5;color:var(--ink)}
+  .meta-path{font-family:var(--mono);font-size:18px;color:var(--ink);
+    margin-bottom:10px}
+  .meta-note{margin:0;font-size:18px;line-height:1.55;color:var(--ink-2);
+    text-wrap:pretty}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <header class="toolbar">
+    <div class="brand">accounting-management-system</div>
+    <div class="toolbar-right">
+      <div class="swatches"><i class="sw p"></i><i class="sw c"></i><i class="sw h"></i></div>
+      <div class="label">Prompt &rarr; Context &rarr; Harness</div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <div class="hero">
+      <div class="eyebrow"><span class="zh">开源项目体检 · 工程化演进</span></div>
+      <h1>从 Prompt 到 Harness</h1>
+      <p class="sub">一次开源项目体检的三阶段工程化演进</p>
+    </div>
+
+    <section class="stages">
+      <article class="stage-card p">
+        <div class="stage-name">Prompt</div>
+        <div class="stage-val">紫 #7C3AED</div>
+      </article>
+      <article class="stage-card c">
+        <div class="stage-name">Context</div>
+        <div class="stage-val">绿 #10B981</div>
+      </article>
+      <article class="stage-card h">
+        <div class="stage-name">Harness</div>
+        <div class="stage-val">橙 #F59E0B</div>
+      </article>
+    </section>
+
+    <div class="meta">
+      <div>
+        <div class="meta-key">项目</div>
+        <div class="meta-val">hechao_2024 / accounting-management-system —— 智能个人记账管理系统</div>
+      </div>
+      <div>
+        <div class="meta-key">底本</div>
+        <div class="meta-path">docs/开源项目改进评估报告.md</div>
+        <p class="meta-note">逐项核对 README / .gitignore / git 历史与远程 / 依赖文件 / 目录结构 / docs / 代码注释</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  (function(){
+    var fit=function(){
+      var s=Math.min(window.innerWidth/1920, window.innerHeight/1080);
+      document.getElementById('stage').style.setProperty('--s', s);
+    };
+    fit(); window.addEventListener('resize', fit);
+  })();
+</script>
+</body>
+</html>
