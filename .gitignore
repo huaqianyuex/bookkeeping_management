@@ -78,3 +78,6 @@ fast_backend/nul
 
 # .env 模板需要入库
 !.env.example
+
+# 前端视觉验收截图（本地验证产物，不入库）
+.visual-check/

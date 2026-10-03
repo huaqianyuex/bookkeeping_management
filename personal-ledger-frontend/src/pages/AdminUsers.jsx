@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react'
 import { Table, Button, Card, Modal, Typography, Tag, Input, Space, Popconfirm, Switch, App as AntdApp } from 'antd'
 import { SearchOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 import { getAdminUserList, deleteAdminUser, batchDeleteAdminUsers, updateAdminUserStatus } from '../api/admin'
-import SectionTitle from '../components/ui/SectionTitle'
-import EmptyState from '../components/ui/EmptyState'
-import SkeletonCard from '../components/ui/SkeletonCard'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar } from '../components/ui'
+import { formatDateTime } from '../utils/format'
 
 const { Text } = Typography
 
@@ -14,7 +12,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(false)
   const [keyword, setKeyword] = useState('')
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
 
   const fetchData = async (page = 1, size = 10, kw = keyword) => {
     setLoading(true)
@@ -64,9 +62,12 @@ export default function AdminUsers() {
       message.warning('所选用户均为管理员，不可删除')
       return
     }
-    Modal.confirm({
+    modal.confirm({
       title: '确认批量删除',
       content: `确定要删除 ${deletable.length} 个用户及其所有数据吗？管理员账户将被跳过。`,
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
       onOk: async () => {
         const res = await batchDeleteAdminUsers(deletable)
         if (res.code === 200) {
@@ -86,6 +87,7 @@ export default function AdminUsers() {
       dataIndex: 'id',
       key: 'id',
       width: 80,
+      responsive: ['md'],
     },
     {
       title: '用户名',
@@ -127,6 +129,8 @@ export default function AdminUsers() {
       title: '创建时间',
       dataIndex: 'createTime',
       key: 'createTime',
+      responsive: ['md'],
+      render: (text) => <Text style={{ color: 'var(--color-text-secondary)' }}>{formatDateTime(text)}</Text>,
     },
     {
       title: '操作',
@@ -134,20 +138,21 @@ export default function AdminUsers() {
       width: 100,
       render: (_, record) => (
         record.role === 1 ? (
-          <Tag color="default">不可操作</Tag>
+          <Text type="secondary">不可操作</Text>
         ) : (
           <Popconfirm
             title="确认删除"
             description="删除后该用户的所有数据将被清除"
             onConfirm={() => handleDelete(record.id)}
-            okText="确认"
+            okText="删除"
+            okType="danger"
             cancelText="取消"
           >
             <Button
               type="link"
               danger
               icon={<DeleteOutlined />}
-              style={{ padding: '4px 8px' }}
+              className="table-action"
             >
               删除
             </Button>
@@ -183,29 +188,25 @@ export default function AdminUsers() {
           showTotal: (t) => `共 ${t} 条`,
           onChange: (page, size) => fetchData(page, size),
         }}
+        scroll={{ x: 720 }}
       />
     )
   }
 
   return (
     <AnimatedRoute>
+      <PageHeader title="用户管理" />
       <Card
-        title={<SectionTitle title="用户管理" />}
         variant="borderless"
         className="card-base"
       >
-        <div style={{
-          marginBottom: 24,
-          display: 'flex',
-          gap: 'var(--space-md)',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}>
+        <ListToolbar>
           <Input
             placeholder="搜索用户名"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             onPressEnter={handleSearch}
+            allowClear
             style={{ width: 240 }}
             prefix={<SearchOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
           />
@@ -217,7 +218,8 @@ export default function AdminUsers() {
                 title="确认批量删除"
                 description={`确定要删除 ${selectedRowKeys.length} 个用户吗？`}
                 onConfirm={handleBatchDelete}
-                okText="确认"
+                okText="删除"
+                okType="danger"
                 cancelText="取消"
               >
                 <Button type="primary" danger icon={<DeleteOutlined />}>
@@ -226,7 +228,7 @@ export default function AdminUsers() {
               </Popconfirm>
             )}
           </Space>
-        </div>
+        </ListToolbar>
 
         {renderContent()}
       </Card>

@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Table, Card, Typography, Tag, DatePicker, Select, Space, Button, Popconfirm, InputNumber, Modal, App as AntdApp } from 'antd'
+import { Table, Card, Typography, Tag, DatePicker, Select, Space, Button, Popconfirm, InputNumber, App as AntdApp } from 'antd'
 import { SearchOutlined, DeleteOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import { getAdminRecords, batchDeleteAdminRecords } from '../api/admin'
-import SectionTitle from '../components/ui/SectionTitle'
-import EmptyState from '../components/ui/EmptyState'
-import SkeletonCard from '../components/ui/SkeletonCard'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar, Money } from '../components/ui'
+import { formatDateTime } from '../utils/format'
 
 const { Text } = Typography
 
@@ -16,7 +14,7 @@ export default function AdminRecords() {
   const [month, setMonth] = useState(null)
   const [userId, setUserId] = useState(null)
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
 
   const fetchData = async (page = 1, size = 10, filterType = type, filterMonth = month, filterUserId = userId) => {
     setLoading(true)
@@ -48,9 +46,12 @@ export default function AdminRecords() {
       message.warning('请先选择要删除的账单')
       return
     }
-    Modal.confirm({
+    modal.confirm({
       title: '确认批量删除',
       content: `确定要删除选中的 ${selectedRowKeys.length} 条账单吗？`,
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
       onOk: async () => {
         const res = await batchDeleteAdminRecords(selectedRowKeys)
         if (res.code === 200) {
@@ -70,11 +71,13 @@ export default function AdminRecords() {
       dataIndex: 'id',
       key: 'id',
       width: 80,
+      responsive: ['md'],
     },
     {
       title: '用户',
       dataIndex: 'username',
       key: 'username',
+      width: 160,
       render: (text, record) => (
         <div>
           <Text strong>{text || '-'}</Text>
@@ -88,6 +91,7 @@ export default function AdminRecords() {
       title: '日期',
       dataIndex: 'recordDate',
       key: 'recordDate',
+      width: 110,
     },
     {
       title: '类型',
@@ -102,28 +106,30 @@ export default function AdminRecords() {
       title: '分类',
       dataIndex: 'categoryName',
       key: 'categoryName',
+      width: 110,
     },
     {
       title: '金额',
       dataIndex: 'amount',
       key: 'amount',
+      width: 130,
       render: (v, r) => (
-        <Text strong style={{ color: r.categoryType === 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
-          {r.categoryType === 0 ? '-' : '+'}¥{Number(v).toFixed(2)}
-        </Text>
+        <Money value={v} categoryType={r.categoryType} signed />
       ),
     },
     {
       title: '备注',
       dataIndex: 'remark',
-      key: 'remark',
+      responsive: ['lg'],
+      ellipsis: true,
     },
     {
       title: '创建时间',
       dataIndex: 'createTime',
       key: 'createTime',
-      width: 180,
-      render: (text) => <Text style={{ fontSize: 'var(--font-size-sm)' }}>{text}</Text>,
+      width: 150,
+      responsive: ['lg'],
+      render: (text) => <Text style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>{formatDateTime(text)}</Text>,
     },
   ]
 
@@ -148,24 +154,19 @@ export default function AdminRecords() {
           showTotal: (t) => `共 ${t} 条`,
           onChange: (page, size) => fetchData(page, size),
         }}
+        scroll={{ x: 800 }}
       />
     )
   }
 
   return (
     <AnimatedRoute>
+      <PageHeader title="全量账单" />
       <Card
-        title={<SectionTitle title="全量账单" />}
         variant="borderless"
         className="card-base"
       >
-        <div style={{
-          marginBottom: 24,
-          display: 'flex',
-          gap: 'var(--space-md)',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-        }}>
+        <ListToolbar>
           <InputNumber
             placeholder="用户ID"
             value={userId}
@@ -200,7 +201,8 @@ export default function AdminRecords() {
                 title="确认批量删除"
                 description={`确定要删除 ${selectedRowKeys.length} 条账单吗？`}
                 onConfirm={handleBatchDelete}
-                okText="确认"
+                okText="删除"
+                okType="danger"
                 cancelText="取消"
               >
                 <Button type="primary" danger icon={<DeleteOutlined />}>
@@ -209,7 +211,7 @@ export default function AdminRecords() {
               </Popconfirm>
             )}
           </Space>
-        </div>
+        </ListToolbar>
 
         {renderContent()}
       </Card>

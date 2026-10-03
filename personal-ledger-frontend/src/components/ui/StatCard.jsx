@@ -7,10 +7,11 @@ import { Card } from 'antd'
  * @param {ReactNode} props.icon - Icon component (e.g., ArrowUpOutlined)
  * @param {string} props.label - Label text (e.g., "本月收入")
  * @param {number|string} props.value - Numeric value to display
- * @param {'income'|'expense'|'balance'} props.color - Color variant
+ * @param {'income'|'expense'|'balance'|'primary'|'info'|'warning'} props.color - Color variant
  * @param {number} [props.balance] - For 'balance' color: used to determine if positive/negative
  * @param {boolean} [props.compact=false] - Use compact/mobile layout (top border style)
- * @param {number} [props.precision=2] - Decimal precision for value display
+ * @param {string} [props.prefix='¥'] - Value prefix; pass '' for count stats
+ * @param {number} [props.precision=2] - Decimal precision for money values
  */
 export default function StatCard({
   icon: Icon,
@@ -19,6 +20,7 @@ export default function StatCard({
   color = 'income',
   balance,
   compact = false,
+  prefix = '¥',
   precision = 2,
 }) {
   const colorMap = {
@@ -37,10 +39,33 @@ export default function StatCard({
       accentColor: (balance ?? 0) >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
       borderColor: (balance ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
     },
+    primary: {
+      iconBg: 'gradient-icon--primary',
+      accentColor: 'var(--color-primary)',
+      borderColor: 'var(--color-primary)',
+    },
+    info: {
+      iconBg: 'gradient-icon--info',
+      accentColor: 'var(--color-info)',
+      borderColor: 'var(--color-info)',
+    },
+    warning: {
+      iconBg: 'gradient-icon--warning',
+      accentColor: '#d3a000',
+      borderColor: 'var(--color-warning)',
+    },
   }
 
   const resolved = colorMap[color]
-  const displayValue = typeof value === 'number' ? value.toFixed(precision) : value
+  const isMoney = prefix === '¥'
+  const num = typeof value === 'number' ? value : null
+  const displayValue = num !== null
+    ? Math.abs(num).toLocaleString('zh-CN', {
+        minimumFractionDigits: isMoney ? precision : 0,
+        maximumFractionDigits: isMoney ? precision : 0,
+      })
+    : value
+  const sign = num !== null && num < 0 ? '-' : ''
 
   /* ── Compact (mobile) variant: top border + inline stat ── */
   if (compact) {
@@ -50,7 +75,7 @@ export default function StatCard({
         className="card-base"
         style={{ borderTop: `3px solid ${resolved.borderColor}` }}
       >
-        <div style={{ textAlign: compact ? 'center' : 'left' }}>
+        <div style={{ textAlign: 'center' }}>
           <span style={{
             color: 'var(--color-text-secondary)',
             fontSize: 'var(--font-size-sm)',
@@ -61,17 +86,17 @@ export default function StatCard({
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: compact ? 'center' : 'flex-start',
+            justifyContent: 'center',
             gap: '4px',
             marginTop: '4px',
           }}>
             {Icon && <Icon style={{ fontSize: 14, color: resolved.accentColor }} />}
-            <span style={{
+            <span className="money" style={{
               color: resolved.accentColor,
               fontWeight: 'var(--font-weight-semibold)',
               fontSize: 'var(--font-size-base)',
             }}>
-              ¥{displayValue}
+              {sign}{prefix}{displayValue}
             </span>
           </div>
         </div>
@@ -86,21 +111,21 @@ export default function StatCard({
         <div className={`gradient-icon ${resolved.iconBg}`}>
           <Icon style={{ fontSize: '24px', color: '#fff' }} />
         </div>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <span style={{
             color: 'var(--color-text-secondary)',
             fontSize: 'var(--font-size-base)',
           }}>
             {label}
           </span>
-          <div style={{
+          <div className="money" style={{
             fontSize: 'var(--font-size-2xl)',
             fontWeight: 'var(--font-weight-bold)',
             color: resolved.accentColor,
             marginTop: '4px',
             letterSpacing: '-0.02em',
           }}>
-            ¥{displayValue}
+            {sign}{prefix}{displayValue}
           </div>
         </div>
       </div>

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, Space, Card, Tag, Typography, App as AntdApp } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Space, Card, Tag, Typography, Popconfirm, App as AntdApp } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { getCategoryList, addCategory, updateCategory, deleteCategory } from '../api/category'
-import SectionTitle from '../components/ui/SectionTitle'
+import PageHeader from '../components/ui/PageHeader'
 import EmptyState from '../components/ui/EmptyState'
 import SkeletonCard from '../components/ui/SkeletonCard'
 import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { formatDateTime } from '../utils/format'
 
 const { Text } = Typography
 
@@ -41,19 +42,13 @@ export default function Categories() {
   }
 
   const handleDelete = async (id) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: '删除后关联账单的分类名称将保留，确定删除？',
-      onOk: async () => {
-        const res = await deleteCategory(id)
-        if (res.code === 200) {
-          message.success('删除成功')
-          fetchList()
-        } else {
-          message.error(res.message)
-        }
-      },
-    })
+    const res = await deleteCategory(id)
+    if (res.code === 200) {
+      message.success('删除成功')
+      fetchList()
+    } else {
+      message.error(res.message)
+    }
   }
 
   const handleOk = async () => {
@@ -75,12 +70,6 @@ export default function Categories() {
 
   const columns = [
     {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 80,
-    },
-    {
       title: '名称',
       dataIndex: 'name',
       key: 'name',
@@ -99,6 +88,8 @@ export default function Categories() {
       title: '创建时间',
       dataIndex: 'createTime',
       key: 'createTime',
+      responsive: ['md'],
+      render: (text) => <Text style={{ color: 'var(--color-text-secondary)' }}>{formatDateTime(text)}</Text>,
     },
     {
       title: '操作',
@@ -110,19 +101,27 @@ export default function Categories() {
             type="link"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
-            style={{ padding: '4px 8px' }}
+            className="table-action"
           >
             编辑
           </Button>
-          <Button
-            type="link"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record.id)}
-            style={{ padding: '4px 8px' }}
+          <Popconfirm
+            title="确认删除"
+            description="删除后关联账单的分类名称将保留，确定删除？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="删除"
+            okType="danger"
+            cancelText="取消"
           >
-            删除
-          </Button>
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              className="table-action"
+            >
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -136,8 +135,9 @@ export default function Categories() {
         dataSource={list}
         columns={columns}
         rowKey="id"
-        pagination={false}
         size="middle"
+        pagination={{ pageSize: 10, hideOnSinglePage: true, showTotal: (t) => `共 ${t} 条` }}
+        scroll={{ x: 480 }}
         style={{ marginTop: 16 }}
       />
     )
@@ -145,16 +145,15 @@ export default function Categories() {
 
   return (
     <AnimatedRoute>
-      <Card
-        title={<SectionTitle title="分类管理" />}
-        extra={
+      <PageHeader
+        title="分类管理"
+        action={
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             新增分类
           </Button>
         }
-        variant="borderless"
-        className="card-base"
-      >
+      />
+      <Card variant="borderless" className="card-base">
         {renderContent()}
       </Card>
 
@@ -168,7 +167,7 @@ export default function Categories() {
         open={modalOpen}
         onOk={handleOk}
         onCancel={() => setModalOpen(false)}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" style={{ marginTop: 24 }}>
           <Form.Item name="name" label="分类名称" rules={[{ required: true, message: '分类名称不能为空' }]}>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Card, Input, Button, Avatar, Spin, App as AntdApp, Select, Empty, Checkbox, Modal } from 'antd'
+import { Card, Input, Button, Avatar, App as AntdApp, Select, Empty, Checkbox, Modal, Drawer } from 'antd'
 import {
   RobotOutlined, SendOutlined, PlusOutlined, UserOutlined,
   SearchOutlined, DeleteOutlined, EditOutlined,
@@ -9,6 +9,8 @@ import {
   listSessions, createSession, renameSession,
   deleteSession, batchDeleteSessions, getSessionMessages,
 } from '../api/ai-session'
+import AnimatedRoute from '../components/ui/AnimatedRoute'
+import useMediaQuery from '../hooks/useMediaQuery'
 
 const API_BASE = '/api/ai'
 
@@ -33,10 +35,11 @@ export default function AiChatPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
+  const isMobile = useMediaQuery('(max-width: 767px)')
 
-  // —— 侧边栏状态 ——
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // —— 侧边栏状态 ——（移动端默认收起为抽屉，桌面默认展开）
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768)
   const [keyword, setKeyword] = useState('')
   const [sort, setSort] = useState('updated')
   const [items, setItems] = useState([])
@@ -95,6 +98,7 @@ export default function AiChatPage() {
       if (data.id) {
         setSessionId(data.id)
         setMessages([])
+        if (isMobile) setSidebarOpen(false)
         if (sidebarOpen) fetchList(1)
       }
     } catch {
@@ -109,6 +113,7 @@ export default function AiChatPage() {
       const msgs = await getSessionMessages(sid)
       setSessionId(sid)
       setMessages(msgs || [])
+      if (isMobile) setSidebarOpen(false)
     } catch {
       message.error('加载对话失败')
     }
@@ -128,7 +133,7 @@ export default function AiChatPage() {
   }
 
   const handleDeleteOne = (s) => {
-    Modal.confirm({
+    modal.confirm({
       title: '删除该对话？',
       content: `「${s.title || '新对话'}」及其全部消息将被永久移除，无法恢复。`,
       okText: '删除', okType: 'danger', cancelText: '取消',
@@ -149,7 +154,7 @@ export default function AiChatPage() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
   const handleBatchDelete = () => {
-    Modal.confirm({
+    modal.confirm({
       title: `删除选中的 ${selected.length} 条对话？`,
       content: '所选对话及全部消息将被永久移除，无法恢复。',
       okText: '全部删除', okType: 'danger', cancelText: '取消',
@@ -254,17 +259,16 @@ export default function AiChatPage() {
   const renderSessionItem = (s) => {
     const active = s.id === sessionId
     const isSelected = selected.includes(s.id)
+    const itemClass = [
+      'session-item',
+      active ? 'session-item--active' : '',
+      isSelected ? 'session-item--selected' : '',
+    ].filter(Boolean).join(' ')
     return (
       <div
         key={s.id}
+        className={itemClass}
         onClick={() => batchMode ? toggleSelect(s.id) : handleOpenSession(s.id)}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-subtle)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-        style={{
-          padding: '10px 12px', marginBottom: 4, borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-          background: active ? 'var(--color-bg-subtle)' : 'transparent',
-          border: isSelected ? '1px solid var(--color-primary)' : '1px solid transparent',
-        }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {batchMode && (
@@ -290,7 +294,7 @@ export default function AiChatPage() {
             </span>
           )}
           {!batchMode && (
-            <span className="session-item-actions" style={{ display: 'none', gap: 4 }}>
+            <span className="session-item-actions">
               <Button type="text" size="small" icon={<EditOutlined />}
                       onClick={(e) => { e.stopPropagation(); setRenamingId(s.id); setRenameValue(s.title) }} />
               <Button type="text" size="small" danger icon={<DeleteOutlined />}
@@ -308,121 +312,173 @@ export default function AiChatPage() {
     )
   }
 
+  // —— 会话侧边栏内容（桌面 aside 与移动 Drawer 共用） ——
+  const sidebarContent = (
+    <>
+      <div style={{ display: 'flex', gap: 8, padding: 12, borderBottom: '1px solid var(--color-border)' }}>
+        <Button type="primary" icon={<PlusOutlined />} block onClick={handleNewSession}>新对话</Button>
+        {!isMobile && <Button icon={<MenuFoldOutlined />} onClick={() => setSidebarOpen(false)} />}
+      </div>
+
+      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <Input prefix={<SearchOutlined />} placeholder="搜索标题或内容" allowClear
+               value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Select size="small" value={sort} onChange={setSort}
+                  options={[{ value: 'updated', label: '最后更新' }, { value: 'created', label: '创建时间' }]}
+                  style={{ width: 120 }} />
+          <Button size="small" type={batchMode ? 'primary' : 'default'}
+                  onClick={() => { setBatchMode(!batchMode); setSelected([]) }}>
+            {batchMode ? '取消' : '管理'}
+          </Button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '0 8px' }}>
+        {items.length === 0 && !listLoading && (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史对话" style={{ marginTop: 40 }} />
+        )}
+        {items.map((s) => renderSessionItem(s))}
+        {hasMore && (
+          <Button block style={{ margin: 8 }} loading={listLoading}
+                  onClick={() => fetchList(page + 1, keyword, true)}>加载更多</Button>
+        )}
+      </div>
+
+      {batchMode && (
+        <div style={{ padding: 12, borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>已选 {selected.length} 条</span>
+          <Button danger icon={<DeleteOutlined />} disabled={selected.length === 0} onClick={handleBatchDelete}>删除</Button>
+        </div>
+      )}
+    </>
+  )
+
+  const pageHeight = isMobile
+    ? 'calc(100vh - var(--header-height) - 40px)'
+    : 'calc(100vh - var(--header-height) - 48px)'
+
   // —— JSX ——
   return (
-    <>
-    <style>{`
-      .session-item-actions { display: none; }
-      div:hover > .session-item-actions { display: inline-flex !important; }
-    `}</style>
-    <div style={{ height: '100vh', display: 'flex', background: 'var(--color-bg)', padding: 24, boxSizing: 'border-box', gap: 16 }}>
-      {/* ====== 左：历史会话侧边栏 ====== */}
-      {sidebarOpen && (
-        <aside style={{
-          width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column',
-          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg)', overflow: 'hidden',
-        }}>
-          <div style={{ display: 'flex', gap: 8, padding: 12, borderBottom: '1px solid var(--color-border)' }}>
-            <Button type="primary" icon={<PlusOutlined />} block onClick={handleNewSession}>新对话</Button>
-            <Button icon={<MenuFoldOutlined />} onClick={() => setSidebarOpen(false)} />
-          </div>
-
-          <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Input prefix={<SearchOutlined />} placeholder="搜索标题或内容" allowClear
-                   value={keyword} onChange={(e) => setKeyword(e.target.value)} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Select size="small" value={sort} onChange={setSort}
-                      options={[{ value: 'updated', label: '最后更新' }, { value: 'created', label: '创建时间' }]}
-                      style={{ width: 120 }} />
-              <Button size="small" type={batchMode ? 'primary' : 'default'}
-                      onClick={() => { setBatchMode(!batchMode); setSelected([]) }}>
-                {batchMode ? '取消' : '管理'}
-              </Button>
+    <AnimatedRoute>
+      <div style={{ height: pageHeight, display: 'flex', background: 'transparent', boxSizing: 'border-box', gap: 16 }}>
+        {/* ====== 左：历史会话侧边栏（桌面） / 抽屉（移动） ====== */}
+        {isMobile ? (
+          <Drawer
+            placement="left"
+            width={300}
+            open={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            title="历史对话"
+            styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' } }}
+          >
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              {sidebarContent}
             </div>
-          </div>
+          </Drawer>
+        ) : (
+          <aside style={{
+            width: sidebarOpen ? 280 : 0,
+            flexShrink: 0,
+            overflow: 'hidden',
+            opacity: sidebarOpen ? 1 : 0,
+            transition: `width var(--transition-base) ease, opacity var(--transition-base) ease`,
+          }}>
+            <div style={{
+              width: 280, height: '100%', display: 'flex', flexDirection: 'column',
+              background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+            }}>
+              {sidebarContent}
+            </div>
+          </aside>
+        )}
 
-          <div style={{ flex: 1, overflow: 'auto', padding: '0 8px' }}>
-            {items.length === 0 && !listLoading && (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史对话" style={{ marginTop: 40 }} />
+        {/* ====== 右：主对话区 ====== */}
+        <Card
+          variant="borderless"
+          className="card-base"
+          style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}
+          styles={{ body: { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 } }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottom: '1px solid var(--color-border)' }}>
+            <h2 style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--font-size-lg)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <RobotOutlined style={{ color: 'var(--color-primary)' }} />
+              AI记账助手
+            </h2>
+            {(isMobile || !sidebarOpen) && (
+              <Button
+                type="text"
+                icon={<MenuUnfoldOutlined />}
+                onClick={() => setSidebarOpen(true)}
+              />
             )}
-            {items.map((s) => renderSessionItem(s))}
-            {hasMore && (
-              <Button block style={{ margin: 8 }} loading={listLoading}
-                      onClick={() => fetchList(page + 1, keyword, true)}>加载更多</Button>
-            )}
           </div>
 
-          {batchMode && (
-            <div style={{ padding: 12, borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>已选 {selected.length} 条</span>
-              <Button danger icon={<DeleteOutlined />} disabled={selected.length === 0} onClick={handleBatchDelete}>删除</Button>
-            </div>
-          )}
-        </aside>
-      )}
-
-      {/* ====== 右：主对话区 ====== */}
-      {!sidebarOpen && (
-        <Button icon={<MenuUnfoldOutlined />} onClick={() => setSidebarOpen(true)} style={{ alignSelf: 'flex-start' }} />
-      )}
-      <Card style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', borderRadius: 'var(--radius-lg)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h2 style={{ margin: 0, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <RobotOutlined style={{ color: 'var(--color-primary)' }} />
-            AI记账助手
-          </h2>
-        </div>
-
-        <div style={{ flex: 1, overflow: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {messages.length === 0 && (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)' }}>
-              <RobotOutlined style={{ fontSize: 64, color: 'var(--color-text-tertiary)', opacity: 0.5, marginBottom: 16 }} />
-              <div style={{ fontSize: 16, marginBottom: 8, color: 'var(--color-text)' }}>你好！我是AI记账助手</div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                我可以帮你：
-                <ul style={{ textAlign: 'left', marginTop: 8, display: 'inline-block' }}>
-                  <li>回答记账和财务相关问题</li>
-                  <li>提供消费建议和预算规划</li>
-                  <li>分析你的消费习惯</li>
-                </ul>
+          <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? 16 : 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {messages.length === 0 && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)' }}>
+                <RobotOutlined style={{ fontSize: 64, color: 'var(--color-text-tertiary)', opacity: 0.5, marginBottom: 16 }} />
+                <div style={{ fontSize: 16, marginBottom: 8, color: 'var(--color-text)' }}>你好！我是AI记账助手</div>
+                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'inline-block', textAlign: 'left' }}>
+                  我可以帮你：
+                  <ul style={{ textAlign: 'left', margin: '8px 0 0', padding: '0 0 0 18px' }}>
+                    <li>回答记账和财务相关问题</li>
+                    <li>提供消费建议和预算规划</li>
+                    <li>分析你的消费习惯</li>
+                  </ul>
+                </div>
               </div>
-            </div>
-          )}
-          {messages.map((msg, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: 10 }}>
-              {msg.role === 'assistant' && (
-                <Avatar size={40} icon={<RobotOutlined />} style={{ background: 'var(--color-primary)', flexShrink: 0 }} />
-              )}
-              <div style={{
-                maxWidth: '70%', padding: '12px 16px', borderRadius: 16,
-                background: msg.role === 'user' ? 'var(--color-primary)' : 'var(--color-surface)',
-                color: msg.role === 'user' ? 'var(--color-text-inverse)' : 'var(--color-text)',
-                fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                boxShadow: 'var(--shadow-sm)',
-              }}>
-                {msg.content || (msg.streaming ? <Spin size="small" /> : '')}
-              </div>
-              {msg.role === 'user' && (
-                <Avatar size={40} icon={<UserOutlined />} style={{ background: 'var(--color-text-secondary)', flexShrink: 0 }} />
-              )}
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+            )}
+            {messages.map((msg, i) => {
+              const isUser = msg.role === 'user'
+              const typing = !isUser && msg.streaming && !msg.content
+              return (
+                <div key={i} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', gap: 10 }}>
+                  {!isUser && (
+                    <Avatar size={40} icon={<RobotOutlined />} style={{ background: 'var(--color-primary)', flexShrink: 0 }} />
+                  )}
+                  <div style={{
+                    maxWidth: isMobile ? '85%' : '70%', padding: '12px 16px',
+                    borderRadius: isUser
+                      ? 'var(--radius-2xl) var(--radius-2xl) 4px var(--radius-2xl)'
+                      : 'var(--radius-2xl) var(--radius-2xl) var(--radius-2xl) 4px',
+                    background: isUser ? 'var(--gradient-primary)' : 'var(--color-surface)',
+                    border: isUser ? 'none' : '1px solid var(--color-border)',
+                    color: isUser ? 'var(--color-text-inverse)' : 'var(--color-text)',
+                    fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    boxShadow: 'var(--shadow-sm)',
+                  }}>
+                    {typing ? (
+                      <span className="chat-typing"><i /><i /><i /></span>
+                    ) : (
+                      <>
+                        {msg.content}
+                        {msg.streaming && <span className="chat-cursor" />}
+                      </>
+                    )}
+                  </div>
+                  {isUser && (
+                    <Avatar size={40} icon={<UserOutlined />} style={{ background: 'var(--color-text-secondary)', flexShrink: 0 }} />
+                  )}
+                </div>
+              )
+            })}
+            <div ref={messagesEndRef} />
+          </div>
 
-        <div style={{ padding: 16, borderTop: '1px solid var(--color-border)', display: 'flex', gap: 12 }}>
-          <Input
-            value={input} onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-            placeholder="输入你的问题..." size="large" disabled={loading}
-          />
-          <Button type="primary" size="large" icon={<SendOutlined />}
-                  onClick={sendMessage} loading={loading} disabled={!input.trim()}
-                  style={{ minWidth: 80 }}>发送</Button>
-        </div>
-      </Card>
-    </div>
-    </>
+          <div style={{ padding: 16, borderTop: '1px solid var(--color-border)', display: 'flex', gap: 12 }}>
+            <Input
+              value={input} onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+              placeholder="输入你的问题..." size="large" disabled={loading}
+            />
+            <Button type="primary" size="large" icon={<SendOutlined />}
+                    onClick={sendMessage} loading={loading} disabled={!input.trim()}
+                    style={{ minWidth: 80 }}>发送</Button>
+          </div>
+        </Card>
+      </div>
+    </AnimatedRoute>
   )
 }

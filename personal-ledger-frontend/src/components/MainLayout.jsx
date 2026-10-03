@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Layout, Menu, Avatar, Dropdown, Button, theme, Drawer, Typography, Modal, Form, Input, Select, InputNumber, DatePicker, Space, App as AntdApp } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Button, theme, Drawer, Typography, Modal, Form, Input, Select, InputNumber, DatePicker, Tabs, App as AntdApp } from 'antd'
 import {
-  DashboardOutlined,
   BookOutlined,
   AppstoreOutlined,
   UserOutlined,
@@ -18,18 +17,21 @@ import {
   HomeOutlined,
   PlusCircleOutlined,
   LineChartOutlined,
+  ArrowUpOutlined,
+  ArrowDownOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import AiChatDrawer from './AiChatDrawer'
 import { getCategoryList } from '../api/category'
 import { addRecord } from '../api/record'
+import useMediaQuery from '../hooks/useMediaQuery'
 import dayjs from 'dayjs'
 
 const { Header, Sider, Content } = Layout
 const { Text } = Typography
 
 const menuItems = [
+  { key: '/dashboard', icon: <LineChartOutlined />, label: '数据概览' },
   { key: '/records',   icon: <BookOutlined />,      label: '账单管理' },
   { key: '/categories', icon: <AppstoreOutlined />,  label: '分类管理' },
   { key: '/ai-chat',   icon: <RobotOutlined />,     label: 'AI助手' },
@@ -58,11 +60,12 @@ const breadcrumbMap = {
 export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const isMobile = useMediaQuery('(max-width: 767px)')
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [categories, setCategories] = useState([])
   const [form] = Form.useForm()
   const [addLoading, setAddLoading] = useState(false)
+  const [quickType, setQuickType] = useState('0')
   const navigate = useNavigate()
   const location = useLocation()
   const { user, fetchUserInfo, logout } = useAuth()
@@ -74,6 +77,11 @@ export default function MainLayout() {
       if (res.code === 200) setCategories(res.data)
     })
   }, [])
+
+  // 切换到桌面端时收起移动端抽屉
+  useEffect(() => {
+    if (!isMobile) setDrawerOpen(false)
+  }, [isMobile])
 
   const handleQuickAdd = async () => {
     try {
@@ -88,6 +96,7 @@ export default function MainLayout() {
         message.success('记账成功')
         setAddModalOpen(false)
         form.resetFields()
+        setQuickType('0')
         window.dispatchEvent(new CustomEvent('record-added'))
       } else {
         message.error(res.message)
@@ -101,15 +110,6 @@ export default function MainLayout() {
 
   useEffect(() => {
     fetchUserInfo()
-
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768
-      setIsMobile(mobile)
-      if (!mobile) setDrawerOpen(false)
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
   const handleLogout = () => {
@@ -150,23 +150,22 @@ export default function MainLayout() {
     return breadcrumbMap[location.pathname] || ''
   }, [location.pathname])
 
+  const quickCategories = categories.filter(c => c.type === Number(quickType))
+
   const siderContent = (
     <>
       <div style={{
-        height: 64,
+        height: 'var(--header-height)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: isMobile ? 'center' : 'flex-start',
         padding: isMobile ? '0' : '0 24px',
         borderBottom: '1px solid var(--color-border)',
       }}>
-        <div className="gradient-icon--primary" style={{
+        <div className="gradient-icon gradient-icon--primary" style={{
           width: 36,
           height: 36,
           borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
           marginRight: collapsed || isMobile ? '0' : '12px',
         }}>
           <WalletOutlined style={{ fontSize: 18, color: '#fff' }} />
@@ -188,14 +187,13 @@ export default function MainLayout() {
           icon={<PlusCircleOutlined />}
           block
           size="large"
-          collapsed={collapsed}
           onClick={() => setAddModalOpen(true)}
           style={{
             height: 48,
             fontSize: 16,
             fontWeight: 600,
-            borderRadius: 12,
-            boxShadow: '0 4px 12px rgba(26, 26, 46, 0.25)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-primary)',
           }}
         >
           {collapsed ? '' : '快速记账'}
@@ -256,10 +254,10 @@ export default function MainLayout() {
           justifyContent: 'space-between',
           alignItems: 'center',
           borderBottom: '1px solid var(--color-border)',
-          height: 64,
+          height: 'var(--header-height)',
           position: 'sticky',
           top: 0,
-          zIndex: 100,
+          zIndex: 'var(--z-sticky)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {isMobile ? (
@@ -309,16 +307,19 @@ export default function MainLayout() {
             </Button>
           </Dropdown>
         </Header>
-        <Content style={{
-          margin: isMobile ? '16px' : '24px auto',
-          padding: 0,
-          width: '100%',
-          maxWidth: 1200,
-        }}>
+        <Content
+          className="page-container"
+          style={{
+            margin: isMobile ? '16px 0 24px' : '24px auto',
+            padding: isMobile ? '0 16px' : '0 24px',
+            width: '100%',
+            maxWidth: 'calc(var(--content-max-width) + 48px)',
+            boxSizing: 'border-box',
+          }}
+        >
           <Outlet />
         </Content>
       </Layout>
-      <AiChatDrawer open={location.pathname === '/ai-chat'} />
 
       {/* 浮动记账按钮 - 仅移动端显示 */}
       {isMobile && (
@@ -326,17 +327,17 @@ export default function MainLayout() {
           onClick={() => setAddModalOpen(true)}
           style={{
             position: 'fixed',
-            bottom: 80,
+            bottom: 24,
             right: 20,
             width: 56,
             height: 56,
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+            background: 'var(--gradient-primary)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(26, 26, 46, 0.4)',
-            zIndex: 999,
+            boxShadow: 'var(--shadow-fab)',
+            zIndex: 'var(--z-fab)',
             cursor: 'pointer',
           }}
         >
@@ -344,25 +345,30 @@ export default function MainLayout() {
         </div>
       )}
 
-      {/* 快速记账弹窗 */}
+      {/* 快速记账弹窗（与账单管理页的记账表单保持一致的结构） */}
       <Modal
         title="快速记账"
         open={addModalOpen}
         onOk={handleQuickAdd}
-        onCancel={() => { setAddModalOpen(false); form.resetFields() }}
+        onCancel={() => { setAddModalOpen(false); form.resetFields(); setQuickType('0') }}
         confirmLoading={addLoading}
         okText="保存"
         cancelText="取消"
         width={480}
       >
+        <Tabs
+          activeKey={quickType}
+          onChange={(k) => { setQuickType(k); form.setFieldValue('categoryId', undefined) }}
+          items={[
+            { key: '0', label: <span><ArrowUpOutlined style={{ color: 'var(--color-expense)' }} /> 支出</span> },
+            { key: '1', label: <span><ArrowDownOutlined style={{ color: 'var(--color-income)' }} /> 收入</span> },
+          ]}
+          style={{ marginBottom: 8 }}
+        />
         <Form form={form} layout="vertical" initialValues={{ recordDate: dayjs() }}>
           <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
             <Select placeholder="选择分类">
-              {categories.filter(c => c.type === 0).map(c => (
-                <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
-              ))}
-              <Select.Option disabled label="收入" />
-              {categories.filter(c => c.type === 1).map(c => (
+              {quickCategories.map(c => (
                 <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
               ))}
             </Select>

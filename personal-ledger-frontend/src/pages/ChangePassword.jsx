@@ -1,5 +1,6 @@
 import { Form, Input, Button, Card, Typography, App as AntdApp } from 'antd'
-import { LockOutlined, SaveOutlined } from '@ant-design/icons'
+import { LockOutlined, SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { Link } from 'react-router-dom'
 import { updatePassword } from '../api/user'
 import AnimatedRoute from '../components/ui/AnimatedRoute'
 
@@ -118,6 +119,12 @@ export default function ChangePassword() {
             </Form.Item>
           </Form>
         </Card>
+        <div style={{ textAlign: 'center', marginTop: 'var(--space-lg)' }}>
+          <Link to="/user-info" style={{ color: 'var(--color-text-secondary)' }}>
+            <ArrowLeftOutlined style={{ marginRight: 6 }} />
+            返回个人信息
+          </Link>
+        </div>
       </div>
     </AnimatedRoute>
   )

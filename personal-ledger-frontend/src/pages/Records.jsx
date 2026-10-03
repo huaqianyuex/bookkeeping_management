@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react'
-import { Row, Col, Table, Button, Form, Input, Select, InputNumber, DatePicker, Space, Card, Tag, Typography, Tabs, Modal, App as AntdApp } from 'antd'
+import { useState, useEffect, useRef } from 'react'
+import { Row, Col, Table, Button, Form, Input, Select, InputNumber, DatePicker, Space, Card, Tag, Typography, Tabs, Popconfirm, App as AntdApp } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { getRecordPage, addRecord, updateRecord, deleteRecord } from '../api/record'
 import { getCategoryList } from '../api/category'
 import EmptyState from '../components/ui/EmptyState'
+import Money from '../components/ui/Money'
+import PageHeader from '../components/ui/PageHeader'
 import SkeletonCard from '../components/ui/SkeletonCard'
 import AnimatedRoute from '../components/ui/AnimatedRoute'
+import useMediaQuery from '../hooks/useMediaQuery'
 
 const { Text } = Typography
 
@@ -18,16 +21,13 @@ export default function Records() {
   const [addForm] = Form.useForm()
   const [searchForm] = Form.useForm()
   const [query, setQuery] = useState({ page: 1, size: 10 })
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const isMobile = useMediaQuery('(max-width: 767px)')
   const [activeType, setActiveType] = useState('0')
   const [addLoading, setAddLoading] = useState(false)
+  const [highlight, setHighlight] = useState(false)
+  const formCardRef = useRef(null)
+  const highlightTimer = useRef(null)
   const { message } = AntdApp.useApp()
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   const fetchCategories = async () => {
     const res = await getCategoryList()
@@ -42,6 +42,8 @@ export default function Records() {
   }
 
   useEffect(() => { fetchCategories(); fetchData() }, [])
+
+  useEffect(() => () => clearTimeout(highlightTimer.current), [])
 
   const handleQuickAdd = async () => {
     try {
@@ -103,22 +105,21 @@ export default function Records() {
       remark: record.remark,
       recordDate: dayjs(record.recordDate),
     })
+    // 滚动定位到表单卡并短暂高亮，让"编辑"有着落点
+    formCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setHighlight(true)
+    clearTimeout(highlightTimer.current)
+    highlightTimer.current = setTimeout(() => setHighlight(false), 1600)
   }
 
   const handleDelete = async (id) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该账单记录吗？',
-      onOk: async () => {
-        const res = await deleteRecord(id)
-        if (res.code === 200) {
-          message.success('删除成功')
-          fetchData(query)
-        } else {
-          message.error(res.message)
-        }
-      },
-    })
+    const res = await deleteRecord(id)
+    if (res.code === 200) {
+      message.success('删除成功')
+      fetchData(query)
+    } else {
+      message.error(res.message)
+    }
   }
 
   const handleCancelEdit = () => {
@@ -160,18 +161,16 @@ export default function Records() {
       title: '金额',
       dataIndex: 'amount',
       key: 'amount',
-      width: 120,
+      width: 130,
       render: (v, r) => (
-        <Text strong style={{ color: r.categoryType === 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
-          {r.categoryType === 0 ? '-' : '+'}¥{Number(v).toFixed(2)}
-        </Text>
+        <Money value={v} categoryType={r.categoryType} signed />
       ),
     },
     {
       title: '备注',
       dataIndex: 'remark',
-      key: 'remark',
       responsive: ['lg'],
+      ellipsis: true,
     },
     {
       title: '操作',
@@ -180,12 +179,21 @@ export default function Records() {
       responsive: ['md'],
       render: (_, record) => (
         <Space>
-          <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)} style={{ padding: '4px 8px' }}>
+          <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)} className="table-action">
             编辑
           </Button>
-          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} style={{ padding: '4px 8px' }}>
-            删除
-          </Button>
+          <Popconfirm
+            title="确认删除"
+            description="删除后无法恢复，确定删除该账单？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="删除"
+            okType="danger"
+            cancelText="取消"
+          >
+            <Button type="link" danger icon={<DeleteOutlined />} className="table-action">
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -193,25 +201,21 @@ export default function Records() {
 
   return (
     <AnimatedRoute>
+      <PageHeader title="账单管理" />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* 记账区域 - 核心 */}
+        <div ref={formCardRef}>
         <Card
-          style={{
-            borderRadius: 16,
-            border: 'none',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-          }}
+          variant="borderless"
+          className="card-base"
+          style={highlight ? { boxShadow: '0 0 0 3px rgba(26, 26, 46, 0.35), var(--shadow-md)', transition: 'box-shadow var(--transition-base)' } : { transition: 'box-shadow var(--transition-base)' }}
           styles={{ body: { padding: isMobile ? 20 : 28 } }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <div style={{
+            <div className="gradient-icon gradient-icon--primary" style={{
               width: 36,
               height: 36,
-              borderRadius: 10,
-              background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              borderRadius: 'var(--radius-md)',
             }}>
               <PlusOutlined style={{ color: '#fff', fontSize: 16 }} />
             </div>
@@ -222,8 +226,8 @@ export default function Records() {
             activeKey={activeType}
             onChange={setActiveType}
             items={[
-              { key: '0', label: <span><ArrowUpOutlined style={{ color: '#e94560' }} /> 支出</span> },
-              { key: '1', label: <span><ArrowDownOutlined style={{ color: '#00b894' }} /> 收入</span> },
+              { key: '0', label: <span><ArrowUpOutlined style={{ color: 'var(--color-expense)' }} /> 支出</span> },
+              { key: '1', label: <span><ArrowDownOutlined style={{ color: 'var(--color-income)' }} /> 收入</span> },
             ]}
             style={{ marginBottom: 16 }}
           />
@@ -286,7 +290,7 @@ export default function Records() {
                         flex: 1,
                         height: 44,
                         fontWeight: 600,
-                        borderRadius: 10,
+                        borderRadius: 'var(--radius-md)',
                       }}
                     >
                       {editing ? '保存修改' : '记一笔'}
@@ -297,6 +301,7 @@ export default function Records() {
             </Row>
           </Form>
         </Card>
+        </div>
 
         {/* 账单列表 */}
         <Card
@@ -306,11 +311,8 @@ export default function Records() {
               共 {data.total} 条记录
             </Text>
           }
-          style={{
-            borderRadius: 16,
-            border: 'none',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-          }}
+          variant="borderless"
+          className="card-base"
           styles={{ body: { padding: isMobile ? 16 : 24 } }}
         >
           {/* 搜索 */}

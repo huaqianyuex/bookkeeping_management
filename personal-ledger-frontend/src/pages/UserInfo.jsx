@@ -1,10 +1,11 @@
-import { Descriptions, Card, Button, Typography, Avatar, Form, Input, Upload, App as AntdApp } from 'antd'
+import { Descriptions, Card, Button, Typography, Avatar, Form, Input, Upload, Skeleton, App as AntdApp } from 'antd'
 import { UserOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { updateUserInfo, uploadAvatar } from '../api/user'
 import SectionTitle from '../components/ui/SectionTitle'
 import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { formatDateTime } from '../utils/format'
 
 const { Title, Text } = Typography
 const USERNAME_REGEX = /^[A-Za-z0-9\u4e00-\u9fa5]{2,20}$/
@@ -16,7 +17,21 @@ export default function UserInfo() {
   const [form] = Form.useForm()
   const { message } = AntdApp.useApp()
 
-  if (!user) return null
+  // 会话恢复期间展示骨架屏，避免白屏
+  if (!user) {
+    return (
+      <AnimatedRoute>
+        <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
+          <Card variant="borderless" className="card-base">
+            <Skeleton avatar active paragraph={{ rows: 0 }} style={{ width: '100%' }} />
+          </Card>
+          <Card variant="borderless" className="card-base">
+            <Skeleton active paragraph={{ rows: 2 }} />
+          </Card>
+        </div>
+      </AnimatedRoute>
+    )
+  }
 
   const avatarSrc = user.avatar || undefined
 
@@ -97,8 +112,11 @@ export default function UserInfo() {
               customRequest={customUpload}
               accept=".jpg,.jpeg,.png,image/jpeg,image/png"
             >
-              <Button icon={<UploadOutlined />}>上传头像（JPG/PNG，≤2MB）</Button>
+              <Button icon={<UploadOutlined />}>上传头像</Button>
             </Upload>
+            <Text style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-sm)' }}>
+              支持 JPG/PNG 格式，不超过 2MB
+            </Text>
             <Title level={3} style={{ margin: 0, color: 'var(--color-text)' }}>
               {user.username}
             </Title>
@@ -148,9 +166,9 @@ export default function UserInfo() {
         >
           <Descriptions
             column={1}
-            variant="bordered"
             size="middle"
             style={{ marginTop: 16 }}
+            labelStyle={{ color: 'var(--color-text-secondary)' }}
           >
             <Descriptions.Item label="用户ID">
               <Text>{user.id}</Text>
@@ -159,18 +177,17 @@ export default function UserInfo() {
               <Text strong>{user.username}</Text>
             </Descriptions.Item>
             <Descriptions.Item label="创建时间">
-              <Text>{user.created_at || '-'}</Text>
+              <Text>{formatDateTime(user.created_at)}</Text>
             </Descriptions.Item>
             <Descriptions.Item label="更新时间">
-              <Text>{user.updated_at || '-'}</Text>
+              <Text>{formatDateTime(user.updated_at)}</Text>
             </Descriptions.Item>
           </Descriptions>
-          <div style={{ textAlign: 'center', marginTop: 32 }}>
+          <div style={{ marginTop: 'var(--space-xl)' }}>
             <Button
               type="primary"
               icon={<EditOutlined />}
               onClick={() => navigate('/change-password')}
-              style={{ height: 44, padding: '0 32px' }}
             >
               修改密码
             </Button>

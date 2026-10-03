@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Card, Modal, Form, Input, Select, Tag, Space, Popconfirm, App as AntdApp } from 'antd'
+import { Table, Button, Card, Modal, Form, Input, Select, Tag, Space, Popconfirm, Typography, App as AntdApp } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined, SyncOutlined } from '@ant-design/icons'
 import { listFaq, createFaq, updateFaq, deleteFaq, rebuildFaqIndex } from '../api/faq'
-import SectionTitle from '../components/ui/SectionTitle'
-import EmptyState from '../components/ui/EmptyState'
-import SkeletonCard from '../components/ui/SkeletonCard'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar } from '../components/ui'
 
 const { TextArea } = Input
+const { Text } = Typography
 
 const CATEGORY_OPTIONS = ['记账操作', '账单查询', '统计分析', '预算管理', '其他']
 
@@ -81,7 +79,7 @@ export default function AdminFaq() {
   }
 
   const columns = [
-    { title: 'ID', dataIndex: 'id', key: 'id', width: 70 },
+    { title: 'ID', dataIndex: 'id', key: 'id', width: 70, responsive: ['md'] },
     {
       title: '问题',
       dataIndex: 'question',
@@ -93,13 +91,16 @@ export default function AdminFaq() {
       dataIndex: 'answer',
       key: 'answer',
       ellipsis: true,
+      responsive: ['md'],
     },
     {
       title: '分类',
       dataIndex: 'category',
       key: 'category',
       width: 120,
-      render: (text) => <Tag color="blue">{text}</Tag>,
+      render: (text) => (
+        <Tag style={{ color: 'var(--color-primary)', backgroundColor: 'var(--color-primary-bg)' }}>{text}</Tag>
+      ),
     },
     {
       title: '操作',
@@ -107,17 +108,18 @@ export default function AdminFaq() {
       width: 150,
       render: (_, record) => (
         <Space>
-          <Button type="link" icon={<EditOutlined />} style={{ padding: '4px 8px' }} onClick={() => openEdit(record)}>
+          <Button type="link" icon={<EditOutlined />} className="table-action" onClick={() => openEdit(record)}>
             编辑
           </Button>
           <Popconfirm
             title="确认删除"
             description="删除后需重建索引才会从 AI 检索中移除"
             onConfirm={() => handleDelete(record.id)}
-            okText="确认"
+            okText="删除"
+            okType="danger"
             cancelText="取消"
           >
-            <Button type="link" danger icon={<DeleteOutlined />} style={{ padding: '4px 8px' }}>
+            <Button type="link" danger icon={<DeleteOutlined />} className="table-action">
               删除
             </Button>
           </Popconfirm>
@@ -135,26 +137,32 @@ export default function AdminFaq() {
         columns={columns}
         rowKey="id"
         size="middle"
-        pagination={false}
+        pagination={{ pageSize: 10, hideOnSinglePage: true, showTotal: (t) => `共 ${t} 条` }}
+        scroll={{ x: 640 }}
       />
     )
   }
 
   return (
     <AnimatedRoute>
+      <PageHeader title="FAQ 管理" />
       <Card
-        title={<SectionTitle title="FAQ 管理" />}
         variant="borderless"
         className="card-base"
       >
-        <div style={{ marginBottom: 24, display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+        <ListToolbar>
           <Space>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增 FAQ</Button>
-            <Button icon={<SyncOutlined spin={rebuilding} />} loading={rebuilding} onClick={handleRebuild}>
+            <Button icon={<SyncOutlined />} loading={rebuilding} onClick={handleRebuild}>
               重建向量索引
             </Button>
           </Space>
-        </div>
+          {data.length > 0 && (
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
+              共 {data.length} 条
+            </Text>
+          )}
+        </ListToolbar>
 
         {renderContent()}
 
