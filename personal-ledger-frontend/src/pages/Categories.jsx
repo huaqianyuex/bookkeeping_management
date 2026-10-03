@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Space, Card, Tag, Typography, Popconfirm, App as AntdApp } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { getCategoryList, addCategory, updateCategory, deleteCategory } from '../api/category'
-import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute } from '../components/ui'
+import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute } from '../components/ui'
 import { formatDateTime } from '../utils/format'
+import { extractErrorMessage } from '../utils/error'
 
 const { Text } = Typography
 
 export default function Categories() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form] = Form.useForm()
@@ -17,11 +19,19 @@ export default function Categories() {
 
   const fetchList = async () => {
     setLoading(true)
-    const res = await getCategoryList()
-    if (res.code === 200) {
-      setList(res.data)
+    setError(null)
+    try {
+      const res = await getCategoryList()
+      if (res.code === 200) {
+        setList(res.data)
+      } else {
+        setError(res.message || '分类加载失败')
+      }
+    } catch (e) {
+      setError(extractErrorMessage(e))
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => { fetchList() }, [])
@@ -126,6 +136,7 @@ export default function Categories() {
 
   const renderContent = () => {
     if (loading) return <SkeletonCard type="table" rows={5} />
+    if (error) return <ErrorState description={error} onRetry={fetchList} />
     if (list.length === 0) return <EmptyState title="暂无分类" description="点击右上角「新增分类」开始添加" />
     return (
       <Table

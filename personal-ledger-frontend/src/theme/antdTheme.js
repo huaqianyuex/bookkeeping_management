@@ -1,26 +1,13 @@
 /**
- * antd 主题 — 与 src/styles/design-tokens.css 为同一色板的两处映射。
- * antd token 无法读取 CSS 变量，故此处以字面量维护；改色请两处同步。
+ * antd 主题配置
+ *
+ * 色板字面量集中在 ./palette.js，本文件只做映射，不再持有颜色字面量。
+ * 之所以需要这一层：antd 的 theme token 不支持 CSS 变量，只能接收 JS 值。
+ * 运行时 CSS 侧的 --color-* 由 palette.js 的 applyPalette() 写入 :root，
+ * 因此 JS 主题与 CSS 变量由同一份 palette 派生，天然不会漂移。
  */
 
-export const palette = {
-  primary: '#1a1a2e',
-  primaryDeep: '#16213e',
-  primaryBg: '#f0f0ff',
-  success: '#00b894',
-  danger: '#e94560',
-  warning: '#feca57',
-  info: '#54a0ff',
-  bg: '#f5f5f7',
-  bgSubtle: '#fafafa',
-  surface: '#ffffff',
-  text: '#1a1a2e',
-  textSecondary: '#636e72',
-  textTertiary: '#a0a0a8',
-  textDisabled: '#b2bec3',
-  border: '#e5e5ea',
-  borderSecondary: '#eaeaef',
-}
+import { palette, withAlpha } from './palette'
 
 export const antdTheme = {
   token: {
@@ -48,7 +35,7 @@ export const antdTheme = {
       itemActiveBg: palette.primaryBg,
       itemSelectedBg: palette.primaryBg,
       itemSelectedColor: palette.primary,
-      itemHoverBg: '#f8f8fa',
+      itemHoverBg: palette.bgSubtle,
       itemColor: palette.textSecondary,
       itemBorderRadius: 8,
       itemMarginInline: 8,
@@ -59,16 +46,16 @@ export const antdTheme = {
       borderRadiusLG: 12,
     },
     Button: {
-      primaryShadow: '0 2px 8px rgba(26, 26, 46, 0.2)',
+      primaryShadow: `0 2px 8px ${withAlpha(palette.primary, 0.2)}`,
     },
     Input: {
       activeBorderColor: palette.primary,
       hoverBorderColor: palette.textSecondary,
     },
     Table: {
-      headerBg: '#fafafa',
+      headerBg: palette.bg,
       headerColor: palette.textSecondary,
-      rowHoverBg: '#f8f8fa',
+      rowHoverBg: palette.bgSubtle,
     },
     Tag: {
       borderRadiusSM: 6,

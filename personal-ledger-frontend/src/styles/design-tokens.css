@@ -1,63 +1,28 @@
 /* ============================================================
    Design Tokens - Personal Ledger App
-   Modern, clean, professional aesthetic (Linear/Vercel-inspired)
-   与 src/theme/antdTheme.js 为同一色板的两处映射，改色请两处同步
+   Slate Cyan & Teal — Low-saturation, high-trust finance aesthetic
+
+   颜色：唯一来源 src/theme/palette.js（运行时注入 :root），本文件不含颜色字面量。
+   尺寸/圆角/阴影/字号/动效/z-index/布局常量：定义在本文件 :root。
    ============================================================ */
 
 :root {
-  /* ── Color Palette ── */
-  /* Primary - Deep navy */
-  --color-primary: #1a1a2e;
-  --color-primary-deep: #16213e;
-  --color-primary-light: #2d3748;
-  --color-primary-bg: #f0f0ff;
-  --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-deep) 100%);
-
-  /* Success / Income */
-  --color-success: #00b894;
-  --color-success-light: #00cec9;
-  --color-success-bg: rgba(0, 184, 148, 0.08);
-
-  /* Danger / Expense */
-  --color-danger: #e94560;
-  --color-danger-light: #ff6b6b;
-  --color-danger-bg: rgba(233, 69, 96, 0.08);
-
-  /* Semantic aliases for ledger amounts */
+  /* ── Color Palette ──
+   *
+   * ⚠ 颜色字面量不在本文件。唯一色板来源是 src/theme/palette.js，
+   *   由其中的 applyPalette() 在运行时把这些变量写入 :root。
+   *   改色请改 palette.js —— 改这里不会生效。
+   *
+   *   本节仅保留由其他变量推导的别名，因此不存在第二份真值。
+   */
+  /* 账本语义别名：收入 = 成功色，支出 = 危险色 */
   --color-income: var(--color-success);
   --color-expense: var(--color-danger);
 
-  /* Warning */
-  --color-warning: #feca57;
-  --color-warning-light: #ffd32a;
-  --color-warning-bg: rgba(254, 202, 87, 0.08);
+  /* 主色渐变 */
+  --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-deep) 100%);
 
-  /* Info */
-  --color-info: #54a0ff;
-  --color-info-light: #74b9ff;
-  --color-info-bg: rgba(84, 160, 255, 0.08);
-
-  /* Background layers */
-  --color-bg: #f5f5f7;
-  --color-bg-subtle: #fafafa;
-
-  /* Surface (cards, panels) */
-  --color-surface: #ffffff;
-  --color-surface-elevated: #ffffff;
-
-  /* Text hierarchy */
-  --color-text: #1a1a2e;
-  --color-text-secondary: #636e72;
-  --color-text-tertiary: #a0a0a8;
-  --color-text-inverse: #ffffff;
-  --color-text-disabled: #c0c0c8;
-
-  /* Border */
-  --color-border: #e5e5ea;
-  --color-border-secondary: #eaeaef;
-  --color-border-focus: #1a1a2e;
-
-  /* ── Spacing Scale ── */
+  /* ── Spacing Scale (8pt grid) ── */
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
@@ -77,18 +42,18 @@
   --radius-full: 9999px;
 
   /* ── Shadows ── */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.07), 0 2px 8px rgba(15, 23, 42, 0.03);
+  --shadow-xl: 0 16px 48px rgba(15, 23, 42, 0.09), 0 4px 12px rgba(15, 23, 42, 0.03);
 
   /* Sider shadow */
-  --shadow-sider: 2px 0 8px rgba(0, 0, 0, 0.03);
+  --shadow-sider: 2px 0 8px rgba(15, 23, 42, 0.03);
 
   /* Primary button / FAB shadows */
-  --shadow-primary: 0 4px 12px rgba(26, 26, 46, 0.25);
-  --shadow-fab: 0 6px 16px rgba(26, 26, 46, 0.35);
+  --shadow-primary: 0 4px 12px rgba(22, 78, 99, 0.22);
+  --shadow-fab: 0 6px 16px rgba(22, 78, 99, 0.32);
 
   /* ── Typography ── */
   --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -159,6 +124,418 @@ button:focus-visible,
   border-radius: var(--radius-sm);
 }
 
+/* ============================================================
+   Layout Primitives — CSS Grid & Flexbox
+   All sizing follows the 8pt grid above.
+   ============================================================ */
+
+/* ── Flex Utilities ── */
+.flex         { display: flex; }
+.flex-col     { display: flex; flex-direction: column; }
+.flex-center  { display: flex; align-items: center; justify-content: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-start   { display: flex; align-items: center; justify-content: flex-start; }
+.flex-wrap    { flex-wrap: wrap; }
+.flex-1       { flex: 1; min-width: 0; }
+.shrink-0     { flex-shrink: 0; }
+.items-start  { align-items: flex-start; }
+.items-end    { align-items: flex-end; }
+
+/* ── CSS Grid Layout Primitives ── */
+
+/* KPI 统计行：手机 3 列等宽紧凑；桌面 3 列宽松 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-xl);
+  margin-bottom: var(--space-xl);
+}
+
+/* 通用双列网格 */
+.col-2-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-xl);
+}
+
+/* 7:3 内容–辅助布局（趋势图 + 环形图） */
+.col-7-3-grid {
+  display: grid;
+  grid-template-columns: 7fr 3fr;
+  gap: var(--space-xl);
+}
+
+/* 自适应卡片网格（最小列宽 260px，自动换行） */
+.auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-xl);
+}
+
+/* ── Gap Tokens ── */
+.gap-xs   { gap: var(--space-xs); }
+.gap-sm   { gap: var(--space-sm); }
+.gap-md   { gap: var(--space-md); }
+.gap-base { gap: var(--space-base); }
+.gap-lg   { gap: var(--space-lg); }
+.gap-xl   { gap: var(--space-xl); }
+.gap-2xl  { gap: var(--space-2xl); }
+
+/* ── Margin Helpers ── */
+.mt-xs   { margin-top: var(--space-xs); }
+.mt-sm   { margin-top: var(--space-sm); }
+.mt-base { margin-top: var(--space-base); }
+.mt-lg   { margin-top: var(--space-lg); }
+.mt-xl   { margin-top: var(--space-xl); }
+.mt-2xl  { margin-top: var(--space-2xl); }
+
+.mb-xs   { margin-bottom: var(--space-xs); }
+.mb-sm   { margin-bottom: var(--space-sm); }
+.mb-base { margin-bottom: var(--space-base); }
+.mb-lg   { margin-bottom: var(--space-lg); }
+.mb-xl   { margin-bottom: var(--space-xl); }
+.mb-2xl  { margin-bottom: var(--space-2xl); }
+
+/* ── Card Variants ── */
+
+/* 基础卡片：细描边 + 柔和阴影，hover 提升层次 */
+.card-base {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  background-color: var(--color-surface);
+  transition: box-shadow var(--transition-base), border-color var(--transition-base);
+}
+.card-base:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* 浮起卡片：更强阴影，用于高亮/特色内容 */
+.card-elevated {
+  box-shadow: var(--shadow-md);
+}
+.card-elevated:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+/* 左侧语义色边框卡片 */
+.card-accent-income  { border-left: 3px solid var(--color-success); }
+.card-accent-expense { border-left: 3px solid var(--color-danger); }
+.card-accent-primary { border-left: 3px solid var(--color-primary); }
+.card-accent-info    { border-left: 3px solid var(--color-info); }
+
+/* ── Typography ── */
+/* 账本式金额排版：等宽数字，多行金额纵向对齐 */
+.money {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.01em;
+}
+
+.text-primary   { color: var(--color-text); }
+.text-secondary { color: var(--color-text-secondary); }
+.text-tertiary  { color: var(--color-text-tertiary); }
+.text-success   { color: var(--color-success); }
+.text-danger    { color: var(--color-danger); }
+.text-info      { color: var(--color-info); }
+.text-warning   { color: var(--color-warning); }
+
+.text-xs   { font-size: var(--font-size-xs); }
+.text-sm   { font-size: var(--font-size-sm); }
+.text-base { font-size: var(--font-size-base); }
+.text-md   { font-size: var(--font-size-md); }
+.text-lg   { font-size: var(--font-size-lg); }
+.text-xl   { font-size: var(--font-size-xl); }
+.text-2xl  { font-size: var(--font-size-2xl); }
+
+.font-normal   { font-weight: var(--font-weight-normal); }
+.font-medium   { font-weight: var(--font-weight-medium); }
+.font-semibold { font-weight: var(--font-weight-semibold); }
+.font-bold     { font-weight: var(--font-weight-bold); }
+
+.leading-tight   { line-height: var(--line-height-tight); }
+.leading-base    { line-height: var(--line-height-base); }
+.leading-relaxed { line-height: var(--line-height-relaxed); }
+
+.tracking-tight { letter-spacing: -0.02em; }
+.tracking-wide  { letter-spacing: 0.05em; }
+.truncate       { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Surface & Background ── */
+.bg-page    { background-color: var(--color-bg); }
+.bg-subtle  { background-color: var(--color-bg-subtle); }
+.bg-surface { background-color: var(--color-surface); }
+
+/* ── Border & Radius ── */
+.border        { border: 1px solid var(--color-border); }
+.border-top    { border-top: 1px solid var(--color-border); }
+.border-bottom { border-bottom: 1px solid var(--color-border); }
+
+.rounded-sm   { border-radius: var(--radius-sm); }
+.rounded-md   { border-radius: var(--radius-md); }
+.rounded-lg   { border-radius: var(--radius-lg); }
+.rounded-xl   { border-radius: var(--radius-xl); }
+.rounded-2xl  { border-radius: var(--radius-2xl); }
+.rounded-full { border-radius: var(--radius-full); }
+
+/* ── Layout Utils ── */
+.overflow-hidden { overflow: hidden; }
+.overflow-auto   { overflow: auto; }
+.min-w-0         { min-width: 0; }
+.w-full          { width: 100%; }
+.h-full          { height: 100%; }
+
+/* ── Icon Containers ── */
+.gradient-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.gradient-icon--success          { background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-light) 100%); }
+.gradient-icon--danger           { background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-light) 100%); }
+.gradient-icon--primary          { background: var(--gradient-primary); }
+.gradient-icon--info             { background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-light) 100%); }
+.gradient-icon--warning          { background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-light) 100%); }
+.gradient-icon--balance-positive { background: var(--gradient-primary); }
+.gradient-icon--balance-negative { background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-light) 100%); }
+
+/* ── Color Dot (SectionTitle decoration) ── */
+.color-dot          { display: inline-block; width: 8px; height: 8px; border-radius: var(--radius-full); flex-shrink: 0; }
+.color-dot--danger  { background: var(--color-danger); }
+.color-dot--success { background: var(--color-success); }
+.color-dot--primary { background: var(--color-primary); }
+.color-dot--info    { background: var(--color-info); }
+.color-dot--warning { background: var(--color-warning); }
+
+/* ── Progress Bar ── */
+.progress-bar-track {
+  width: 64px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-secondary);
+  overflow: hidden;
+}
+.progress-bar-track--wide {
+  width: 100%;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-secondary);
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  transition: width var(--transition-slow);
+}
+.progress-bar-fill--success { background: var(--color-success); }
+.progress-bar-fill--danger  { background: var(--color-danger); }
+.progress-bar-fill--info    { background: var(--color-info); }
+.progress-bar-fill--warning { background: var(--color-warning); }
+
+/* ── Page Container ── */
+.page-container {
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── Breadcrumb ── */
+.breadcrumb-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+.breadcrumb-current {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ── Page Header ── */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-xl);
+  gap: var(--space-base);
+}
+.page-header__title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.page-header__subtitle {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+}
+
+/* ── Section Title ── */
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.section-title__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.section-title__text {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  letter-spacing: 0.01em;
+}
+
+/* ── Table Action & Toolbar ── */
+.table-action {
+  padding: 4px 8px;
+}
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-xl);
+}
+
+/* ── Logo Gradient ── */
+.logo-gradient {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+}
+
+/* ── Sidebar Menu hover (Drawer fallback) ── */
+.menu-item-hover {
+  transition: background-color var(--transition-fast);
+  border-radius: var(--radius-md);
+}
+.menu-item-hover:hover {
+  background-color: var(--color-bg-subtle) !important;
+}
+
+/* ── FAB (Floating Action Button — Mobile) ── */
+.fab {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-fab);
+  z-index: var(--z-fab);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.fab:hover  { transform: scale(1.06); box-shadow: 0 8px 24px rgba(22, 78, 99, 0.4); }
+.fab:active { transform: scale(0.97); }
+
+/* ── AI Session Items ── */
+.session-item {
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+.session-item:hover         { background-color: var(--color-bg-subtle); }
+.session-item--active       { background-color: var(--color-primary-bg); border-color: var(--color-primary-bg); }
+.session-item--selected     { border-color: var(--color-primary); }
+.session-item-actions       { display: none; gap: 4px; }
+.session-item:hover .session-item-actions { display: inline-flex; }
+
+/* ── Animated Route ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animated-route {
+  animation: fadeInUp var(--transition-slow) ease both;
+}
+
+/* ── Chat Typing & Cursor ── */
+@keyframes chatDotBlink {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+.chat-typing   { display: inline-flex; align-items: center; gap: 4px; padding: 4px 0; }
+.chat-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-tertiary);
+  animation: chatDotBlink 1.2s infinite ease-in-out;
+}
+.chat-typing i:nth-child(2) { animation-delay: 0.15s; }
+.chat-typing i:nth-child(3) { animation-delay: 0.3s; }
+.chat-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: fadeIn 0.8s step-start infinite alternate;
+}
+
+/* ── Responsive Breakpoints ── */
+
+/* Mobile < 768px */
+@media (max-width: 767px) {
+  .stats-grid {
+    gap: var(--space-sm);
+  }
+  .col-2-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-base);
+  }
+  .col-7-3-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-base);
+  }
+  .auto-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+    margin-bottom: var(--space-base);
+  }
+  .page-header__title {
+    font-size: var(--font-size-lg);
+  }
+}
+
+/* Tablet ≥ 768px */
+@media (min-width: 768px) {
+  .stats-grid   { gap: var(--space-xl); }
+  .col-2-grid   { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .col-7-3-grid { grid-template-columns: 7fr 3fr; }
+}
+
+/* Motion preference */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -168,255 +545,4 @@ button:focus-visible,
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-/* ============================================================
-   Utility Classes - Derived from Tokens
-   ============================================================ */
-
-/* Card base style using design tokens */
-.card-base {
-  border-radius: var(--radius-lg);
-  border: none;
-  box-shadow: var(--shadow-sm);
-  background-color: var(--color-surface);
-}
-
-.card-elevated {
-  box-shadow: var(--shadow-md);
-}
-
-/* 账本式金额排版：等宽数字，多行金额纵向对齐 */
-.money {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-  letter-spacing: -0.01em;
-}
-
-/* Text utilities */
-.text-primary { color: var(--color-text); }
-.text-secondary { color: var(--color-text-secondary); }
-.text-tertiary { color: var(--color-text-tertiary); }
-.text-success { color: var(--color-success); }
-.text-danger { color: var(--color-danger); }
-
-/* 表格操作列链接按钮的统一内边距 */
-.table-action {
-  padding: 4px 8px;
-}
-
-/* 列表筛选工具栏（Admin 各页共用） */
-.list-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-xl);
-}
-
-/* Color indicator dot (used in SectionTitle) */
-.color-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-full);
-  flex-shrink: 0;
-}
-
-.color-dot--danger { background: var(--color-danger); }
-.color-dot--success { background: var(--color-success); }
-.color-dot--primary { background: var(--color-primary); }
-.color-dot--info { background: var(--color-info); }
-.color-dot--warning { background: var(--color-warning); }
-
-/* Stat card icon gradient backgrounds */
-.gradient-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-xl);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.gradient-icon--success {
-  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-light) 100%);
-}
-.gradient-icon--danger {
-  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-light) 100%);
-}
-.gradient-icon--primary {
-  background: var(--gradient-primary);
-}
-.gradient-icon--info {
-  background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-light) 100%);
-}
-.gradient-icon--warning {
-  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-light) 100%);
-}
-.gradient-icon--balance-positive {
-  background: var(--gradient-primary);
-}
-.gradient-icon--balance-negative {
-  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-light) 100%);
-}
-
-/* Page transition keyframes */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.animated-route {
-  animation: fadeInUp var(--transition-slow) ease both;
-}
-
-/* 统计卡片骨架/网格：与真实 StatCard 行同构 */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-xl);
-  margin-bottom: var(--space-xl);
-}
-
-@media (max-width: 767px) {
-  .stats-grid {
-    gap: var(--space-base);
-  }
-}
-
-/* 菜单项 hover 增强（保留给 Drawer 内菜单） */
-.menu-item-hover {
-  transition: all var(--transition-fast);
-  border-radius: var(--radius-md);
-}
-
-.menu-item-hover:hover {
-  background-color: var(--color-bg) !important;
-}
-
-/* Logo gradient */
-.logo-gradient {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #2d3748 50%, #4a5568 100%);
-}
-
-/* Progress bar base */
-.progress-bar-track {
-  width: 60px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--color-border-secondary);
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  background: var(--color-primary);
-  transition: width var(--transition-slow);
-}
-
-/* Responsive container for page content */
-.page-container {
-  margin-left: auto;
-  margin-right: auto;
-  padding: 0;
-  width: 100%;
-  max-width: var(--content-max-width);
-}
-
-.page-container--mobile {
-  margin: var(--space-base);
-}
-
-.page-container--desktop {
-  margin: var(--space-xl) auto;
-}
-
-/* Breadcrumb styles */
-.breadcrumb-nav {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
-}
-
-.breadcrumb-current {
-  color: var(--color-text);
-  font-weight: var(--font-weight-medium);
-}
-
-/* ── AI 会话列表项：hover 显示操作按钮（替代原 <style> 注入 hack） ── */
-.session-item {
-  padding: 10px 12px;
-  margin-bottom: 4px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: background-color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.session-item:hover {
-  background-color: var(--color-bg-subtle);
-}
-
-.session-item--active {
-  background-color: var(--color-bg-subtle);
-}
-
-.session-item--selected {
-  border-color: var(--color-primary);
-}
-
-.session-item-actions {
-  display: none;
-  gap: 4px;
-}
-
-.session-item:hover .session-item-actions {
-  display: inline-flex;
-}
-
-/* ── AI 聊天气泡与打字指示 ── */
-@keyframes chatDotBlink {
-  0%, 80%, 100% { opacity: 0.25; }
-  40% { opacity: 1; }
-}
-
-.chat-typing {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 0;
-}
-
-.chat-typing i {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-full);
-  background: var(--color-text-tertiary);
-  animation: chatDotBlink 1.2s infinite ease-in-out;
-}
-
-.chat-typing i:nth-child(2) { animation-delay: 0.15s; }
-.chat-typing i:nth-child(3) { animation-delay: 0.3s; }
-
-.chat-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  background: currentColor;
-  animation: fadeIn 0.8s step-start infinite alternate;
 }

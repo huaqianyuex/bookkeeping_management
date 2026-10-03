@@ -7,17 +7,13 @@ import {
 import { ArrowUpOutlined, ArrowDownOutlined, WalletOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { getMonthlyStatistics, getCategoryStatistics } from '../api/statistics'
-import { StatCard, PageHeader, SectionTitle, EmptyState, Money, SkeletonCard, StatsRowSkeleton, AnimatedRoute } from '../components/ui'
+import { chartColors } from '../theme/palette'
+import { StatCard, PageHeader, SectionTitle, EmptyState, ErrorState, Money, SkeletonCard, StatsRowSkeleton, AnimatedRoute } from '../components/ui'
 import useMediaQuery from '../hooks/useMediaQuery'
+import { extractErrorMessage } from '../utils/error'
 
 const { MonthPicker } = DatePicker
 const { Text } = Typography
-
-/* 支出构成环形图的分类色板：以主题色为锚的低饱和度质感色轮 */
-const PIE_COLORS = [
-  '#164e63', '#e11d48', '#0284c7', '#d97706', '#059669',
-  '#8b5cf6', '#0d9488', '#f97316', '#64748b', '#94a3b8',
-]
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
@@ -47,34 +43,51 @@ export default function Dashboard() {
   const [incomeData, setIncomeData] = useState([])
   const [trendData, setTrendData] = useState([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const isMobile = useMediaQuery('(max-width: 767px)')
 
   const fetchData = async (date) => {
     setLoading(true)
+    setError(null)
     const year = date.year()
     const m = date.month() + 1
 
     /* 近 6 个月趋势：复用现有 monthly 接口并行取数，无后端改动 */
     const months = Array.from({ length: 6 }, (_, i) => date.subtract(5 - i, 'month'))
-    const [monthlyRes, expenseRes, incomeRes, ...trendResList] = await Promise.all([
-      getMonthlyStatistics({ year, month: m }),
-      getCategoryStatistics({ year, month: m, type: 0 }),
-      getCategoryStatistics({ year, month: m, type: 1 }),
-      ...months.map(d => getMonthlyStatistics({ year: d.year(), month: d.month() + 1 })),
-    ])
 
-    if (monthlyRes.code === 200) setMonthlyData(monthlyRes.data)
-    if (expenseRes.code === 200) setExpenseData(expenseRes.data)
-    if (incomeRes.code === 200) setIncomeData(incomeRes.data)
-    setTrendData(months.map((d, i) => {
-      const res = trendResList[i]
-      return {
-        label: `${d.month() + 1}月`,
-        收入: res?.code === 200 ? Number(res.data.totalIncome) : 0,
-        支出: res?.code === 200 ? Number(res.data.totalExpense) : 0,
-      }
-    }))
-    setLoading(false)
+    try {
+      // 三个核心请求决定整页能否渲染，任一失败即进入错误态；
+      // 趋势属辅助信息，用 allSettled 允许单月降级为 0（下方 res?.code 分支即为此准备）。
+      const [core, trend] = await Promise.all([
+        Promise.all([
+          getMonthlyStatistics({ year, month: m }),
+          getCategoryStatistics({ year, month: m, type: 0 }),
+          getCategoryStatistics({ year, month: m, type: 1 }),
+        ]),
+        Promise.allSettled(
+          months.map((d) => getMonthlyStatistics({ year: d.year(), month: d.month() + 1 })),
+        ),
+      ])
+
+      const [monthlyRes, expenseRes, incomeRes] = core
+
+      if (monthlyRes.code === 200) setMonthlyData(monthlyRes.data)
+      if (expenseRes.code === 200) setExpenseData(expenseRes.data)
+      if (incomeRes.code === 200) setIncomeData(incomeRes.data)
+      setTrendData(months.map((d, i) => {
+        const res = trend[i]
+        const ok = res.status === 'fulfilled' && res.value?.code === 200
+        return {
+          label: `${d.month() + 1}月`,
+          收入: ok ? Number(res.value.data.totalIncome) : 0,
+          支出: ok ? Number(res.value.data.totalExpense) : 0,
+        }
+      }))
+    } catch (e) {
+      setError(extractErrorMessage(e))
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchData(month) }, [month])
@@ -130,6 +143,15 @@ export default function Dashboard() {
             <SkeletonCard type="table" rows={4} />
           </Col>
         </Row>
+      </AnimatedRoute>
+    )
+  }
+
+  if (error) {
+    return (
+      <AnimatedRoute>
+        <PageHeader title="数据概览" action={monthPicker} />
+        <ErrorState description={error} onRetry={() => fetchData(month)} />
       </AnimatedRoute>
     )
   }
@@ -223,7 +245,7 @@ export default function Dashboard() {
                       stroke="none"
                     >
                       {expenseData.map((entry, i) => (
-                        <Cell key={entry.categoryId ?? i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        <Cell key={entry.categoryId ?? i} fill={chartColors[i % chartColors.length]} />
                       ))}
                     </Pie>
                     <Tooltip content={<ChartTooltip />} />

@@ -2,23 +2,32 @@ import { useState, useEffect } from 'react'
 import { Table, Button, Card, Modal, Typography, Tag, Input, Space, Popconfirm, Switch, App as AntdApp } from 'antd'
 import { SearchOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 import { getAdminUserList, deleteAdminUser, batchDeleteAdminUsers, updateAdminUserStatus } from '../../api/admin'
-import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar } from '../../components/ui'
+import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute, ListToolbar } from '../../components/ui'
 import { formatDateTime } from '../../utils/format'
+import { extractErrorMessage } from '../../utils/error'
 
 const { Text } = Typography
 
 export default function AdminUsers() {
   const [data, setData] = useState({ records: [], total: 0, pages: 0, current: 1, size: 10 })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [keyword, setKeyword] = useState('')
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
   const { message, modal } = AntdApp.useApp()
 
   const fetchData = async (page = 1, size = 10, kw = keyword) => {
     setLoading(true)
-    const res = await getAdminUserList({ page, size, keyword: kw || undefined })
-    if (res.code === 200) setData(res.data)
-    setLoading(false)
+    setError(null)
+    try {
+      const res = await getAdminUserList({ page, size, keyword: kw || undefined })
+      if (res.code === 200) setData(res.data)
+      else setError(res.message || '用户列表加载失败')
+    } catch (e) {
+      setError(extractErrorMessage(e))
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -172,6 +181,7 @@ export default function AdminUsers() {
 
   const renderContent = () => {
     if (loading) return <SkeletonCard type="table" rows={6} />
+    if (error) return <ErrorState description={error} onRetry={() => fetchData()} />
     if (data.records.length === 0) return <EmptyState title="暂无用户数据" description="没有找到匹配的用户" />
     return (
       <Table

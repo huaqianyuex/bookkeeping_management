@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react'
 import { Table, Card, Typography, Tag, DatePicker, Select, Space, Button, Popconfirm, InputNumber, App as AntdApp } from 'antd'
 import { SearchOutlined, DeleteOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import { getAdminRecords, batchDeleteAdminRecords } from '../../api/admin'
-import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar, Money } from '../../components/ui'
+import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute, ListToolbar, Money } from '../../components/ui'
 import { formatDateTime } from '../../utils/format'
+import { extractErrorMessage } from '../../utils/error'
 
 const { Text } = Typography
 
 export default function AdminRecords() {
   const [data, setData] = useState({ records: [], total: 0, pages: 0, current: 1, size: 10 })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [type, setType] = useState(null)
   const [month, setMonth] = useState(null)
   const [userId, setUserId] = useState(null)
@@ -18,13 +20,20 @@ export default function AdminRecords() {
 
   const fetchData = async (page = 1, size = 10, filterType = type, filterMonth = month, filterUserId = userId) => {
     setLoading(true)
+    setError(null)
     const params = { page, size }
     if (filterType !== null && filterType !== undefined) params.type = filterType
     if (filterMonth) params.month = filterMonth
     if (filterUserId) params.userId = filterUserId
-    const res = await getAdminRecords(params)
-    if (res.code === 200) setData(res.data)
-    setLoading(false)
+    try {
+      const res = await getAdminRecords(params)
+      if (res.code === 200) setData(res.data)
+      else setError(res.message || '账单加载失败')
+    } catch (e) {
+      setError(extractErrorMessage(e))
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -135,6 +144,7 @@ export default function AdminRecords() {
 
   const renderContent = () => {
     if (loading) return <SkeletonCard type="table" rows={6} />
+    if (error) return <ErrorState description={error} onRetry={() => fetchData()} />
     if (data.records.length === 0) return <EmptyState title="暂无账单数据" description="没有找到匹配的账单记录" />
     return (
       <Table

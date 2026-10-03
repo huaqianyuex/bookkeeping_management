@@ -4,14 +4,16 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutli
 import dayjs from 'dayjs'
 import { getRecordPage, addRecord, updateRecord, deleteRecord } from '../api/record'
 import { getCategoryList } from '../api/category'
-import { EmptyState, Money, PageHeader, SkeletonCard, AnimatedRoute } from '../components/ui'
+import { EmptyState, ErrorState, Money, PageHeader, SkeletonCard, AnimatedRoute } from '../components/ui'
 import useMediaQuery from '../hooks/useMediaQuery'
+import { extractErrorMessage } from '../utils/error'
 
 const { Text } = Typography
 
 export default function Records() {
   const [data, setData] = useState({ records: [], total: 0, pages: 0, current: 1, size: 10 })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [categories, setCategories] = useState([])
   const [editing, setEditing] = useState(null)
   const [addForm] = Form.useForm()
@@ -26,15 +28,26 @@ export default function Records() {
   const { message } = AntdApp.useApp()
 
   const fetchCategories = async () => {
-    const res = await getCategoryList()
-    if (res.code === 200) setCategories(res.data)
+    try {
+      const res = await getCategoryList()
+      if (res.code === 200) setCategories(res.data)
+    } catch {
+      // 分类只影响下拉可选项，取不到不阻塞主列表，静默降级即可
+    }
   }
 
   const fetchData = async (params) => {
     setLoading(true)
-    const res = await getRecordPage(params || query)
-    if (res.code === 200) setData(res.data)
-    setLoading(false)
+    setError(null)
+    try {
+      const res = await getRecordPage(params || query)
+      if (res.code === 200) setData(res.data)
+      else setError(res.message || '账单加载失败')
+    } catch (e) {
+      setError(extractErrorMessage(e))
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchCategories(); fetchData() }, [])
@@ -334,6 +347,8 @@ export default function Records() {
           {/* 表格 */}
           {loading ? (
             <SkeletonCard type="table" rows={5} />
+          ) : error ? (
+            <ErrorState description={error} onRetry={() => fetchData(query)} />
           ) : data.records.length === 0 ? (
             <EmptyState title="暂无账单" description="开始记一笔吧" />
           ) : (
