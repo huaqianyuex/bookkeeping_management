@@ -1,10 +1,10 @@
 import { Descriptions, Card, Button, Typography, Avatar, Form, Input, Upload, Skeleton, App as AntdApp } from 'antd'
-import { UserOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons'
+import { UserOutlined, EditOutlined, UploadOutlined, LockOutlined } from '@ant-design/icons'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { updateUserInfo, uploadAvatar } from '../api/user'
-import SectionTitle from '../components/ui/SectionTitle'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { SectionTitle, PageHeader, AnimatedRoute } from '../components/ui'
+import useMediaQuery from '../hooks/useMediaQuery'
 import { formatDateTime } from '../utils/format'
 
 const { Title, Text } = Typography
@@ -16,17 +16,19 @@ export default function UserInfo() {
   const navigate = useNavigate()
   const [form] = Form.useForm()
   const { message } = AntdApp.useApp()
+  const isMobile = useMediaQuery('(max-width: 767px)')
 
   // 会话恢复期间展示骨架屏，避免白屏
   if (!user) {
     return (
       <AnimatedRoute>
-        <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-xl)' }}>
-          <Card variant="borderless" className="card-base">
-            <Skeleton avatar active paragraph={{ rows: 0 }} style={{ width: '100%' }} />
+        <PageHeader title="个人信息" />
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 16 }}>
+          <Card variant="borderless" className="card-base" styles={{ body: { padding: 24 } }}>
+            <Skeleton avatar active paragraph={{ rows: 2 }} />
           </Card>
-          <Card variant="borderless" className="card-base">
-            <Skeleton active paragraph={{ rows: 2 }} />
+          <Card variant="borderless" className="card-base" styles={{ body: { padding: 24 } }}>
+            <Skeleton active paragraph={{ rows: 5 }} />
           </Card>
         </div>
       </AnimatedRoute>
@@ -55,13 +57,11 @@ export default function UserInfo() {
       message.error('头像仅支持 JPG/PNG 格式')
       return Upload.LIST_IGNORE
     }
-
     const isLt2M = file.size <= MAX_AVATAR_SIZE
     if (!isLt2M) {
       message.error('头像大小不能超过 2MB')
       return Upload.LIST_IGNORE
     }
-
     return true
   }
 
@@ -84,26 +84,29 @@ export default function UserInfo() {
 
   return (
     <AnimatedRoute>
-      <div style={{ maxWidth: 680, margin: '0 auto' }}>
+      <PageHeader title="个人信息" subtitle="查看与管理您的个人账户基本资料" />
+
+      {/* Modern Responsive Grid: Sidebar profile card + Content panels */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : '280px 1fr',
+        gap: isMobile ? 16 : 24,
+        alignItems: 'start',
+      }}>
+        {/* Left Column: Profile Card */}
         <Card
           variant="borderless"
           className="card-base"
-          style={{ marginBottom: 'var(--space-xl)' }}
+          styles={{ body: { padding: isMobile ? '20px 16px' : '24px 20px', textAlign: 'center' } }}
         >
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            padding: 'var(--space-xl) 0',
-            gap: 12,
-          }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <Avatar
               size={88}
               src={avatarSrc}
               icon={<UserOutlined />}
               style={{
                 backgroundColor: 'var(--color-primary)',
-                marginBottom: 'var(--space-xs)',
+                boxShadow: 'var(--shadow-sm)',
               }}
             />
             <Upload
@@ -112,87 +115,120 @@ export default function UserInfo() {
               customRequest={customUpload}
               accept=".jpg,.jpeg,.png,image/jpeg,image/png"
             >
-              <Button icon={<UploadOutlined />}>上传头像</Button>
-            </Upload>
-            <Text style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-sm)' }}>
-              支持 JPG/PNG 格式，不超过 2MB
-            </Text>
-            <Title level={3} style={{ margin: 0, color: 'var(--color-text)' }}>
-              {user.username}
-            </Title>
-            <Text style={{ color: 'var(--color-text-secondary)' }}>
-              ID: {user.id}
-            </Text>
-          </div>
-        </Card>
-
-        <Card
-          title={<SectionTitle title="资料设置" />}
-          variant="borderless"
-          className="card-base"
-          style={{ marginBottom: 'var(--space-xl)' }}
-        >
-          <Form
-            form={form}
-            layout="vertical"
-            initialValues={{ username: user.username }}
-            onFinish={onUpdateProfile}
-          >
-            <Form.Item
-              name="username"
-              label="用户名"
-              rules={[
-                { required: true, message: '请输入用户名' },
-                { pattern: USERNAME_REGEX, message: '用户名需为2-20位中英文或数字组合' },
-              ]}
-            >
-              <Input
-                placeholder="请输入2-20位中英文或数字组合"
-                maxLength={20}
-              />
-            </Form.Item>
-            <Form.Item style={{ marginBottom: 0 }}>
-              <Button type="primary" htmlType="submit" icon={<EditOutlined />}>
-                保存用户名
+              <Button size="small" icon={<UploadOutlined />} style={{ borderRadius: 'var(--radius-md)' }}>
+                更换头像
               </Button>
-            </Form.Item>
-          </Form>
-        </Card>
+            </Upload>
+            <Text style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--font-size-xs)' }}>
+              支持 JPG/PNG，小于 2MB
+            </Text>
 
-        <Card
-          title={<SectionTitle title="账户信息" />}
-          variant="borderless"
-          className="card-base"
-        >
-          <Descriptions
-            column={1}
-            size="middle"
-            style={{ marginTop: 16 }}
-            labelStyle={{ color: 'var(--color-text-secondary)' }}
-          >
-            <Descriptions.Item label="用户ID">
-              <Text>{user.id}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="用户名">
-              <Text strong>{user.username}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="创建时间">
-              <Text>{formatDateTime(user.created_at)}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="更新时间">
-              <Text>{formatDateTime(user.updated_at)}</Text>
-            </Descriptions.Item>
-          </Descriptions>
-          <div style={{ marginTop: 'var(--space-xl)' }}>
-            <Button
-              type="primary"
-              icon={<EditOutlined />}
-              onClick={() => navigate('/change-password')}
-            >
-              修改密码
-            </Button>
+            <div style={{ marginTop: 4 }}>
+              <Title level={4} style={{ margin: 0, color: 'var(--color-text)', fontWeight: 700 }}>
+                {user.username}
+              </Title>
+              <span style={{
+                display: 'inline-block',
+                marginTop: 6,
+                padding: '2px 10px',
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--color-primary-bg)',
+                color: 'var(--color-primary)',
+                fontSize: 'var(--font-size-xs)',
+                fontWeight: 600,
+              }}>
+                {user.role === 1 ? '系统管理员' : '标准用户'}
+              </span>
+            </div>
+
+            <div style={{
+              width: '100%',
+              marginTop: 12,
+              paddingTop: 16,
+              borderTop: '1px solid var(--color-border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 'var(--font-size-sm)',
+            }}>
+              <span style={{ color: 'var(--color-text-secondary)' }}>用户ID</span>
+              <span className="money" style={{ color: 'var(--color-text)', fontWeight: 600 }}>{user.id}</span>
+            </div>
           </div>
         </Card>
+
+        {/* Right Column: Settings and Metadata */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Edit Form */}
+          <Card
+            title={<SectionTitle title="资料设置" dotColor="primary" />}
+            variant="borderless"
+            className="card-base"
+            styles={{ body: { padding: isMobile ? '16px' : '20px 24px' } }}
+          >
+            <Form
+              form={form}
+              layout="vertical"
+              initialValues={{ username: user.username }}
+              onFinish={onUpdateProfile}
+            >
+              <Form.Item
+                name="username"
+                label="用户昵称"
+                rules={[
+                  { required: true, message: '请输入用户名' },
+                  { pattern: USERNAME_REGEX, message: '用户名需为2-20位中英文或数字组合' },
+                ]}
+                style={{ marginBottom: 16 }}
+              >
+                <Input
+                  size="large"
+                  placeholder="请输入2-20位中英文或数字组合"
+                  maxLength={20}
+                  style={{ borderRadius: 'var(--radius-md)' }}
+                />
+              </Form.Item>
+              <Form.Item style={{ marginBottom: 0 }}>
+                <Button type="primary" htmlType="submit" icon={<EditOutlined />} size="large" style={{ borderRadius: 'var(--radius-md)' }}>
+                  保存修改
+                </Button>
+              </Form.Item>
+            </Form>
+          </Card>
+
+          {/* Account Metadata */}
+          <Card
+            title={<SectionTitle title="账户详情" dotColor="info" />}
+            variant="borderless"
+            className="card-base"
+            styles={{ body: { padding: isMobile ? '16px' : '20px 24px' } }}
+          >
+            <Descriptions
+              column={isMobile ? 1 : 2}
+              size="middle"
+              labelStyle={{ color: 'var(--color-text-secondary)' }}
+            >
+              <Descriptions.Item label="注册时间">
+                <Text>{formatDateTime(user.created_at)}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="最近更新">
+                <Text>{formatDateTime(user.updated_at)}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="账户状态">
+                <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>正常</span>
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                icon={<LockOutlined />}
+                onClick={() => navigate('/change-password')}
+                style={{ borderRadius: 'var(--radius-md)' }}
+              >
+                修改安全密码
+              </Button>
+            </div>
+          </Card>
+        </div>
       </div>
     </AnimatedRoute>
   )

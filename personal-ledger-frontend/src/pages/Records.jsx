@@ -4,11 +4,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutli
 import dayjs from 'dayjs'
 import { getRecordPage, addRecord, updateRecord, deleteRecord } from '../api/record'
 import { getCategoryList } from '../api/category'
-import EmptyState from '../components/ui/EmptyState'
-import Money from '../components/ui/Money'
-import PageHeader from '../components/ui/PageHeader'
-import SkeletonCard from '../components/ui/SkeletonCard'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { EmptyState, Money, PageHeader, SkeletonCard, AnimatedRoute } from '../components/ui'
 import useMediaQuery from '../hooks/useMediaQuery'
 
 const { Text } = Typography
@@ -201,15 +197,15 @@ export default function Records() {
 
   return (
     <AnimatedRoute>
-      <PageHeader title="账单管理" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <PageHeader title="账单管理" subtitle="录入、检索与管理您的日常收支明细" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {/* 记账区域 - 核心 */}
         <div ref={formCardRef}>
         <Card
           variant="borderless"
           className="card-base"
-          style={highlight ? { boxShadow: '0 0 0 3px rgba(26, 26, 46, 0.35), var(--shadow-md)', transition: 'box-shadow var(--transition-base)' } : { transition: 'box-shadow var(--transition-base)' }}
-          styles={{ body: { padding: isMobile ? 20 : 28 } }}
+          style={highlight ? { boxShadow: '0 0 0 3px rgba(22, 78, 99, 0.35), var(--shadow-md)', transition: 'box-shadow var(--transition-base)' } : { transition: 'box-shadow var(--transition-base)' }}
+          styles={{ body: { padding: isMobile ? 16 : 24 } }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
             <div className="gradient-icon gradient-icon--primary" style={{

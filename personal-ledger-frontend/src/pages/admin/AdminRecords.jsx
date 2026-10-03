@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Table, Card, Typography, Tag, DatePicker, Select, Space, Button, Popconfirm, InputNumber, App as AntdApp } from 'antd'
 import { SearchOutlined, DeleteOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
-import { getAdminRecords, batchDeleteAdminRecords } from '../api/admin'
-import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar, Money } from '../components/ui'
-import { formatDateTime } from '../utils/format'
+import { getAdminRecords, batchDeleteAdminRecords } from '../../api/admin'
+import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar, Money } from '../../components/ui'
+import { formatDateTime } from '../../utils/format'
 
 const { Text } = Typography
 

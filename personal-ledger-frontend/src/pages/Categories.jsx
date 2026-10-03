@@ -2,10 +2,7 @@ import { useState, useEffect } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Space, Card, Tag, Typography, Popconfirm, App as AntdApp } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { getCategoryList, addCategory, updateCategory, deleteCategory } from '../api/category'
-import PageHeader from '../components/ui/PageHeader'
-import EmptyState from '../components/ui/EmptyState'
-import SkeletonCard from '../components/ui/SkeletonCard'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute } from '../components/ui'
 import { formatDateTime } from '../utils/format'
 
 const { Text } = Typography

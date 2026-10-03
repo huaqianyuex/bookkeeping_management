@@ -9,7 +9,7 @@ import {
   listSessions, createSession, renameSession,
   deleteSession, batchDeleteSessions, getSessionMessages,
 } from '../api/ai-session'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { AnimatedRoute } from '../components/ui'
 import useMediaQuery from '../hooks/useMediaQuery'
 
 const API_BASE = '/api/ai'

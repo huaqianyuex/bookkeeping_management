@@ -2,7 +2,7 @@ import { Form, Input, Button, Card, Typography, App as AntdApp } from 'antd'
 import { LockOutlined, SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { updatePassword } from '../api/user'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { AnimatedRoute } from '../components/ui'
 
 const { Title, Text } = Typography
 const PASSWORD_REGEX = /^\d{6}$/

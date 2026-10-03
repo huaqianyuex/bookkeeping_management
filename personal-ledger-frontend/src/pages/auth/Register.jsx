@@ -1,8 +1,8 @@
 import { Form, Input, Button, Typography, App as AntdApp } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { useNavigate, Link } from 'react-router-dom'
-import { register } from '../api/user'
-import AuthLayout from '../components/ui/AuthLayout'
+import { register } from '../../api/user'
+import { AuthLayout } from '../../components/ui'
 
 const { Title, Text } = Typography
 

@@ -7,22 +7,16 @@ import {
 import { ArrowUpOutlined, ArrowDownOutlined, WalletOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { getMonthlyStatistics, getCategoryStatistics } from '../api/statistics'
-import StatCard from '../components/ui/StatCard'
-import PageHeader from '../components/ui/PageHeader'
-import SectionTitle from '../components/ui/SectionTitle'
-import EmptyState from '../components/ui/EmptyState'
-import Money from '../components/ui/Money'
-import SkeletonCard, { StatsRowSkeleton } from '../components/ui/SkeletonCard'
-import AnimatedRoute from '../components/ui/AnimatedRoute'
+import { StatCard, PageHeader, SectionTitle, EmptyState, Money, SkeletonCard, StatsRowSkeleton, AnimatedRoute } from '../components/ui'
 import useMediaQuery from '../hooks/useMediaQuery'
 
 const { MonthPicker } = DatePicker
 const { Text } = Typography
 
-/* 支出构成环形图的分类色板：以主题色为锚的有限色轮 */
+/* 支出构成环形图的分类色板：以主题色为锚的低饱和度质感色轮 */
 const PIE_COLORS = [
-  '#1a1a2e', '#e94560', '#54a0ff', '#feca57', '#00b894',
-  '#a29bfe', '#00cec9', '#ff9f43', '#576574', '#c8d6e5',
+  '#164e63', '#e11d48', '#0284c7', '#d97706', '#059669',
+  '#8b5cf6', '#0d9488', '#f97316', '#64748b', '#94a3b8',
 ]
 
 function ChartTooltip({ active, payload, label }) {
@@ -153,8 +147,8 @@ export default function Dashboard() {
     <AnimatedRoute>
       <PageHeader title="数据概览" action={monthPicker} />
 
-      {/* Stats Cards */}
-      <Row gutter={isMobile ? 12 : 24} style={{ marginBottom: 24 }}>
+      {/* Stats Cards: 8pt grid compliant gutter [16, 16] on desktop, [8, 8] on mobile */}
+      <Row gutter={isMobile ? [8, 8] : [16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={8} md={8}>
           <StatCard
             icon={ArrowUpOutlined}
@@ -185,13 +179,13 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      {/* Charts */}
-      <Row gutter={[isMobile ? 0 : 24, isMobile ? 16 : 0]} style={{ marginBottom: isMobile ? 16 : 24 }}>
+      {/* Charts: height optimized to 224px (28*8pt) to ensure above-the-fold visibility */}
+      <Row gutter={isMobile ? [8, 8] : [16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} lg={14}>
-          <div className="card-base" style={{ padding: '20px 24px', height: '100%' }}>
+          <div className="card-base" style={{ padding: isMobile ? '16px' : '16px 24px', height: '100%', boxSizing: 'border-box' }}>
             <SectionTitle title="近 6 个月收支趋势" dotColor="primary" />
-            <div style={{ marginTop: 16 }}>
-              <ResponsiveContainer width="100%" height={260}>
+            <div style={{ marginTop: 12 }}>
+              <ResponsiveContainer width="100%" height={224}>
                 <LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-secondary)" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--color-text-tertiary)' }} axisLine={false} tickLine={false} />
@@ -203,28 +197,28 @@ export default function Dashboard() {
                   />
                   <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--color-border)' }} />
                   <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
-                  <Line type="monotone" dataKey="收入" stroke="#00b894" strokeWidth={2.5} dot={{ r: 3, fill: '#00b894', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="支出" stroke="#e94560" strokeWidth={2.5} dot={{ r: 3, fill: '#e94560', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="收入" stroke="var(--color-success)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--color-success)', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="支出" stroke="var(--color-danger)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--color-danger)', strokeWidth: 0 }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
         </Col>
         <Col xs={24} lg={10}>
-          <div className="card-base" style={{ padding: '20px 24px', height: '100%' }}>
+          <div className="card-base" style={{ padding: isMobile ? '16px' : '16px 24px', height: '100%', boxSizing: 'border-box' }}>
             <SectionTitle title="本月支出构成" dotColor="danger" />
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 12 }}>
               {expenseData.length === 0 ? (
                 <EmptyState title="暂无支出数据" size="small" />
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={224}>
                   <PieChart>
                     <Pie
                       data={expenseData}
                       dataKey="amount"
                       nameKey="categoryName"
-                      innerRadius="55%"
-                      outerRadius="82%"
+                      innerRadius="54%"
+                      outerRadius="80%"
                       paddingAngle={2}
                       stroke="none"
                     >
@@ -247,10 +241,10 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      {/* Category Tables */}
-      <Row gutter={isMobile ? 0 : 24}>
+      {/* Category Tables: Clean 8pt paddings and tabular density */}
+      <Row gutter={isMobile ? [8, 8] : [16, 16]}>
         <Col xs={24} md={12}>
-          <div className="card-base" style={{ padding: '20px 24px', marginBottom: isMobile ? 16 : 0 }}>
+          <div className="card-base" style={{ padding: isMobile ? '16px' : '16px 24px' }}>
             <SectionTitle title="支出分类统计" dotColor="danger" />
             <Table
               dataSource={expenseData}
@@ -259,13 +253,13 @@ export default function Dashboard() {
               pagination={false}
               size={isMobile ? 'small' : 'middle'}
               scroll={isMobile ? { x: 300 } : undefined}
-              style={{ marginTop: 16 }}
+              style={{ marginTop: 12 }}
               locale={{ emptyText: <EmptyState title="暂无支出数据" size="small" /> }}
             />
           </div>
         </Col>
         <Col xs={24} md={12}>
-          <div className="card-base" style={{ padding: '20px 24px' }}>
+          <div className="card-base" style={{ padding: isMobile ? '16px' : '16px 24px' }}>
             <SectionTitle title="收入分类统计" dotColor="success" />
             <Table
               dataSource={incomeData}
@@ -274,7 +268,7 @@ export default function Dashboard() {
               pagination={false}
               size={isMobile ? 'small' : 'middle'}
               scroll={isMobile ? { x: 300 } : undefined}
-              style={{ marginTop: 16 }}
+              style={{ marginTop: 12 }}
               locale={{ emptyText: <EmptyState title="暂无收入数据" size="small" /> }}
             />
           </div>

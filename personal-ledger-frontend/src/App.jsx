@@ -3,21 +3,24 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider, App as AntdApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { AuthProvider } from './context/AuthContext'
+import { antdTheme } from './theme/antdTheme'
 import MainLayout from './components/MainLayout'
-import AuthRoute from './components/AuthRoute'
-import AdminRoute from './components/AdminRoute'
-import Login from './pages/Login'
-import Register from './pages/Register'
+import AuthRoute from './components/guards/AuthRoute'
+import AdminRoute from './components/guards/AdminRoute'
+import Login from './pages/auth/Login'
+import Register from './pages/auth/Register'
 import Dashboard from './pages/Dashboard'
 import Records from './pages/Records'
 import Categories from './pages/Categories'
 import UserInfo from './pages/UserInfo'
 import ChangePassword from './pages/ChangePassword'
-import AdminDashboard from './pages/AdminDashboard'
-import AdminUsers from './pages/AdminUsers'
-import AdminRecords from './pages/AdminRecords'
-import AdminFaq from './pages/AdminFaq'
+import Membership from './pages/Membership'
 import AiChatPage from './pages/AiChat'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminUsers from './pages/admin/AdminUsers'
+import AdminRecords from './pages/admin/AdminRecords'
+import AdminFaq from './pages/admin/AdminFaq'
+import AdminMembership from './pages/admin/AdminMembership'
 
 function AppContent() {
   return (
@@ -40,12 +43,12 @@ function AppContent() {
         <Route path="admin/records" element={<AdminRoute><AdminRecords /></AdminRoute>} />
         <Route path="admin/faq" element={<AdminRoute><AdminFaq /></AdminRoute>} />
         <Route path="ai-chat" element={<AiChatPage />} />
+        <Route path="membership" element={<Membership />} />
+        <Route path="admin/membership" element={<AdminRoute><AdminMembership /></AdminRoute>} />
       </Route>
     </Routes>
   )
 }
-
-import { antdTheme } from './theme/antdTheme'
 
 export default function App() {
   return (

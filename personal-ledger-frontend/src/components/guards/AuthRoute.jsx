@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../../context/AuthContext'
 
-export default function AdminRoute({ children }) {
+export default function AuthRoute({ children }) {
   const { user, loading } = useAuth()
   const location = useLocation()
   const token = localStorage.getItem('token')
@@ -10,10 +10,6 @@ export default function AdminRoute({ children }) {
 
   if (!token || !user) {
     return <Navigate to="/login" state={{ from: location }} replace />
-  }
-
-  if (user.role !== 1) {
-    return <Navigate to="/dashboard" replace />
   }
 
   return children

@@ -4,8 +4,8 @@ import {
   UserOutlined, BookOutlined, AppstoreOutlined,
   ArrowUpOutlined, ArrowDownOutlined, WalletOutlined,
 } from '@ant-design/icons'
-import { getAdminOverview } from '../api/admin'
-import { PageHeader, StatCard, EmptyState, SkeletonCard, AnimatedRoute } from '../components/ui'
+import { getAdminOverview } from '../../api/admin'
+import { PageHeader, StatCard, EmptyState, SkeletonCard, AnimatedRoute } from '../../components/ui'
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null)

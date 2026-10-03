@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Table, Button, Card, Modal, Form, Input, Select, Tag, Space, Popconfirm, Typography, App as AntdApp } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined, SyncOutlined } from '@ant-design/icons'
-import { listFaq, createFaq, updateFaq, deleteFaq, rebuildFaqIndex } from '../api/faq'
-import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar } from '../components/ui'
+import { listFaq, createFaq, updateFaq, deleteFaq, rebuildFaqIndex } from '../../api/faq'
+import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar } from '../../components/ui'
 
 const { TextArea } = Input
 const { Text } = Typography
