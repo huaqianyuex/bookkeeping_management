@@ -21,6 +21,10 @@ request.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
+      // 只清 localStorage 不重置 AuthContext 内存 user：守卫要到下一次渲染
+      // 读 localStorage 才"侥幸"生效，中间态里页面仍显示已登录。广播事件让
+      // AuthProvider 立即 setUser(null)。
+      window.dispatchEvent(new CustomEvent('auth-expired'))
       window.location.hash = '#/login'
     }
     return Promise.reject(error)

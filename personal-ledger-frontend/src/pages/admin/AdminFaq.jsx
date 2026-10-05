@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Card, Modal, Form, Input, Select, Tag, Space, Popconfirm, Typography, App as AntdApp } from 'antd'
+import { Table, Button, Card, Modal, Form, Input, Select, Space, Popconfirm, Typography, App as AntdApp } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined, SyncOutlined } from '@ant-design/icons'
 import { listFaq, createFaq, updateFaq, deleteFaq, rebuildFaqIndex } from '../../api/faq'
-import { PageHeader, EmptyState, SkeletonCard, AnimatedRoute, ListToolbar } from '../../components/ui'
+import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute, ListToolbar, SemanticTag } from '../../components/ui'
+import { extractErrorMessage } from '../../utils/error'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -12,6 +13,7 @@ const CATEGORY_OPTIONS = ['记账操作', '账单查询', '统计分析', '预�
 export default function AdminFaq() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [rebuilding, setRebuilding] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null) // null=新增，否则为待编辑行
@@ -21,9 +23,16 @@ export default function AdminFaq() {
 
   const fetchData = async () => {
     setLoading(true)
-    const res = await listFaq()
-    if (res.code === 200) setData(res.data)
-    setLoading(false)
+    setError(null)
+    try {
+      const res = await listFaq()
+      if (res.code === 200) setData(res.data)
+      else setError(res.message || 'FAQ 加载失败')
+    } catch (e) {
+      setError(extractErrorMessage(e))
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchData() }, [])
@@ -41,40 +50,59 @@ export default function AdminFaq() {
   }
 
   const handleSubmit = async () => {
-    const values = await form.validateFields()
+    let values
+    try {
+      values = await form.validateFields()
+    } catch {
+      return // 校验失败由 antd 内联提示
+    }
     setSubmitting(true)
-    const res = editing
-      ? await updateFaq(editing.id, values)
-      : await createFaq(values)
-    setSubmitting(false)
-    if (res.code === 200) {
-      message.success(editing ? '更新成功' : '创建成功')
-      setModalOpen(false)
-      fetchData()
-    } else {
-      message.error(res.message)
+    try {
+      const res = editing
+        ? await updateFaq(editing.id, values)
+        : await createFaq(values)
+      if (res.code === 200) {
+        message.success(editing ? '更新成功' : '创建成功')
+        setModalOpen(false)
+        fetchData()
+      } else {
+        message.error(res.message)
+      }
+    } catch (e) {
+      message.error(extractErrorMessage(e))
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const handleDelete = async (id) => {
-    const res = await deleteFaq(id)
-    if (res.code === 200) {
-      message.success('删除成功')
-      fetchData()
-    } else {
-      message.error(res.message)
+    try {
+      const res = await deleteFaq(id)
+      if (res.code === 200) {
+        message.success('删除成功')
+        fetchData()
+      } else {
+        message.error(res.message)
+      }
+    } catch (e) {
+      message.error(extractErrorMessage(e))
     }
   }
 
   const handleRebuild = async () => {
     setRebuilding(true)
-    const res = await rebuildFaqIndex()
-    setRebuilding(false)
-    // 该接口为 AI 模块裸返回：成功 {success,count}，失败 {error}
-    if (res.success) {
-      message.success(`索引重建完成，共 ${res.count} 条`)
-    } else {
-      message.error(res.error || '重建失败')
+    try {
+      const res = await rebuildFaqIndex()
+      // 该接口为 AI 模块裸返回：成功 {success,count}，失败 {error}
+      if (res.success) {
+        message.success(`索引重建完成，共 ${res.count} 条`)
+      } else {
+        message.error(res.error || '重建失败')
+      }
+    } catch (e) {
+      message.error(extractErrorMessage(e))
+    } finally {
+      setRebuilding(false)
     }
   }
 
@@ -99,13 +127,14 @@ export default function AdminFaq() {
       key: 'category',
       width: 120,
       render: (text) => (
-        <Tag style={{ color: 'var(--color-primary)', backgroundColor: 'var(--color-primary-bg)' }}>{text}</Tag>
+        <SemanticTag variant="primary">{text}</SemanticTag>
       ),
     },
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      /* 容纳「编辑 + 删除」两枚带图标按钮，详见 Records 同名列的说明 */
+      width: 176,
       render: (_, record) => (
         <Space>
           <Button type="link" icon={<EditOutlined />} className="table-action" onClick={() => openEdit(record)}>
@@ -130,6 +159,7 @@ export default function AdminFaq() {
 
   const renderContent = () => {
     if (loading) return <SkeletonCard type="table" rows={6} />
+    if (error) return <ErrorState description={error} onRetry={fetchData} />
     if (data.length === 0) return <EmptyState title="暂无 FAQ" description="点击「新增 FAQ」添加知识库条目" />
     return (
       <Table
@@ -138,7 +168,7 @@ export default function AdminFaq() {
         rowKey="id"
         size="middle"
         pagination={{ pageSize: 10, hideOnSinglePage: true, showTotal: (t) => `共 ${t} 条` }}
-        scroll={{ x: 640 }}
+        scroll={{ x: 700 }}
       />
     )
   }

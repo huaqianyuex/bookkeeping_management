@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Row, Col, Table, Button, Form, Input, Select, InputNumber, DatePicker, Space, Card, Tag, Typography, Tabs, Popconfirm, App as AntdApp } from 'antd'
+import { Row, Col, Table, Button, Form, Input, Select, InputNumber, DatePicker, Space, Card, Typography, Tabs, Popconfirm, App as AntdApp } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { getRecordPage, addRecord, updateRecord, deleteRecord } from '../api/record'
 import { getCategoryList } from '../api/category'
-import { EmptyState, ErrorState, Money, PageHeader, SkeletonCard, AnimatedRoute } from '../components/ui'
+import { EmptyState, ErrorState, Money, PageHeader, SkeletonCard, AnimatedRoute, SemanticTag } from '../components/ui'
 import useMediaQuery from '../hooks/useMediaQuery'
 import { extractErrorMessage } from '../utils/error'
 
@@ -64,9 +64,13 @@ export default function Records() {
         remark: values.remark,
         recordDate: values.recordDate.format('YYYY-MM-DD'),
       }
-      const res = await addRecord(payload)
+      // 编辑态必须走 updateRecord，否则「保存修改」会变成新增一条重复账单
+      const res = editing
+        ? await updateRecord(editing.id, payload)
+        : await addRecord(payload)
       if (res.code === 200) {
-        message.success('记账成功')
+        message.success(editing ? '修改成功' : '记账成功')
+        setEditing(null)
         addForm.resetFields()
         addForm.setFieldsValue({ recordDate: dayjs() })
         fetchData({ page: 1, size: query.size })
@@ -74,7 +78,8 @@ export default function Records() {
         message.error(res.message)
       }
     } catch (e) {
-      // validation error
+      if (e?.errorFields) return // 表单校验错误由 antd 内联提示
+      message.error('操作失败，请检查网络后重试')
     } finally {
       setAddLoading(false)
     }
@@ -156,7 +161,7 @@ export default function Records() {
       width: 80,
       responsive: ['md'],
       render: (v) => (
-        <Tag color={v === 0 ? 'error' : 'success'}>{v === 0 ? '支出' : '收入'}</Tag>
+        <SemanticTag variant={v === 0 ? 'danger' : 'success'}>{v === 0 ? '支出' : '收入'}</SemanticTag>
       ),
     },
     {
@@ -184,7 +189,9 @@ export default function Records() {
     {
       title: '操作',
       key: 'action',
-      width: 140,
+      /* 宽度需容纳「图标+文字」两枚 link 按钮；表格单元左右内边距提到 16px 后
+         原 140px 已放不下，会把「删除」裁掉。 */
+      width: 168,
       responsive: ['md'],
       render: (_, record) => (
         <Space>
@@ -211,24 +218,27 @@ export default function Records() {
   return (
     <AnimatedRoute>
       <PageHeader title="账单管理" subtitle="录入、检索与管理您的日常收支明细" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-base)' }}>
         {/* 记账区域 - 核心 */}
         <div ref={formCardRef}>
         <Card
           variant="borderless"
           className="card-base"
-          style={highlight ? { boxShadow: '0 0 0 3px rgba(22, 78, 99, 0.35), var(--shadow-md)', transition: 'box-shadow var(--transition-base)' } : { transition: 'box-shadow var(--transition-base)' }}
-          styles={{ body: { padding: isMobile ? 16 : 24 } }}
+          style={{
+            boxShadow: highlight ? 'var(--ring-primary), var(--shadow-md)' : undefined,
+            transition: 'box-shadow var(--transition-base)',
+          }}
+          styles={{ body: { padding: isMobile ? 'var(--space-base)' : 'var(--space-xl)' } }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
             <div className="gradient-icon gradient-icon--primary" style={{
               width: 36,
               height: 36,
               borderRadius: 'var(--radius-md)',
             }}>
-              <PlusOutlined style={{ color: '#fff', fontSize: 16 }} />
+              <PlusOutlined style={{ color: 'var(--color-text-inverse)', fontSize: 'var(--font-size-lg)' }} />
             </div>
-            <Text strong style={{ fontSize: 18 }}>{editing ? '编辑账单' : '快速记账'}</Text>
+            <Text strong style={{ fontSize: 'var(--font-size-lg)' }}>{editing ? '编辑账单' : '快速记账'}</Text>
           </div>
 
           <Tabs
@@ -238,7 +248,7 @@ export default function Records() {
               { key: '0', label: <span><ArrowUpOutlined style={{ color: 'var(--color-expense)' }} /> 支出</span> },
               { key: '1', label: <span><ArrowDownOutlined style={{ color: 'var(--color-income)' }} /> 收入</span> },
             ]}
-            style={{ marginBottom: 16 }}
+            style={{ marginBottom: 'var(--space-base)' }}
           />
 
           <Form
@@ -249,7 +259,7 @@ export default function Records() {
           >
             <Row gutter={16}>
               <Col xs={24} sm={8}>
-                <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择' }]} style={{ marginBottom: isMobile ? 12 : 16 }}>
+                <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择' }]} style={{ marginBottom: isMobile ? 'var(--space-md)' : 'var(--space-base)' }}>
                   <Select placeholder="选择分类" size="large">
                     {filteredCategories.map(c => (
                       <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
@@ -258,7 +268,7 @@ export default function Records() {
                 </Form.Item>
               </Col>
               <Col xs={24} sm={8}>
-                <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请输入金额' }]} style={{ marginBottom: isMobile ? 12 : 16 }}>
+                <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请输入金额' }]} style={{ marginBottom: isMobile ? 'var(--space-md)' : 'var(--space-base)' }}>
                   <InputNumber
                     min={0.01}
                     precision={2}
@@ -270,20 +280,28 @@ export default function Records() {
                 </Form.Item>
               </Col>
               <Col xs={24} sm={8}>
-                <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: '请选择日期' }]} style={{ marginBottom: isMobile ? 12 : 16 }}>
+                <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: '请选择日期' }]} style={{ marginBottom: isMobile ? 'var(--space-md)' : 'var(--space-base)' }}>
                   <DatePicker style={{ width: '100%' }} size="large" />
                 </Form.Item>
               </Col>
             </Row>
             <Row gutter={16}>
               <Col xs={24} sm={16}>
-                <Form.Item name="remark" label="备注" style={{ marginBottom: 16 }}>
+                <Form.Item name="remark" label="备注" style={{ marginBottom: 'var(--space-base)' }}>
                   <Input.TextArea placeholder="添加备注（可选）" rows={1} autoSize={{ minRows: 1, maxRows: 3 }} />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={8}>
                 <Form.Item style={{ marginBottom: 0 }}>
-                  <Space style={{ width: '100%' }} direction={isMobile ? 'vertical' : 'horizontal'}>
+                  {/* 用普通 flex 容器替代 Space：Space 在 vertical 模式下不会把子项
+                      拉满宽度，导致移动端主 CTA「记一笔」只有内容宽，与上方全宽的
+                      表单项不成体系。align-items: stretch 即可解决。 */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: isMobile ? 'column' : 'row',
+                    gap: 'var(--space-sm)',
+                    width: '100%',
+                  }}>
                     {editing && (
                       <Button size="large" onClick={handleCancelEdit} style={{ flex: 1 }}>
                         取消
@@ -296,15 +314,15 @@ export default function Records() {
                       loading={addLoading}
                       icon={<PlusOutlined />}
                       style={{
-                        flex: 1,
-                        height: 44,
-                        fontWeight: 600,
+                        flex: isMobile ? '0 0 auto' : 1,
+                        width: isMobile ? '100%' : undefined,
+                        fontWeight: 'var(--font-weight-semibold)',
                         borderRadius: 'var(--radius-md)',
                       }}
                     >
                       {editing ? '保存修改' : '记一笔'}
                     </Button>
-                  </Space>
+                  </div>
                 </Form.Item>
               </Col>
             </Row>
@@ -314,29 +332,29 @@ export default function Records() {
 
         {/* 账单列表 */}
         <Card
-          title={<Text strong style={{ fontSize: 16 }}>最近账单</Text>}
+          title={<Text strong style={{ fontSize: 'var(--font-size-lg)' }}>最近账单</Text>}
           extra={
-            <Text type="secondary" style={{ fontSize: 13 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
               共 {data.total} 条记录
             </Text>
           }
           variant="borderless"
           className="card-base"
-          styles={{ body: { padding: isMobile ? 16 : 24 } }}
+          styles={{ body: { padding: isMobile ? 'var(--space-base)' : 'var(--space-xl)' } }}
         >
           {/* 搜索 */}
-          <Form form={searchForm} layout={isMobile ? 'vertical' : 'inline'} style={{ marginBottom: 16 }}>
-            <Form.Item name="categoryId" label="分类" style={{ marginBottom: isMobile ? 12 : 8 }}>
+          <Form form={searchForm} layout={isMobile ? 'vertical' : 'inline'} style={{ marginBottom: 'var(--space-base)' }}>
+            <Form.Item name="categoryId" label="分类" style={{ marginBottom: isMobile ? 'var(--space-md)' : 'var(--space-sm)' }}>
               <Select style={{ width: isMobile ? '100%' : 140 }} placeholder="全部" allowClear>
                 {categories.map(c => (
                   <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
                 ))}
               </Select>
             </Form.Item>
-            <Form.Item name="month" label="月份" style={{ marginBottom: isMobile ? 12 : 8 }}>
+            <Form.Item name="month" label="月份" style={{ marginBottom: isMobile ? 'var(--space-md)' : 'var(--space-sm)' }}>
               <DatePicker picker="month" placeholder="选择月份" style={{ width: isMobile ? '100%' : undefined }} />
             </Form.Item>
-            <Form.Item style={{ marginBottom: isMobile ? 12 : 8 }}>
+            <Form.Item style={{ marginBottom: isMobile ? 'var(--space-md)' : 'var(--space-sm)' }}>
               <Space>
                 <Button icon={<SearchOutlined />} onClick={handleSearch}>查询</Button>
                 <Button icon={<ReloadOutlined />} onClick={handleReset}>重置</Button>
@@ -365,7 +383,7 @@ export default function Records() {
                 showTotal: (t) => `共 ${t} 条`,
                 onChange: handlePageChange,
               }}
-              scroll={{ x: 700 }}
+              scroll={{ x: 740 }}
             />
           )}
         </Card>

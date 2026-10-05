@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Table, Card, Typography, Tag, DatePicker, Select, Space, Button, Popconfirm, InputNumber, App as AntdApp } from 'antd'
+import { Table, Card, Typography, DatePicker, Select, Space, Button, Popconfirm, InputNumber, App as AntdApp } from 'antd'
 import { SearchOutlined, DeleteOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons'
 import { getAdminRecords, batchDeleteAdminRecords } from '../../api/admin'
-import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute, ListToolbar, Money } from '../../components/ui'
+import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute, ListToolbar, Money, SemanticTag } from '../../components/ui'
 import { formatDateTime } from '../../utils/format'
 import { extractErrorMessage } from '../../utils/error'
 
@@ -23,7 +23,8 @@ export default function AdminRecords() {
     setError(null)
     const params = { page, size }
     if (filterType !== null && filterType !== undefined) params.type = filterType
-    if (filterMonth) params.month = filterMonth
+    // dayjs 对象直接进 query 会被 axios 序列化成完整 ISO 时间串，后端按 YYYY-MM 预检必 422
+    if (filterMonth) params.month = filterMonth.format('YYYY-MM')
     if (filterUserId) params.userId = filterUserId
     try {
       const res = await getAdminRecords(params)
@@ -108,7 +109,7 @@ export default function AdminRecords() {
       key: 'categoryType',
       width: 80,
       render: (v) => (
-        <Tag color={v === 0 ? 'error' : 'success'}>{v === 0 ? '支出' : '收入'}</Tag>
+        <SemanticTag variant={v === 0 ? 'danger' : 'success'}>{v === 0 ? '支出' : '收入'}</SemanticTag>
       ),
     },
     {

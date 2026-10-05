@@ -32,6 +32,14 @@ export function AuthProvider({ children }) {
     if (localStorage.getItem('token')) fetchUserInfo()
   }, [fetchUserInfo])
 
+  // api/request.js 拦截到 401（token 过期/失效）时广播 auth-expired，
+  // 立即清掉内存 user，避免「localStorage 已无 token 但 UI 仍显示登录」的中间态
+  useEffect(() => {
+    const onExpired = () => setUser(null)
+    window.addEventListener('auth-expired', onExpired)
+    return () => window.removeEventListener('auth-expired', onExpired)
+  }, [])
+
   const logout = useCallback(() => {
     localStorage.removeItem('token')
     setUser(null)
