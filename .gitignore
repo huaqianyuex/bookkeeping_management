@@ -50,6 +50,7 @@ personal-ledger-frontend/skills-lock.json
 # Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
 .venv/
 venv/
 
@@ -57,15 +58,15 @@ venv/
 .zcode/
 
 # Runtime user uploads
-fast_backend/uploads/
+fast_backend*/uploads/
 
 # ── 开源化清理（2026-09）：个人/内部/垃圾文件不入库 ──
 .claude/
 **/.hbuilderx/
 personal-ledger-uniapp/.impeccable/
 CLAUDE.md
-fast_backend/notes.md
-fast_backend/task_plan.md
+fast_backend*/notes.md
+fast_backend*/task_plan.md
 question_text.txt
 fast_backend_接口完整版/
 nul
