@@ -35,7 +35,8 @@ class UserMembership(Base, IdMixin, TimestampMixin):
         DateTime, comment="会员到期时间；NULL=永久（仅免费档可能出现）"
     )
     source: Mapped[int] = mapped_column(
-        SmallInteger, nullable=False, default=0, comment="开通来源：0=兑换码 1=管理员开通"
+        SmallInteger, nullable=False, default=0,
+        comment="开通来源：0=兑换码 1=管理员开通 2=充值购买（订单入账）",
     )
 
     def __repr__(self) -> str:

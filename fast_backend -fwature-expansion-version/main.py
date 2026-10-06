@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config.settings import CORS_ORIGINS
-from routers import admin, ai, category, membership, record, statistics, user
+from routers import admin, ai, category, membership, record, recharge, statistics, user
 from utils.exception_handlers import register_exception_handlers
 from utils.response import success_response
 
@@ -83,3 +83,5 @@ app.include_router(admin.router)
 app.include_router(ai.router)
 app.include_router(membership.router)         # /api/membership（用户侧）
 app.include_router(membership.admin_router)   # /api/admin/membership（管理侧）
+app.include_router(recharge.router)           # /api/recharge（用户侧 + 支付回调闸口）
+app.include_router(recharge.admin_router)     # /api/admin/recharges（充值审批）

@@ -49,6 +49,32 @@ CHAT_MODEL = os.getenv("CHAT_MODEL", "agnes-2.5-flash")
 ANALYZE_MODEL = os.getenv("ANALYZE_MODEL", "agnes-2.0-flash")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
+# ---- 会员 ----
+# 会员对话走的高级模型；未配置时回退 CHAT_MODEL（以 Agnes 平台实际可用模型为准），
+# 在 .env 中按需开启：CHAT_MODEL_PREMIUM=agnes-2.5-pro
+CHAT_MODEL_PREMIUM = os.getenv("CHAT_MODEL_PREMIUM", "")
+
+# 权益矩阵：数值即口径，前端权益表从 GET /api/membership/status 动态取，不硬编码。
+# tier 为生效等级（0=免费 1=会员）；会员过期由查询时惰性降级（docs/membership-plan.md §0）。
+MEMBERSHIP_PLANS = {
+    0: {
+        "name": "免费版",
+        "daily_chat": 10,
+        "concurrency": 1,
+        "daily_analyze": 2,
+        "daily_bookkeeping": 5,
+        "premium_model": False,
+    },
+    1: {
+        "name": "会员",
+        "daily_chat": 100,
+        "concurrency": 3,
+        "daily_analyze": 30,
+        "daily_bookkeeping": 50,
+        "premium_model": True,
+    },
+}
+
 # ---- 对话记忆 ----
 MAX_HISTORY_TOKENS = int(os.getenv("MAX_HISTORY_TOKENS", "2000"))
 KEEP_RECENT_MESSAGES = int(os.getenv("KEEP_RECENT_MESSAGES", "6"))

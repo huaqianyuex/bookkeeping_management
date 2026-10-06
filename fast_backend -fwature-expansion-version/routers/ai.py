@@ -41,7 +41,7 @@ from ai.bookkeeping_chain import parse_bookkeeping
 from config.db_config import get_db, AsyncSessionLocal
 from config.settings import (
     MEMBERSHIP_PLANS, STT_ENABLED, STT_MAX_SECONDS, STT_MAX_SIZE_MB,
-    VOICE_RATE_LIMIT_PER_MIN,
+    VOICE_RATE_LIMIT_PER_MIN, FAQ_INJECT_ENABLED, BK_LOW_CONFIDENCE,
 )
 from crud import ai as ai_crud
 from crud import membership as membership_crud
@@ -205,6 +205,32 @@ async def session_messages(
 
 # ── 对话 ────────────────────────────────────────────────────────────────
 
+async def _build_system_prompt(db: AsyncSession, user_id: int, query: str) -> str:
+    """组装对话用 system prompt = 基础约束 + 财务数据块 + 知识库块。
+
+    两块都是「有则注入、无则跳过」，任一块构造失败都不阻断对话：
+    - 财务数据块：ai/context.py，查库失败会返回显式的「查不到」口径块；
+    - 知识库块：ai/faq_retriever.build_knowledge_block，内部有规则闸门，
+      只有像「预算怎么设」「支持哪些分类」这类知识库问句才会真的发起一次
+      Embedding 检索，其余消息零额外成本。
+
+    之所以抽成公共函数：/chat 与 /chat/stream 原本各自复制了一份拼接逻辑，
+    两边很容易改一处漏一处。
+    """
+    blocks: list[str] = []
+    try:
+        blocks.append(await ai_context.build_finance_block(db, user_id))
+    except Exception:
+        logger.exception("build_finance_block failed, user_id=%s", user_id)
+    if FAQ_INJECT_ENABLED:
+        try:
+            blocks.append(await faq_retriever.build_knowledge_block(query))
+        except Exception:
+            # 检索失败静默降级：对话本身不依赖知识库
+            logger.exception("build_knowledge_block failed, user_id=%s", user_id)
+    return chat_chain.build_system_prompt(*blocks)
+
+
 @router.post("/chat", summary="非流式对话")
 async def chat(
     body: ChatIn,
@@ -235,10 +261,10 @@ async def chat(
         if quota_error:
             return JSONResponse(status_code=429, content=quota_error)
 
-        # 组装消息：system + 财务数据块 + 历史窗口 + 本次 human
+        # 组装消息：system(含财务数据块 + 知识库块) + 历史窗口 + 本次 human
         history = await memory.build_history(db, body.session_id)
-        finance_block = await ai_context.build_finance_block(db, user_id)
-        messages = [SystemMessage(content=chat_chain.SYSTEM_PROMPT + finance_block), *history, HumanMessage(content=body.message)]
+        system_prompt = await _build_system_prompt(db, user_id, body.message)
+        messages = [SystemMessage(content=system_prompt), *history, HumanMessage(content=body.message)]
 
         # 落库用户消息
         await ai_crud.add_message(db, body.session_id, "user", body.message)
@@ -318,8 +344,8 @@ async def chat_stream(
 
                 # 2) 组装消息并流式产出（注入实时财务数据，模型才能分析当月账单）
                 history = await memory.build_history(gen_db, body.session_id)
-                finance_block = await ai_context.build_finance_block(gen_db, user_id)
-                messages = [SystemMessage(content=chat_chain.SYSTEM_PROMPT + finance_block), *history, HumanMessage(content=body.message)]
+                system_prompt = await _build_system_prompt(gen_db, user_id, body.message)
+                messages = [SystemMessage(content=system_prompt), *history, HumanMessage(content=body.message)]
 
                 full = []
                 try:
@@ -367,7 +393,8 @@ async def analyze_expenses(
         if quota_error:
             return JSONResponse(status_code=429, content=quota_error)
         ctx = await ai_context.build_user_context(db, user_id)
-        data = await analyze_chain.analyze_expense(ctx)
+        # body.query 此前收而不传，用户诉求被丢弃（analyze_chain 内硬编码默认文案）
+        data = await analyze_chain.analyze_expense(ctx, query=body.query)
         return {"success": True, "data": data.model_dump()}
     except Exception:
         # 不用回显原始异常：DB/LLM 报错可能含 SQL 语句、内部路径、API key 提示
@@ -413,22 +440,24 @@ async def faq_search(
     user: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """6.11 FAQ 检索：正常 {"results":[...]}；检索抛异常 {"results":[], "fallback": true}
+    """6.11 FAQ 检索：正常 {"results":[...], "mode": ...}
 
-    两种失败形态要区分：无命中**没有** fallback 键；异常才有。
+    mode 口径：
+    - "vector"  向量检索命中（score 为归一化余弦，0~1）
+    - "keyword" 降级为字符重合度检索（Embedding 不可用或向量索引未构建）
+    - "empty"   空 query / 索引为空，无从检索
+
+    两种失败形态要区分：无命中**没有** fallback 键；整体抛异常才有。
+    历史问题：top_k 硬编码 3，绕过 FAQ_TOP_K 配置；且降级是静默的，
+    前端拿到 score 却无从判断它是余弦分还是字符重合度分（两者量纲不可比）。
     """
-    # TODO:
-    # try:
-    #     results = await ai_faq_retriever.search_faq(query, top_k=3)  # score 降序
-    #     return {"results": results}
-    # except Exception:
-    #     return {"results": [], "fallback": True}
-
     try:
-         results=await faq_retriever.search_faq(query,top_k=3)
-         return {"results":results}
+        # top_k 不传，用 search_faq_detailed 默认值（读 FAQ_TOP_K）
+        results, mode = await faq_retriever.search_faq_detailed(query)
+        return {"results": results, "mode": mode}
     except Exception:
-        return {"results": [],"fallback":True}
+        logger.exception("faq search failed, query_len=%d", len(query or ""))
+        return {"results": [], "fallback": True}
 
 
 @router.post("/faq/rebuild", summary="重建 FAQ 向量索引")
@@ -779,6 +808,8 @@ async def bookkeeping(
     ok_items: list[tuple] = []
     skipped_idx: list[int] = []
     warnings: list[str] = []
+    fallback_count = 0     # 归入「其他」的条目数
+    low_conf_count = 0     # 低于 BK_LOW_CONFIDENCE 的条目数
 
     for idx, item in enumerate(parsed.items):
         ov = ov_map.get(idx)
@@ -825,13 +856,37 @@ async def bookkeeping(
                 # 归类失败且系统没有「其他」分类：中止本单。
                 # 继续走会在 NOT NULL 列 records.category_id 插 NULL 触发 IntegrityError（P0）
                 return await _bk_fail("未识别到明确分类，且系统缺少「其他」分类，请先创建后重试")
-            warnings.append("未识别到明确分类，已归入「其他」")
+            fallback_count += 1
 
         # 无显式 override 类型时，以最终入账分类为准（分类是强数据约束，
         # 比 LLM 的收支猜测可信；两者都缺信息才回落支出）
         if not override_type:
             item.type = cat.type if cat is not None else 0
+
+        # confidence 此前只被解析/落库/返回，从不参与任何决策。这里做两件事：
+        # 统计低置信条目，供 warnings 汇总提示用户核对。
+        # 注意两点：
+        # 1) 不因低置信阻断入账——用户已经明确发了记账语句，阻断会变成
+        #    "说了不记"，比"记错了可改"更糟；
+        # 2) confidence == 0 视为「模型没给」而非「零置信」：schema 默认值就是 0.0，
+        #    若照单全收，任何不返回该字段的模型都会让每笔记账都挂一条假警告。
+        if 0 < item.confidence < BK_LOW_CONFIDENCE:
+            low_conf_count += 1
+
         ok_items.append((idx, item, amount, rec_date, cat))
+
+    # warnings 汇总：原先每条 fallback 都 append 一句完全相同的话，
+    # 一单 10 笔全落「其他」就是 10 条重复文案。改为按类别聚合成一条。
+    if fallback_count:
+        warnings.append(
+            f"{fallback_count} 笔未识别到明确分类，已归入「其他」"
+            if fallback_count > 1 else "未识别到明确分类，已归入「其他」"
+        )
+    if low_conf_count:
+        warnings.append(
+            f"{low_conf_count} 笔识别把握不大，请核对金额与分类"
+            if low_conf_count > 1 else "识别把握不大，请核对金额与分类"
+        )
 
     # ── 第 8 步：dry_run / clarify / created 三分支 ──
     def _preview_items():

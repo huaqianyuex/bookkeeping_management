@@ -131,10 +131,21 @@ class BudgetPlan(BaseModel):
 
 
 class UserFinanceContext(BaseModel):
-    """用户财务上下文 — 传给 LLM 的用户数据摘要（ai/context.py 组包）"""
+    """用户财务上下文 — 传给 LLM 的用户数据摘要（ai/context.py 组包）
+
+    ⚠️ 历史不一致（已修）：本模型原先只有 4 个字段，而 ai/context.py 的
+    build_user_context 实际返回 5 个键（多出 this_month / last_month_expense），
+    且 analyze_chain.py 按 dict 下标消费 ctx['this_month'] / ['last_month_expense']。
+    模型与真实契约不符 = 类型形同虚设，字段拼错也不会报错。现补齐真实字段。
+
+    注：build_user_context 目前返回 dict 而非本模型（消费方 analyze_chain 用下标
+    访问，改成模型要同步改两处调用）。本模型作为契约文档保留，改组包逻辑时须同步。
+    """
+    this_month: str = ""                                    # 统计月份 yyyy-MM
     total_income: float = 0
     total_expense: float = 0
-    recent_records: List[dict] = Field(default_factory=list)
+    last_month_expense: float = 0                           # 环比用
+    recent_records: List[dict] = Field(default_factory=list)  # 预留，当前组包未填充
     top_categories: List[dict] = Field(default_factory=list)
 #
 #

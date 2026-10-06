@@ -326,3 +326,12 @@ async def grant_membership(db: AsyncSession, user_id: int, days: int) -> UserMem
     await db.execute(_extend_membership_stmt(user_id, days, source=1))
     await db.commit()
     return await get_membership_row(db, user_id)
+
+
+async def extend_membership_for_recharge(db: AsyncSession, user_id: int, days: int) -> None:
+    """充值订单入账专用：source=2，叠加语义与 redeem/grant 完全一致（单一来源）。
+
+    刻意不 commit——充值侧必须把「订单状态流转 + 审计留痕 + 会员延期」作为同一事务
+    提交，中途失败不留"钱已收、会员未开"的半成品（与 redeem_code 同一事务原则）。
+    """
+    await db.execute(_extend_membership_stmt(user_id, days, source=2))

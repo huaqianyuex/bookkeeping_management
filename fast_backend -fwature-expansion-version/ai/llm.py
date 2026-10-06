@@ -3,6 +3,8 @@ from langchain_openai import ChatOpenAI
 from config.settings import (
     CHAT_MODEL, CHAT_MODEL_PREMIUM, ANALYZE_MODEL, EMBEDDING_MODEL,
     OPENAI_BASE_URL, AGNES_API_KEY,
+    LLM_TIMEOUT_SECONDS, LLM_MAX_RETRIES,
+    CHAT_MAX_TOKENS, ANALYZE_MAX_TOKENS,
 )
 
 _chat_llm: ChatOpenAI | None = None   # 进程内单例，避免每次请求重建客户端
@@ -12,12 +14,20 @@ _embeddings = None
 
 
 def _new_chat_llm(model: str) -> ChatOpenAI:
+    # timeout / max_retries / max_tokens 必须显式给：
+    # - 无 timeout：网关挂起时请求长挂，占住 ai_concurrency 的进程内并发槽，
+    #   表现为「并发已达上限」但其实上一条早已失联；
+    # - max_retries 默认 2，配合 SSE 会把一次用户请求放大成 3 次上游计费；
+    # - 无 max_tokens：输出无界，异常情况下可烧掉大量 token 且全量落库。
     return ChatOpenAI(
         model=model,
         api_key=AGNES_API_KEY,
         base_url=OPENAI_BASE_URL,
         temperature=0.7,
         streaming=True,          # /chat/stream 需要
+        max_tokens=CHAT_MAX_TOKENS,
+        timeout=LLM_TIMEOUT_SECONDS,
+        max_retries=LLM_MAX_RETRIES,
     )
 
 
@@ -37,8 +47,14 @@ def get_analyze_llm() -> ChatOpenAI:
     """分析 LLM：温度 0，输出稳定（配合 .with_structured_output 用）"""
     global _analyze_llm
     if _analyze_llm is None:
+        # ANALYZE_MAX_TOKENS 比对话大：ExpenseAnalysis 要装 3 条洞察 + 3 条建议
+        # + summary + risk_level，还要装 category_limits；给太小会被截断成非法
+        # JSON，with_structured_output 直接抛异常。
         _analyze_llm = ChatOpenAI(model=ANALYZE_MODEL, api_key=AGNES_API_KEY,
-                                  base_url=OPENAI_BASE_URL, temperature=0)
+                                  base_url=OPENAI_BASE_URL, temperature=0,
+                                  max_tokens=ANALYZE_MAX_TOKENS,
+                                  timeout=LLM_TIMEOUT_SECONDS,
+                                  max_retries=LLM_MAX_RETRIES)
     return _analyze_llm
 
 

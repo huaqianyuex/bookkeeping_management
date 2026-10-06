@@ -214,13 +214,34 @@ async def batch_soft_delete_sessions(db: AsyncSession, user_id: int, ids: list[s
 
 async def list_messages(db: AsyncSession, session_id: str):
     """会话消息列表（6.6）：按 timestamp 升序"""
-    # TODO: 实现
     result = await db.execute(
         select(ChatMessage)
         .where(ChatMessage.session_id == session_id)
         .order_by(ChatMessage.timestamp.asc())
     )
     return result.scalars().all()
+
+
+async def list_messages_tail(db: AsyncSession, session_id: str, limit: int):
+    """只取会话**最后** limit 条消息，按 timestamp 升序返回。
+
+    供 ai/memory.build_history 使用：原先那里调 list_messages 把整个会话历史
+    全部读进内存、再在 Python 里从尾部切 N 条——会话越长每轮对话的
+    内存与序列化开销越大，而 idx_messages_session_ts 索引本就能支持
+    ORDER BY ... DESC LIMIT 反向扫描。
+    limit <= 0 时返回空列表（调用方据此跳过查询）。
+    """
+    if limit <= 0:
+        return []
+    result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.timestamp.desc())
+        .limit(limit)
+    )
+    rows = list(result.scalars().all())
+    rows.reverse()   # 恢复升序，与 list_messages 口径一致
+    return rows
 
 
 async def add_message(db: AsyncSession, session_id: str, role: str, content: str) -> ChatMessage:

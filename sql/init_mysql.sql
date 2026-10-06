@@ -24,6 +24,11 @@
 --    7. feedback              依赖 messages
 --    8. faq                   独立字典表
 --    9. ai_bookkeeping_logs   依赖 users, sessions, messages, 自身
+--    10. user_membership      依赖 users（会员模块，docs/membership-plan.md §2）
+--    11. ai_usage_daily       依赖 users（会员模块，docs/membership-plan.md §2）
+--    12. membership_codes     依赖 users（会员模块，docs/membership-plan.md §2）
+--    13. recharge_orders      依赖 users（充值模块，docs/fastapi-backend/11-充值与审批模块.md）
+--    14. recharge_audit_logs  依赖 recharge_orders, users（充值模块）
 --
 --  【四】表间关系说明
 --    users          1 : N  categories            （一个用户多个分类）
@@ -37,7 +42,13 @@
 --    sessions       1 : N  ai_bookkeeping_logs   （一次记账请求可挂在某会话下）
 --    ai_bookkeeping_logs 1 : N ai_bookkeeping_logs （parent_id 自关联：追问续写 / 纠错链路）
 --    faq            —      独立字典表，无外键
---    * 一对一：本系统无 1:1 关系
+--    users          1 : 1  user_membership       （一个用户一行会员信息；免费用户可无行）
+--    users          1 : N  ai_usage_daily        （一个用户按天多条用量记录）
+--    users          1 : N  membership_codes      （used_by：一个用户可核销多张码，可空）
+--    users          1 : N  recharge_orders       （一个用户多笔充值订单）
+--    users          1 : N  recharge_audit_logs   （actor_id：一个用户多条操作留痕，可空）
+--    recharge_orders 1 : N recharge_audit_logs   （一笔订单多条审计留痕，append-only）
+--    * 一对一：users 1:1 user_membership（会员信息，见上）
 --    * 多对多：本系统无 N:M 关系，因此不需要中间表
 --
 --  【五】设计决策与已知偏差（务必阅读）
@@ -364,6 +375,7 @@ CREATE TABLE IF NOT EXISTS `ai_bookkeeping_logs` (
     `id`            BIGINT       NOT NULL AUTO_INCREMENT           COMMENT '主键',
     `request_id`    VARCHAR(64)  NOT NULL                          COMMENT '对外请求 ID，格式 bk_{毫秒}_{随机}',
     `user_id`       BIGINT       NOT NULL                          COMMENT '发起用户 ID',
+    `source`        VARCHAR(10)  NOT NULL DEFAULT 'text'             COMMENT '来源：text=手输/文本记账，voice=语音记账',
     `session_id`    VARCHAR(64)  NULL     DEFAULT NULL             COMMENT '关联的 AI 会话 ID，可为空',
     `message_id`    VARCHAR(64)  NULL     DEFAULT NULL             COMMENT '关联的消息 ID，可为空',
     `client_msg_id` VARCHAR(64)  NULL     DEFAULT NULL             COMMENT '客户端幂等键（UUID）；NULL 表示不启用强幂等',
@@ -400,6 +412,155 @@ CREATE TABLE IF NOT EXISTS `ai_bookkeeping_logs` (
 
 -- ⚠️ `client_msg_id` 允许为 NULL：MySQL 唯一索引对多行 NULL 不冲突，
 --    这正是「未传幂等键时不触发强幂等」的预期行为，切勿改为 NOT NULL。
+
+
+-- ---------------------------------------------------------------------------
+-- 10. user_membership —— 用户会员表（会员模块，docs/membership-plan.md §2）
+--    用途：会员等级与到期时间。免费用户可以没有行；过期在查询时惰性降级为免费
+--          （tier==1 且 expires_at > NOW() 才算会员），无定时任务。
+--    来源：docs/membership-plan.md §2.1
+--    关系：user_membership.user_id → users.id（1:1，uk_membership_user）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `user_membership` (
+    `id`         BIGINT      NOT NULL AUTO_INCREMENT           COMMENT '主键 ID',
+    `user_id`    BIGINT      NOT NULL                          COMMENT '用户 ID，1:1 唯一',
+    `tier`       TINYINT     NOT NULL DEFAULT 0                COMMENT '等级：0=免费 1=会员',
+    `expires_at` DATETIME    NULL     DEFAULT NULL             COMMENT '会员到期时间；NULL=永久（仅免费档）',
+    `source`     TINYINT     NOT NULL DEFAULT 0                COMMENT '开通来源：0=兑换码 1=管理员开通',
+    `created_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_membership_user` (`user_id`),
+    CONSTRAINT `fk_membership_user` FOREIGN KEY (`user_id`)
+        REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci
+  COMMENT = '用户会员表（1:1，免费用户可无行）';
+
+
+-- ---------------------------------------------------------------------------
+-- 11. ai_usage_daily —— AI 每日用量表（会员模块，docs/membership-plan.md §2）
+--    用途：按 (user_id, usage_date) 唯一计数，MySQL upsert 累加；跨天自然归零，无需定时重置。
+--    来源：docs/membership-plan.md §2.1
+--    关系：ai_usage_daily.user_id → users.id（N:1）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_usage_daily` (
+    `id`                BIGINT   NOT NULL AUTO_INCREMENT           COMMENT '主键 ID',
+    `user_id`           BIGINT   NOT NULL                          COMMENT '用户 ID',
+    `usage_date`        DATE     NOT NULL                          COMMENT '统计日期',
+    `chat_count`        INT      NOT NULL DEFAULT 0                COMMENT '当日 AI 对话次数',
+    `analyze_count`     INT      NOT NULL DEFAULT 0                COMMENT '当日分析次数（消费分析+预算规划）',
+    `bookkeeping_count` INT      NOT NULL DEFAULT 0                COMMENT '当日智能记账解析次数',
+    `created_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_usage_user_date` (`user_id`, `usage_date`),
+    CONSTRAINT `fk_usage_user` FOREIGN KEY (`user_id`)
+        REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci
+  COMMENT = 'AI 每日用量表（会员配额计数）';
+
+
+-- ---------------------------------------------------------------------------
+-- 12. membership_codes —— 会员兑换码表（会员模块，docs/membership-plan.md §2）
+--    用途：管理员批量生成、用户核销、运营作废。16 位码去除 0/O/1/I 防手抄歧义。
+--    来源：docs/membership-plan.md §2.1
+--    关系：membership_codes.used_by → users.id（可空，SET NULL）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `membership_codes` (
+    `id`         BIGINT      NOT NULL AUTO_INCREMENT           COMMENT '主键 ID',
+    `code`       CHAR(16)    NOT NULL                          COMMENT '兑换码（16 位大写字母数字，去除 0/O/1/I）',
+    `days`       INT         NOT NULL                          COMMENT '兑换天数',
+    `status`     TINYINT     NOT NULL DEFAULT 0                COMMENT '状态：0=未使用 1=已使用 2=已作废',
+    `batch_no`   VARCHAR(32) NULL     DEFAULT NULL             COMMENT '批次号（默认生成时间戳）',
+    `used_by`    BIGINT      NULL     DEFAULT NULL             COMMENT '核销用户 ID',
+    `used_at`    DATETIME    NULL     DEFAULT NULL             COMMENT '核销时间',
+    `created_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_membership_codes_code` (`code`),
+    KEY `idx_membership_codes_status` (`status`),
+    CONSTRAINT `fk_codes_user` FOREIGN KEY (`used_by`)
+        REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci
+  COMMENT = '会员兑换码表';
+
+
+-- ---------------------------------------------------------------------------
+-- 13. recharge_orders —— 充值订单表（充值模块，docs/fastapi-backend/11-充值与审批模块.md）
+--    用途：套餐直购「钱 → 会员天数」的唯一凭证；状态机 0待支付/1待审批/2已支付/3已拒绝/4已取消/5超时关闭。
+--    plan_name/days/amount 为下单时刻快照，套餐调价不影响历史订单；金额 DECIMAL(10,2) 禁 float。
+--    关系：recharge_orders.user_id → users.id（CASCADE）
+--          recharge_orders.reviewed_by → users.id（可空，SET NULL）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `recharge_orders` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT           COMMENT '主键 ID',
+    `order_no`    VARCHAR(32)  NOT NULL                          COMMENT '业务订单号（RCH 前缀），回调/查询/审计的对外标识',
+    `user_id`     BIGINT       NOT NULL                          COMMENT '下单用户 ID',
+    `plan_id`     VARCHAR(32)  NOT NULL                          COMMENT '套餐 ID（服务端目录键快照）',
+    `plan_name`   VARCHAR(64)  NOT NULL                          COMMENT '套餐名称快照',
+    `days`        INT          NOT NULL                          COMMENT '会员天数快照',
+    `amount`      DECIMAL(10,2) NOT NULL                         COMMENT '应收金额快照（元）；服务端定价，回调时核对',
+    `status`      TINYINT      NOT NULL DEFAULT 0                COMMENT '0=待支付 1=待审批 2=已支付 3=已拒绝 4=已取消 5=超时关闭',
+    `pay_method`  TINYINT      NOT NULL DEFAULT 0                COMMENT '支付方式：0=模拟支付（真实渠道需资质，本期预留）',
+    `risk_flags`  VARCHAR(255) NULL     DEFAULT NULL             COMMENT '支付时命中的风控规则（逗号分隔），无命中为 NULL',
+    `client_ip`   VARCHAR(45)  NULL     DEFAULT NULL             COMMENT '下单 IP（IPv6 最长 45）',
+    `paid_at`     DATETIME     NULL     DEFAULT NULL             COMMENT '支付成功时间（含待审批订单，钱已收等放行）',
+    `reviewed_by` BIGINT       NULL     DEFAULT NULL             COMMENT '审批管理员 ID',
+    `reviewed_at` DATETIME     NULL     DEFAULT NULL             COMMENT '审批时间',
+    `review_note` VARCHAR(255) NULL     DEFAULT NULL             COMMENT '审批备注（拒绝原因必填）',
+    `expires_at`  DATETIME     NULL     DEFAULT NULL             COMMENT '待支付有效期，超时由读/支付路径懒关闭',
+    `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_recharge_orders_no` (`order_no`),
+    KEY `idx_recharge_orders_user` (`user_id`, `created_at`),
+    KEY `idx_recharge_orders_status` (`status`, `created_at`),
+    CONSTRAINT `fk_recharge_user` FOREIGN KEY (`user_id`)
+        REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_recharge_reviewer` FOREIGN KEY (`reviewed_by`)
+        REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci
+  COMMENT = '充值订单表（含安全审批状态机）';
+
+
+-- ---------------------------------------------------------------------------
+-- 14. recharge_audit_logs —— 充值审计日志表（充值模块，append-only）
+--    用途：充值全链路操作留痕——每笔订单的创建/支付/风控拦截/审批/取消/超时/会员延期
+--    各写一行，与状态流转同一事务提交，杜绝绕过审批不留痕。无更新/删除端点。
+--    关系：recharge_audit_logs.order_id → recharge_orders.id（CASCADE）
+--          recharge_audit_logs.actor_id → users.id（系统动作为 NULL，可空 SET NULL）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `recharge_audit_logs` (
+    `id`          BIGINT      NOT NULL AUTO_INCREMENT           COMMENT '主键 ID',
+    `order_id`    BIGINT      NOT NULL                          COMMENT '订单 ID',
+    `order_no`    VARCHAR(32) NOT NULL                          COMMENT '订单号冗余（免 JOIN 可读）',
+    `actor_type`  TINYINT     NOT NULL                          COMMENT '操作方：0=用户 1=系统（风控/超时/回调） 2=管理员',
+    `actor_id`    BIGINT      NULL     DEFAULT NULL             COMMENT '操作人 ID；系统动作为 NULL',
+    `action`      VARCHAR(32) NOT NULL                          COMMENT '动作：CREATE/PAY_SUCCESS/PAY_FAIL/RISK_HOLD/APPROVE/REJECT/CANCEL/EXPIRE_CLOSE/EXTEND_MEMBERSHIP',
+    `from_status` TINYINT     NULL     DEFAULT NULL             COMMENT '流转前状态；CREATE 时为 NULL',
+    `to_status`   TINYINT     NOT NULL                          COMMENT '流转后状态',
+    `detail`      VARCHAR(500) NULL    DEFAULT NULL             COMMENT '详情：命中风控规则/失败原因/审批备注等',
+    `ip`          VARCHAR(45) NULL     DEFAULT NULL             COMMENT '操作 IP',
+    `created_at`  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发生时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_recharge_audit_order` (`order_id`, `id`),
+    KEY `idx_recharge_audit_created` (`created_at`),
+    CONSTRAINT `fk_recharge_audit_order` FOREIGN KEY (`order_id`)
+        REFERENCES `recharge_orders` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_recharge_audit_actor` FOREIGN KEY (`actor_id`)
+        REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci
+  COMMENT = '充值审计日志表（append-only 留痕）';
 
 
 -- ============================================================================
@@ -492,7 +653,7 @@ ON DUPLICATE KEY UPDATE
 -- ============================================================================
 --  五、执行结果校验
 -- ============================================================================
--- 执行完成后，预期看到 9 张业务/支撑表：
+-- 执行完成后，预期看到 14 张业务/支撑表（业务 4 + AI 4 + 记账日志 1 + 会员 3 + 充值 2）：
 --
 --   SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES
 --    WHERE TABLE_SCHEMA = 'bookkeeping_fastapi' ORDER BY TABLE_NAME;
@@ -506,9 +667,11 @@ ON DUPLICATE KEY UPDATE
 --   SELECT TABLE_NAME, CONSTRAINT_NAME, REFERENCED_TABLE_NAME
 --     FROM information_schema.KEY_COLUMN_USAGE
 --    WHERE TABLE_SCHEMA = 'bookkeeping_fastapi' AND REFERENCED_TABLE_NAME IS NOT NULL;
---   预期 11 条外键约束（fk_user_token_user / fk_categories_user /
+--   预期 19 条外键约束（fk_user_token_user / fk_categories_user /
 --   fk_records_user / fk_records_category / fk_sessions_user / fk_messages_session /
---   fk_feedback_message / fk_abk_user / fk_abk_session / fk_abk_message / fk_abk_parent）。
+--   fk_feedback_message / fk_feedback_user / fk_abk_user / fk_abk_session /
+--   fk_abk_message / fk_abk_parent / fk_membership_user / fk_usage_user / fk_codes_user /
+--   fk_recharge_user / fk_recharge_reviewer / fk_recharge_audit_order / fk_recharge_audit_actor）。
 
 
 -- ============================================================================

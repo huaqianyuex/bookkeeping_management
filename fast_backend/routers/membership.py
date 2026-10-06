@@ -1,0 +1,127 @@
+"""会员模块路由（骨架：端点声明 + 实现步骤 TODO，逻辑待实现）
+
+实现规格：docs/membership-plan.md §6；两个 router 在 main.py 一并 include。
+
+约定：
+- 本模块走标准 {code, message, data} 信封（utils.response.success_response），
+  与 AI 模块裸 JSON 契约无关；业务失败用 HTTPException（全局处理器转信封）；
+- 权益数值唯一来源 config.settings.MEMBERSHIP_PLANS，不在此硬编码；
+- AI 消费点的配额闸门（/api/ai/** 的 429 裸 JSON QUOTA_EXCEEDED）是既有接口的
+  行为增强，规格见 docs/membership-plan.md §5，本期未接入。
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config.db_config import get_db
+from schemas.membership import CodeGenerateIn, GrantIn, RedeemIn
+from utils.auth import get_current_admin, get_current_user
+from utils.response import success_response
+
+# 用户侧与管理侧分两个 router（prefix 不同、同一 tag 便于 Swagger 分组）
+router = APIRouter(prefix="/api/membership", tags=["membership"])
+admin_router = APIRouter(prefix="/api/admin/membership", tags=["membership"])
+
+
+@router.get("/status", summary="我的会员状态与今日用量")
+async def membership_status(
+    user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """等级 + 到期时间 + 今日用量 + 权益矩阵（会员中心与 AI 页额度角标的数据源）。
+
+    TODO:
+      1) tier = await membership_crud.get_tier(db, user_id)
+      2) plan = MEMBERSHIP_PLANS[tier]
+      3) m = await membership_crud.get_effective_membership(db, user_id)
+      4) usage = await membership_crud.get_usage_row(db, user_id)（无行按 0 组包）
+      5) return success_response(data={tier, tierName, expiresAt, benefits=plan,
+                                       usage={date, chat, analyze, bookkeeping}})
+    """
+
+    return success_response(data=None)
+
+
+@router.post("/redeem", summary="兑换码开通/续费")
+async def redeem(
+    body: RedeemIn,
+    user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """兑换码核销：叠加语义从 max(NOW, 现有到期) 起加天数。
+
+    TODO:
+      1) ok, msg, m = await membership_crud.redeem_code(db, user_id, body.code)
+      2) not ok -> raise HTTPException(status_code=400, detail=msg)
+      3) return success_response(message=msg, data={"tier": 1, "expiresAt": m.expires_at.isoformat()})
+    """
+    return success_response(message="兑换成功", data=None)
+
+
+@admin_router.post("/codes", summary="批量生成兑换码")
+async def generate_codes(
+    body: CodeGenerateIn,
+    _: int = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量生成（count 1-500、days 1-3650 由 schema 校验）。
+
+    TODO:
+      1) rows = await membership_crud.generate_codes(db, body.count, body.days, body.batch_no)
+      2) return success_response(message=f"已生成 {len(rows)} 张兑换码",
+                                 data={"batchNo": rows[0].batch_no,
+                                       "codes": [MembershipCodeOut.model_validate(r).model_dump(by_alias=True) ...]})
+    """
+    return success_response(message="已生成 0 张兑换码", data=None)
+
+
+@admin_router.get("/codes", summary="兑换码列表")
+async def list_codes(
+    _: int = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100),
+    status: int | None = Query(None, description="0未使用 1已使用 2已作废；缺省全部"),
+):
+    """兑换码分页列表（id 倒序，PageResult 结构）。
+
+    TODO:
+      1) status 非 None 时须 in (0,1,2)，否则 raise HTTPException(400, "参数错误")
+      2) result = await membership_crud.list_codes(db, page, size, status)
+      3) return success_response(data={records, total, pages, current, size})
+    """
+    return success_response(data={"records": [], "total": 0, "pages": 0, "current": page, "size": size})
+
+
+@admin_router.put("/codes/{code_id}/void", summary="作废兑换码")
+async def void_code(
+    code_id: int,
+    _: int = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """作废：仅未使用（status=0）可作废。
+
+    TODO:
+      1) ok, msg = await membership_crud.void_code(db, code_id)
+      2) not ok -> raise HTTPException(status_code=400, detail=msg)
+      3) return success_response(message=msg)
+    """
+    return success_response(message="已作废")
+
+
+@admin_router.post("/grant", summary="手动开通/延期会员")
+async def grant(
+    body: GrantIn,
+    _: int = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """管理员开通/延期（叠加语义）；用户不存在返回 404（会员模块有意选择）。
+
+    TODO:
+      1) m = await membership_crud.grant_membership(db, body.user_id, body.days)
+      2) m is None -> raise HTTPException(status_code=404, detail="用户不存在")
+      3) return success_response(message=f"已为用户 {body.user_id} 开通/延期 {body.days} 天",
+                                 data={"userId": m.user_id, "tier": m.tier,
+                                       "expiresAt": m.expires_at.isoformat() if m.expires_at else None})
+    """
+    return success_response(message="已开通", data=None)

@@ -16,35 +16,94 @@ ANALYZE_SYSTEM = (
 
 BUDGET_SYSTEM = (
     "你是个人记账管理系统「小记」的预算规划师。基于用户月收入、储蓄目标和历史消费结构制定预算，"
-    "输出 JSON：monthly_budget（建议月总预算）、category_limits（数组，每项含 category 名称、"
-    "limit 预算上限、reason 一句理由，最多 6 个分类）、savings_target（月储蓄目标）、"
+    "输出 JSON：monthly_budget（建议月总预算，必须小于用户月收入）、"
+    "category_limits（数组，每项含 category 名称、"
+    "limit 预算上限、reason 一句理由，最多 6 个分类；各分类 limit 之和不得超过 monthly_budget）、"
+    "savings_target（月储蓄目标）、"
     "alerts（提醒，数组，可为空）。只输出 JSON，不要多余文字。用中文。"
 )
 
 
-async def analyze_expense(ctx: dict) -> ExpenseAnalysis:
+class _ExpenseInsightPart(BaseModel):
+    """LLM 负责的文本子集（数值字段一律由系统计算，不让模型碰）
+
+    提到模块级：原先定义在 analyze_expense() 函数体内，每次请求都要重新构造
+    Pydantic 模型并重新生成 JSON Schema 随请求下发。
+    """
+    summary: str = Field(description="一句话总结")
+    insights: list[str] = Field(description="洞察，正好3条")
+    suggestions: list[str] = Field(description="建议，正好3条")
+    risk_level: str = Field(description="低/一般/高 三选一")
+
+
+# 预算兜底上限：月总预算硬性不得超过月收入的这个比例。
+# 历史缺口：monthly_budget 完全信任 LLM，月收入 5000 也可能输出「建议月总预算 8000」，
+# 而前端会把它当建议直接展示（savings_target 当时被系统覆盖了，monthly_budget 没有）。
+_BUDGET_INCOME_CAP = 0.9
+# 各分类 limit 之和相对 monthly_budget 的容忍度，超出则按比例缩放
+_CATEGORY_SUM_TOLERANCE = 1.05
+
+
+def _sanitize_budget(plan: BudgetPlan, monthly_income: float) -> BudgetPlan:
+    """预算数值一致性校验——把 LLM 的自由发挥夹回经济上说得通的区间。
+
+    三道夹逼：
+    1. monthly_budget 必须 > 0 且 ≤ 月收入 * _BUDGET_INCOME_CAP；
+    2. 各分类 limit 归一到非负；
+    3. 各分类 limit 之和 ≤ monthly_budget * _CATEGORY_SUM_TOLERANCE，
+       超出按比例缩放（缩到容忍线内），避免「分类加起来远大于总预算」的
+       自相矛盾建议。
+    """
+    cap = round(monthly_income * _BUDGET_INCOME_CAP, 2)
+    if not plan.monthly_budget or plan.monthly_budget <= 0:
+        plan.monthly_budget = cap
+    elif plan.monthly_budget > cap:
+        plan.monthly_budget = cap
+
+    limits: list[dict] = []
+    for item in plan.category_limits or []:
+        try:
+            limit = float(item.get("limit") or 0)
+        except (TypeError, ValueError):
+            limit = 0.0
+        if limit < 0:
+            limit = 0.0
+        new_item = dict(item)
+        new_item["limit"] = round(limit, 2)
+        limits.append(new_item)
+    plan.category_limits = limits
+
+    total = sum(x["limit"] for x in limits)
+    ceiling = plan.monthly_budget * _CATEGORY_SUM_TOLERANCE
+    if total > ceiling > 0:
+        ratio = ceiling / total
+        for x in limits:
+            x["limit"] = round(x["limit"] * ratio, 2)
+    return plan
+
+
+async def analyze_expense(ctx: dict, query: str | None = None) -> ExpenseAnalysis:
     """消费分析（6.9）：ctx = build_user_context 的财务数据
 
     结构化输出：把 ExpenseAnalysis 交给 with_structured_output，
     LLM 只填 summary/insights/suggestions/risk_level，数值字段由系统计算补齐。
-    """
-    # LLM 只负责文本字段的结构子集
-    class _LLMPart(BaseModel):
-        summary: str = Field(description="一句话总结")
-        insights: list[str] = Field(description="洞察，正好3条")
-        suggestions: list[str] = Field(description="建议，正好3条")
-        risk_level: str = Field(description="低/一般/高 三选一")
 
-    llm = get_analyze_llm().with_structured_output(_LLMPart)
+    query：用户自然语言诉求（ExpenseAnalyzeIn.query）。历史 bug 是该字段
+    定义了、API 文档写了、前端传了，服务端却硬编码「请分析我的消费情况」
+    并丢弃入参——于是「为什么餐饮涨了」和「随便分析」得到完全相同的分析。
+    """
+    demand = (query or "").strip() or "请分析我的消费情况"
+
+    llm = get_analyze_llm().with_structured_output(_ExpenseInsightPart)
     prompt = (
         f"统计月份: {ctx['this_month']}\n"
         f"当月总收入: {ctx['total_income']}\n"
         f"当月总支出: {ctx['total_expense']}\n"
         f"上月总支出: {ctx['last_month_expense']}\n"
         f"当月支出Top分类: {ctx['top_categories']}\n"
-        f"用户诉求: 请分析我的消费情况"
+        f"用户诉求: {demand}"
     )
-    part: _LLMPart = await llm.ainvoke([SystemMessage(content=ANALYZE_SYSTEM), HumanMessage(content=prompt)])
+    part: _ExpenseInsightPart = await llm.ainvoke([SystemMessage(content=ANALYZE_SYSTEM), HumanMessage(content=prompt)])
 
     income = float(ctx["total_income"])
     expense = float(ctx["total_expense"])
@@ -75,4 +134,4 @@ async def plan_budget(monthly_income: float, savings_goal: float | None, ctx: di
     )
     plan: BudgetPlan = await llm.ainvoke([SystemMessage(content=BUDGET_SYSTEM), HumanMessage(content=prompt)])
     plan.savings_target = target  # 储蓄目标以系统计算为准
-    return plan
+    return _sanitize_budget(plan, monthly_income)
