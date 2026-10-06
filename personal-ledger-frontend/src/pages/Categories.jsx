@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Modal, Form, Input, Select, Space, Card, Tag, Typography, Popconfirm, App as AntdApp } from 'antd'
+import { Table, Button, Modal, Form, Input, Select, Space, Card, Typography, Popconfirm, App as AntdApp } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { getCategoryList, addCategory, updateCategory, deleteCategory } from '../api/category'
-import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute } from '../components/ui'
+import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute, SemanticTag } from '../components/ui'
 import { formatDateTime } from '../utils/format'
 import { extractErrorMessage } from '../utils/error'
 
@@ -88,7 +88,7 @@ export default function Categories() {
       key: 'type',
       width: 100,
       render: (v) => (
-        <Tag color={v === 0 ? 'error' : 'success'}>{v === 0 ? '支出' : '收入'}</Tag>
+        <SemanticTag variant={v === 0 ? 'danger' : 'success'}>{v === 0 ? '支出' : '收入'}</SemanticTag>
       ),
     },
     {
@@ -101,7 +101,8 @@ export default function Categories() {
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      /* 容纳「编辑 + 删除」两枚带图标按钮，详见 Records 同名列的说明 */
+      width: 184,
       render: (_, record) => (
         <Space>
           <Button
@@ -145,8 +146,8 @@ export default function Categories() {
         rowKey="id"
         size="middle"
         pagination={{ pageSize: 10, hideOnSinglePage: true, showTotal: (t) => `共 ${t} 条` }}
-        scroll={{ x: 480 }}
-        style={{ marginTop: 16 }}
+        scroll={{ x: 540 }}
+        style={{ marginTop: 'var(--space-base)' }}
       />
     )
   }
@@ -177,7 +178,7 @@ export default function Categories() {
         onCancel={() => setModalOpen(false)}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 24 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 'var(--space-xl)' }}>
           <Form.Item name="name" label="分类名称" rules={[{ required: true, message: '分类名称不能为空' }]}>
             <Input placeholder="请输入分类名称" />
           </Form.Item>

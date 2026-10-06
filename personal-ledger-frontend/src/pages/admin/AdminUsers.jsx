@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Card, Modal, Typography, Tag, Input, Space, Popconfirm, Switch, App as AntdApp } from 'antd'
+import { Table, Button, Card, Modal, Typography, Input, Space, Popconfirm, Switch, App as AntdApp } from 'antd'
 import { SearchOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 import { getAdminUserList, deleteAdminUser, batchDeleteAdminUsers, updateAdminUserStatus } from '../../api/admin'
-import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute, ListToolbar } from '../../components/ui'
+import { PageHeader, EmptyState, ErrorState, SkeletonCard, AnimatedRoute, ListToolbar, SemanticTag } from '../../components/ui'
 import { formatDateTime } from '../../utils/format'
 import { extractErrorMessage } from '../../utils/error'
 
@@ -110,7 +110,9 @@ export default function AdminUsers() {
       key: 'role',
       width: 100,
       render: (v) => (
-        <Tag color={v === 1 ? 'gold' : 'default'}>{v === 1 ? '管理员' : '普通用户'}</Tag>
+        /* accent 而非 antd 预设 gold：角色是"身份"不是"状态"，
+           用调色板里唯一未被语义色占用的强调位，避免读成"警告"。 */
+        <SemanticTag variant={v === 1 ? 'accent' : 'neutral'}>{v === 1 ? '管理员' : '普通用户'}</SemanticTag>
       ),
     },
     {
@@ -120,7 +122,7 @@ export default function AdminUsers() {
       width: 90,
       render: (v, record) => (
         record.role === 1 ? (
-          <Tag color="success">启用</Tag>
+          <SemanticTag variant="success">启用</SemanticTag>
         ) : (
           <Popconfirm
             title={v === 1 ? '确认禁用' : '确认启用'}
@@ -144,7 +146,7 @@ export default function AdminUsers() {
     {
       title: '操作',
       key: 'action',
-      width: 100,
+      width: 124,
       render: (_, record) => (
         record.role === 1 ? (
           <Text type="secondary">不可操作</Text>
@@ -198,7 +200,7 @@ export default function AdminUsers() {
           showTotal: (t) => `共 ${t} 条`,
           onChange: (page, size) => fetchData(page, size),
         }}
-        scroll={{ x: 720 }}
+        scroll={{ x: 760 }}
       />
     )
   }

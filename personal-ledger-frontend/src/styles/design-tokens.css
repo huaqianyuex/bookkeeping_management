@@ -2,106 +2,35 @@
    Design Tokens - Personal Ledger App
    Slate Cyan & Teal — Low-saturation, high-trust finance aesthetic
 
-   颜色：唯一来源 src/theme/palette.js（运行时注入 :root），本文件不含颜色字面量。
-   尺寸/圆角/阴影/字号/动效/z-index/布局常量：定义在本文件 :root。
+   ⚠ 本文件**不再持有任何真值**（既无颜色字面量，也无尺寸字面量）。
+     唯一真值来源：
+       · 颜色   → src/theme/palette.js  由 applyPalette() 写入 :root
+       · 标量   → src/theme/tokens.js   由 applyTokens()  写入 :root
+     二者均在 main.jsx 中于 React 渲染前同步执行，因此不存在首帧缺变量。
+
+     本文件只保留三类内容：
+       1. 由其他变量推导的**别名**（改源变量即自动跟随）
+       2. 结构性工具类 / 布局原语
+       3. 全局基线样式（字体、滚动条、选中态、降低动效偏好）
    ============================================================ */
 
 :root {
-  /* ── Color Palette ──
-   *
-   * ⚠ 颜色字面量不在本文件。唯一色板来源是 src/theme/palette.js，
-   *   由其中的 applyPalette() 在运行时把这些变量写入 :root。
-   *   改色请改 palette.js —— 改这里不会生效。
-   *
-   *   本节仅保留由其他变量推导的别名，因此不存在第二份真值。
-   */
-  /* 账本语义别名：收入 = 成功色，支出 = 危险色 */
+  /* ── 语义别名（由 palette 派生，无需在别处重复定义） ── */
+  /* 账本语义：收入 = 成功色，支出 = 危险色 */
   --color-income: var(--color-success);
   --color-expense: var(--color-danger);
 
-  /* 主色渐变 */
-  --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-deep) 100%);
-
-  /* ── Spacing Scale (8pt grid) ── */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 12px;
-  --space-base: 16px;
-  --space-lg: 20px;
-  --space-xl: 24px;
-  --space-2xl: 32px;
-  --space-3xl: 40px;
-  --space-4xl: 48px;
-
-  /* ── Border Radius Scale ── */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 14px;
-  --radius-2xl: 18px;
-  --radius-full: 9999px;
-
-  /* ── Shadows ── */
-  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
-  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.03);
-  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.07), 0 2px 8px rgba(15, 23, 42, 0.03);
-  --shadow-xl: 0 16px 48px rgba(15, 23, 42, 0.09), 0 4px 12px rgba(15, 23, 42, 0.03);
-
-  /* Sider shadow */
-  --shadow-sider: 2px 0 8px rgba(15, 23, 42, 0.03);
-
-  /* Primary button / FAB shadows */
-  --shadow-primary: 0 4px 12px rgba(22, 78, 99, 0.22);
-  --shadow-fab: 0 6px 16px rgba(22, 78, 99, 0.32);
-
-  /* ── Typography ── */
-  --font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-
-  /* Font Size Scale */
-  --font-size-xs: 11px;
-  --font-size-sm: 12px;
-  --font-size-base: 14px;
-  --font-size-md: 15px;
-  --font-size-lg: 17px;
-  --font-size-xl: 20px;
-  --font-size-2xl: 24px;
-  --font-size-3xl: 30px;
-
-  /* Font weights */
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-
-  /* Line heights */
-  --line-height-tight: 1.25;
-  --line-height-base: 1.5;
-  --line-height-relaxed: 1.65;
-
-  /* ── Transitions ── */
-  --transition-fast: 150ms ease;
-  --transition-base: 200ms ease;
-  --transition-slow: 300ms ease;
-  --transition-slower: 400ms ease-out;
-
-  /* ── Z-Index Scale ── */
-  --z-base: 0;
-  --z-dropdown: 100;
-  --z-sticky: 200;
-  --z-overlay: 300;
-  --z-modal: 400;
-  --z-toast: 500;
-  --z-fab: 900;
-
-  /* ── Layout Constants ── */
-  --sider-width: 240px;
-  --sider-collapsed-width: 72px;
-  --header-height: 64px;
-  --content-max-width: 1200px;
+  /* 品牌渐变。刻意分成两支 —— 二者对"上面压不压文字"的要求相反：
+     · --gradient-primary（亮）：只用于承载图标的色块（Logo 方块、FAB），其上无文字
+     · --gradient-brand  （暗）：用于承载白字的区域（登录页品牌区），
+       保证最亮端 #0e7490 上白字仍有 5.4:1，满足 WCAG AA */
+  --gradient-primary: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+  --gradient-brand: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-deep) 100%);
 }
+
+/* ============================================================
+   Base — 字体、滚动条、选中态
+   ============================================================ */
 
 html,
 body {
@@ -111,8 +40,46 @@ body {
 
 body {
   font-family: var(--font-family-base);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  color: var(--color-text);
   background-color: var(--color-bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 纤细滚动条：默认滚动条在浅色界面上过于笨重，且与卡片圆角不协调 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::selection {
+  background: var(--color-primary-border);
+  color: var(--color-primary-deep);
 }
 
 /* 键盘可达性：仅键盘聚焦时显示轮廓，不干扰鼠标点击 */
@@ -126,7 +93,7 @@ button:focus-visible,
 
 /* ============================================================
    Layout Primitives — CSS Grid & Flexbox
-   All sizing follows the 8pt grid above.
+   All sizing follows the 4pt grid defined in tokens.js.
    ============================================================ */
 
 /* ── Flex Utilities ── */
@@ -143,33 +110,33 @@ button:focus-visible,
 
 /* ── CSS Grid Layout Primitives ── */
 
-/* KPI 统计行：手机 3 列等宽紧凑；桌面 3 列宽松 */
+/* KPI 统计行：手机 3 列等宽紧凑；桌面 3 列标准间距 */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-xl);
-  margin-bottom: var(--space-xl);
+  gap: var(--space-base);
+  margin-bottom: var(--space-base);
 }
 
 /* 通用双列网格 */
 .col-2-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-xl);
+  gap: var(--space-lg);
 }
 
 /* 7:3 内容–辅助布局（趋势图 + 环形图） */
 .col-7-3-grid {
   display: grid;
   grid-template-columns: 7fr 3fr;
-  gap: var(--space-xl);
+  gap: var(--space-lg);
 }
 
 /* 自适应卡片网格（最小列宽 260px，自动换行） */
 .auto-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--space-xl);
+  gap: var(--space-lg);
 }
 
 /* ── Gap Tokens ── */
@@ -196,7 +163,9 @@ button:focus-visible,
 .mb-xl   { margin-bottom: var(--space-xl); }
 .mb-2xl  { margin-bottom: var(--space-2xl); }
 
-/* ── Card Variants ── */
+/* ============================================================
+   Surfaces
+   ============================================================ */
 
 /* 基础卡片：细描边 + 柔和阴影，hover 提升层次 */
 .card-base {
@@ -224,7 +193,19 @@ button:focus-visible,
 .card-accent-primary { border-left: 3px solid var(--color-primary); }
 .card-accent-info    { border-left: 3px solid var(--color-info); }
 
-/* ── Typography ── */
+/* 遮罩层：移动端侧边栏 / 抽屉共用。抽成类避免各处手写 rgba */
+.overlay-mask {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+}
+
+/* ============================================================
+   Typography
+   ============================================================ */
+
 /* 账本式金额排版：等宽数字，多行金额纵向对齐 */
 .money {
   font-variant-numeric: tabular-nums;
@@ -285,6 +266,10 @@ button:focus-visible,
 .w-full          { width: 100%; }
 .h-full          { height: 100%; }
 
+/* ============================================================
+   Decorative Primitives
+   ============================================================ */
+
 /* ── Icon Containers ── */
 .gradient-icon {
   width: 48px;
@@ -300,6 +285,7 @@ button:focus-visible,
 .gradient-icon--primary          { background: var(--gradient-primary); }
 .gradient-icon--info             { background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-light) 100%); }
 .gradient-icon--warning          { background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-light) 100%); }
+.gradient-icon--accent           { background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-light) 100%); }
 .gradient-icon--balance-positive { background: var(--gradient-primary); }
 .gradient-icon--balance-negative { background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-light) 100%); }
 
@@ -310,6 +296,7 @@ button:focus-visible,
 .color-dot--primary { background: var(--color-primary); }
 .color-dot--info    { background: var(--color-info); }
 .color-dot--warning { background: var(--color-warning); }
+.color-dot--accent  { background: var(--color-accent); }
 
 /* ── Progress Bar ── */
 .progress-bar-track {
@@ -337,7 +324,13 @@ button:focus-visible,
 .progress-bar-fill--info    { background: var(--color-info); }
 .progress-bar-fill--warning { background: var(--color-warning); }
 
-/* ── Page Container ── */
+/* ── Logo Gradient ── */
+.logo-gradient { background: var(--gradient-primary); }
+
+/* ============================================================
+   Page Structure
+   ============================================================ */
+
 .page-container {
   width: 100%;
   max-width: var(--content-max-width);
@@ -345,25 +338,11 @@ button:focus-visible,
   margin-right: auto;
 }
 
-/* ── Breadcrumb ── */
-.breadcrumb-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
-}
-.breadcrumb-current {
-  color: var(--color-text);
-  font-weight: var(--font-weight-medium);
-}
-
-/* ── Page Header ── */
 .page-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-base);
   gap: var(--space-base);
 }
 .page-header__title {
@@ -380,7 +359,6 @@ button:focus-visible,
   color: var(--color-text-secondary);
 }
 
-/* ── Section Title ── */
 .section-title {
   display: flex;
   align-items: center;
@@ -399,20 +377,14 @@ button:focus-visible,
 }
 
 /* ── Table Action & Toolbar ── */
-.table-action {
-  padding: 4px 8px;
-}
+.table-action { padding: 4px 8px; }
+
 .list-toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-md);
   flex-wrap: wrap;
-  margin-bottom: var(--space-xl);
-}
-
-/* ── Logo Gradient ── */
-.logo-gradient {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  margin-bottom: var(--space-base);
 }
 
 /* ── Sidebar Menu hover (Drawer fallback) ── */
@@ -443,7 +415,7 @@ button:focus-visible,
   outline: none;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
-.fab:hover  { transform: scale(1.06); box-shadow: 0 8px 24px rgba(22, 78, 99, 0.4); }
+.fab:hover  { transform: scale(1.06); box-shadow: var(--shadow-fab-hover); }
 .fab:active { transform: scale(0.97); }
 
 /* ── AI Session Items ── */
@@ -456,10 +428,76 @@ button:focus-visible,
   transition: background-color var(--transition-fast), border-color var(--transition-fast);
 }
 .session-item:hover         { background-color: var(--color-bg-subtle); }
-.session-item--active       { background-color: var(--color-primary-bg); border-color: var(--color-primary-bg); }
+.session-item--active       { background-color: var(--color-primary-bg); border-color: var(--color-primary-border); }
 .session-item--selected     { border-color: var(--color-primary); }
 .session-item-actions       { display: none; gap: 4px; }
 .session-item:hover .session-item-actions { display: inline-flex; }
+
+/* ── Command Palette (⌘K) ── */
+.cmdk-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay);
+  backdrop-filter: blur(2px);
+  z-index: var(--z-modal);
+  cursor: pointer;
+}
+.cmdk-panel {
+  position: fixed;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 32px));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  z-index: calc(var(--z-modal) + 1);
+  overflow: hidden;
+}
+.cmdk-input {
+  display: block;
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 14px 16px;
+  font-size: var(--font-size-md);
+  font-family: var(--font-family-base);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  box-sizing: border-box;
+}
+.cmdk-input::placeholder { color: var(--color-text-tertiary); }
+.cmdk-list {
+  max-height: 320px;
+  overflow: auto;
+  padding: 6px;
+}
+.cmdk-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+}
+.cmdk-item--active { background: var(--color-primary-bg); }
+.cmdk-item__icon { color: var(--color-text-secondary); display: inline-flex; }
+.cmdk-item__label { flex: 1; min-width: 0; }
+.cmdk-item__hint { font-size: var(--font-size-sm); color: var(--color-text-tertiary); }
+.cmdk-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* ============================================================
+   Animation
+   ============================================================ */
 
 /* ── Animated Route ── */
 @keyframes fadeInUp {
@@ -471,7 +509,7 @@ button:focus-visible,
   to   { opacity: 1; }
 }
 .animated-route {
-  animation: fadeInUp var(--transition-slow) ease both;
+  animation: fadeInUp var(--transition-slow) both;
 }
 
 /* ── Chat Typing & Cursor ── */
@@ -499,7 +537,9 @@ button:focus-visible,
   animation: fadeIn 0.8s step-start infinite alternate;
 }
 
-/* ── Responsive Breakpoints ── */
+/* ============================================================
+   Responsive Breakpoints
+   ============================================================ */
 
 /* Mobile < 768px */
 @media (max-width: 767px) {
@@ -530,9 +570,16 @@ button:focus-visible,
 
 /* Tablet ≥ 768px */
 @media (min-width: 768px) {
-  .stats-grid   { gap: var(--space-xl); }
+  .stats-grid   { gap: var(--space-base); }
   .col-2-grid   { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .col-7-3-grid { grid-template-columns: 7fr 3fr; }
+}
+
+/* 窄平板区间：7:3 双栏挤不下右侧环形图，降为单列 */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .col-7-3-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Motion preference */

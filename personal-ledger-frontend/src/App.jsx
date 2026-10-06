@@ -16,11 +16,13 @@ import UserInfo from './pages/UserInfo'
 import ChangePassword from './pages/ChangePassword'
 import Membership from './pages/Membership'
 import AiChatPage from './pages/AiChat'
+import SettingsLayout from './pages/settings/SettingsLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminRecords from './pages/admin/AdminRecords'
 import AdminFaq from './pages/admin/AdminFaq'
 import AdminMembership from './pages/admin/AdminMembership'
+import AdminRecharges from './pages/admin/AdminRecharges'
 
 function AppContent() {
   return (
@@ -36,8 +38,13 @@ function AppContent() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="records" element={<Records />} />
         <Route path="categories" element={<Categories />} />
-        <Route path="user-info" element={<UserInfo />} />
-        <Route path="change-password" element={<ChangePassword />} />
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="profile" replace />} />
+          <Route path="profile" element={<UserInfo />} />
+          <Route path="password" element={<ChangePassword />} />
+        </Route>
+        <Route path="user-info" element={<Navigate to="/settings/profile" replace />} />
+        <Route path="change-password" element={<Navigate to="/settings/password" replace />} />
         <Route path="admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
         <Route path="admin/records" element={<AdminRoute><AdminRecords /></AdminRoute>} />
@@ -45,6 +52,7 @@ function AppContent() {
         <Route path="ai-chat" element={<AiChatPage />} />
         <Route path="membership" element={<Membership />} />
         <Route path="admin/membership" element={<AdminRoute><AdminMembership /></AdminRoute>} />
+        <Route path="admin/recharges" element={<AdminRoute><AdminRecharges /></AdminRoute>} />
       </Route>
     </Routes>
   )

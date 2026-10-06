@@ -31,8 +31,8 @@ export default function Login() {
 
   return (
     <AuthLayout brandTitle="个人记账本" brandSubtitle="简洁高效的个人财务管理工具">
-      <div style={{ marginBottom: 48 }}>
-        <Title level={3} style={{ marginBottom: 8, fontWeight: 700, color: 'var(--color-text)' }}>
+      <div style={{ marginBottom: 'var(--space-4xl)' }}>
+        <Title level={3} style={{ marginBottom: 'var(--space-sm)', fontWeight: 'var(--font-weight-bold)', color: 'var(--color-text)' }}>
           欢迎回来
         </Title>
         <Text style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-md)' }}>
@@ -41,26 +41,26 @@ export default function Login() {
       </div>
 
       <Form form={form} onFinish={onFinish} size="large" layout="vertical">
-        <Form.Item name="username" style={{ marginBottom: 20 }}>
+        <Form.Item name="username" style={{ marginBottom: 'var(--space-lg)' }}>
           <Input
             prefix={<UserOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
             placeholder="用户名"
-            style={{ height: 48, borderRadius: 'var(--radius-md)' }}
+            style={{ borderRadius: 'var(--radius-md)' }}
           />
         </Form.Item>
-        <Form.Item name="password" style={{ marginBottom: 28 }}>
+        <Form.Item name="password" style={{ marginBottom: 'var(--space-2xl)' }}>
           <Input.Password
             prefix={<LockOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
             placeholder="密码"
-            style={{ height: 48, borderRadius: 'var(--radius-md)' }}
+            style={{ borderRadius: 'var(--radius-md)' }}
           />
         </Form.Item>
-        <Form.Item style={{ marginBottom: 20 }}>
+        <Form.Item style={{ marginBottom: 'var(--space-lg)' }}>
           <Button
             type="primary"
             htmlType="submit"
             block
-            style={{ height: 48, fontSize: 16, fontWeight: 600 }}
+            style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}
           >
             登录
           </Button>
@@ -73,8 +73,8 @@ export default function Login() {
             to="/register"
             style={{
               color: 'var(--color-primary)',
-              fontWeight: 600,
-              marginLeft: 4,
+              fontWeight: 'var(--font-weight-semibold)',
+              marginLeft: 'var(--space-xs)',
             }}
           >
             立即注册

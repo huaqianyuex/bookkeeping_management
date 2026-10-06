@@ -7,7 +7,7 @@ import { Card } from 'antd'
  * @param {ReactNode} props.icon - Icon component (e.g., ArrowUpOutlined)
  * @param {string} props.label - Label text (e.g., "本月收入")
  * @param {number|string} props.value - Numeric value to display
- * @param {'income'|'expense'|'balance'|'primary'|'info'|'warning'} props.color - Color variant
+ * @param {'income'|'expense'|'balance'|'primary'|'info'|'warning'|'accent'} props.color - Color variant
  * @param {number} [props.balance] - For 'balance' color: used to determine if positive/negative
  * @param {boolean} [props.compact=false] - Use compact/mobile layout (top border style)
  * @param {string} [props.prefix='¥'] - Value prefix; pass '' for count stats
@@ -23,40 +23,21 @@ export default function StatCard({
   prefix = '¥',
   precision = 2,
 }) {
+  /* 每个语义位只求解一次色值。
+     结余（balance）此前数字用主色、顶部色条却用成功/危险色，同一张卡片出现两种
+     语义——现统一按正负取主色 / 危险色：结余是派生指标，不该与"收入"共用绿色。 */
+  const isBalancePositive = (balance ?? 0) >= 0
   const colorMap = {
-    income: {
-      iconBg: 'gradient-icon--success',
-      accentColor: 'var(--color-success)',
-      borderColor: 'var(--color-success)',
-    },
-    expense: {
-      iconBg: 'gradient-icon--danger',
-      accentColor: 'var(--color-danger)',
-      borderColor: 'var(--color-danger)',
-    },
-    balance: {
-      iconBg: (balance ?? 0) >= 0 ? 'gradient-icon--balance-positive' : 'gradient-icon--balance-negative',
-      accentColor: (balance ?? 0) >= 0 ? 'var(--color-primary)' : 'var(--color-danger)',
-      borderColor: (balance ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
-    },
-    primary: {
-      iconBg: 'gradient-icon--primary',
-      accentColor: 'var(--color-primary)',
-      borderColor: 'var(--color-primary)',
-    },
-    info: {
-      iconBg: 'gradient-icon--info',
-      accentColor: 'var(--color-info)',
-      borderColor: 'var(--color-info)',
-    },
-    warning: {
-      iconBg: 'gradient-icon--warning',
-      accentColor: '#d3a000',
-      borderColor: 'var(--color-warning)',
-    },
+    income: { accentColor: 'var(--color-success)' },
+    expense: { accentColor: 'var(--color-danger)' },
+    balance: { accentColor: isBalancePositive ? 'var(--color-primary)' : 'var(--color-danger)' },
+    primary: { accentColor: 'var(--color-primary)' },
+    info: { accentColor: 'var(--color-info)' },
+    warning: { accentColor: 'var(--color-warning)' },
+    accent: { accentColor: 'var(--color-accent)' },
   }
 
-  const resolved = colorMap[color]
+  const resolved = colorMap[color] || colorMap.income
   const isMoney = prefix === '¥'
   const num = typeof value === 'number' ? value : null
   const displayValue = num !== null
@@ -73,13 +54,16 @@ export default function StatCard({
       <Card
         variant="borderless"
         className="card-base"
-        style={{ borderTop: `3px solid ${resolved.borderColor}` }}
+        styles={{ body: { padding: 'var(--space-md) var(--space-sm)' } }}
+        style={{ borderTop: `3px solid ${resolved.accentColor}` }}
       >
         <div style={{ textAlign: 'center' }}>
           <span style={{
             color: 'var(--color-text-secondary)',
-            fontSize: 'var(--font-size-sm)',
+            fontSize: 'var(--font-size-xs)',
             fontWeight: 'var(--font-weight-normal)',
+            display: 'block',
+            marginBottom: 'var(--space-xs)',
           }}>
             {label}
           </span>
@@ -87,14 +71,14 @@ export default function StatCard({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px',
-            marginTop: '4px',
+            gap: 'var(--space-xs)',
           }}>
-            {Icon && <Icon style={{ fontSize: 14, color: resolved.accentColor }} />}
+            {Icon && <Icon style={{ fontSize: 'var(--font-size-sm)', color: resolved.accentColor }} />}
             <span className="money" style={{
               color: resolved.accentColor,
               fontWeight: 'var(--font-weight-semibold)',
               fontSize: 'var(--font-size-base)',
+              lineHeight: 'var(--line-height-tight)',
             }}>
               {sign}{prefix}{displayValue}
             </span>
@@ -104,30 +88,32 @@ export default function StatCard({
     )
   }
 
-  /* ── Desktop variant: gradient icon + large value ── */
+  /* ── Desktop variant: number-first, no decorative icon block ── */
   return (
-    <Card variant="borderless" className="card-base">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <div className={`gradient-icon ${resolved.iconBg}`}>
-          <Icon style={{ fontSize: '24px', color: '#fff' }} />
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <span style={{
-            color: 'var(--color-text-secondary)',
-            fontSize: 'var(--font-size-base)',
-          }}>
-            {label}
-          </span>
-          <div className="money" style={{
-            fontSize: 'var(--font-size-2xl)',
-            fontWeight: 'var(--font-weight-bold)',
-            color: resolved.accentColor,
-            marginTop: '4px',
-            letterSpacing: '-0.02em',
-          }}>
-            {sign}{prefix}{displayValue}
-          </div>
-        </div>
+    <Card
+      variant="borderless"
+      className="card-base"
+      styles={{ body: { padding: 'var(--space-md) var(--space-lg)' } }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+        {Icon && <Icon style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-tertiary)' }} />}
+        <span style={{
+          color: 'var(--color-text-secondary)',
+          fontSize: 'var(--font-size-sm)',
+          fontWeight: 'var(--font-weight-medium)',
+        }}>
+          {label}
+        </span>
+      </div>
+      <div className="money" style={{
+        fontSize: 'var(--font-size-2xl)',
+        fontWeight: 'var(--font-weight-semibold)',
+        color: resolved.accentColor,
+        marginTop: 'var(--space-xs)',
+        lineHeight: 'var(--line-height-tight)',
+        letterSpacing: '-0.02em',
+      }}>
+        {sign}{prefix}{displayValue}
       </div>
     </Card>
   )

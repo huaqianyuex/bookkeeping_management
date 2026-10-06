@@ -1,7 +1,4 @@
-import { Typography } from 'antd'
 import useMediaQuery from '../../hooks/useMediaQuery'
-
-const { Title } = Typography
 
 /**
  * PageHeader - Responsive page header with title and optional action area
@@ -17,38 +14,11 @@ export default function PageHeader({ title, action, subtitle }) {
   return (
     <div
       className="page-header"
-      style={{
-        marginBottom: 'var(--space-xl)',
-        display: 'flex',
-        justifyContent: isMobile ? 'center' : 'space-between',
-        alignItems: isMobile && !action ? 'center' : 'flex-start',
-        flexDirection: isMobile && action ? 'column' : 'row',
-        gap: isMobile && action ? 'var(--space-base)' : 0,
-      }}
+      style={isMobile && action ? { flexDirection: 'column', alignItems: 'stretch' } : undefined}
     >
       <div>
-        <Title
-          level={isMobile ? 5 : 4}
-          style={{
-            margin: 0,
-            color: 'var(--color-text)',
-            fontWeight: 'var(--font-weight-bold)',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          {title}
-        </Title>
-        {subtitle && (
-          <p
-            style={{
-              margin: 'var(--space-xs) 0 0',
-              color: 'var(--color-text-secondary)',
-              fontSize: 'var(--font-size-base)',
-            }}
-          >
-            {subtitle}
-          </p>
-        )}
+        <h2 className="page-header__title">{title}</h2>
+        {subtitle && <p className="page-header__subtitle">{subtitle}</p>}
       </div>
       {action && <div style={{ flexShrink: 0 }}>{action}</div>}
     </div>

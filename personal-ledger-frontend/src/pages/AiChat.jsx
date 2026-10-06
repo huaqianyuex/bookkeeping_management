@@ -287,7 +287,7 @@ export default function AiChatPage() {
             />
           ) : (
             <span style={{
-              flex: 1, fontSize: 14, fontWeight: active ? 600 : 400,
+              flex: 1, fontSize: 'var(--font-size-base)', fontWeight: active ? 'var(--font-weight-semibold)' : 'var(--font-weight-normal)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {s.title || '新对话'}
@@ -295,17 +295,17 @@ export default function AiChatPage() {
           )}
           {!batchMode && (
             <span className="session-item-actions">
-              <Button type="text" size="small" icon={<EditOutlined />}
+              <Button type="text" size="small" icon={<EditOutlined />} aria-label="重命名对话"
                       onClick={(e) => { e.stopPropagation(); setRenamingId(s.id); setRenameValue(s.title) }} />
-              <Button type="text" size="small" danger icon={<DeleteOutlined />}
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label="删除对话"
                       onClick={(e) => { e.stopPropagation(); handleDeleteOne(s) }} />
             </span>
           )}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 4 }}>
+        <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 'var(--space-xs)' }}>
           {s.preview || '（暂无消息）'}
         </div>
-        <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+        <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
           {formatRelative(s.updatedAt)} · {s.messageCount}条
         </div>
       </div>
@@ -315,12 +315,12 @@ export default function AiChatPage() {
   // —— 会话侧边栏内容（桌面 aside 与移动 Drawer 共用） ——
   const sidebarContent = (
     <>
-      <div style={{ display: 'flex', gap: 8, padding: 12, borderBottom: '1px solid var(--color-border)' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-sm)', padding: 'var(--space-md)', borderBottom: '1px solid var(--color-border)' }}>
         <Button type="primary" icon={<PlusOutlined />} block onClick={handleNewSession}>新对话</Button>
-        {!isMobile && <Button icon={<MenuFoldOutlined />} onClick={() => setSidebarOpen(false)} />}
+        {!isMobile && <Button icon={<MenuFoldOutlined />} aria-label="收起历史对话" onClick={() => setSidebarOpen(false)} />}
       </div>
 
-      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ padding: 'var(--space-md)', display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
         <Input prefix={<SearchOutlined />} placeholder="搜索标题或内容" allowClear
                value={keyword} onChange={(e) => setKeyword(e.target.value)} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -336,18 +336,18 @@ export default function AiChatPage() {
 
       <div style={{ flex: 1, overflow: 'auto', padding: '0 8px' }}>
         {items.length === 0 && !listLoading && (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史对话" style={{ marginTop: 40 }} />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史对话" style={{ marginTop: 'var(--space-3xl)' }} />
         )}
         {items.map((s) => renderSessionItem(s))}
         {hasMore && (
-          <Button block style={{ margin: 8 }} loading={listLoading}
+          <Button block style={{ margin: 'var(--space-sm)' }} loading={listLoading}
                   onClick={() => fetchList(page + 1, keyword, true)}>加载更多</Button>
         )}
       </div>
 
       {batchMode && (
-        <div style={{ padding: 12, borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>已选 {selected.length} 条</span>
+        <div style={{ padding: 'var(--space-md)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>已选 {selected.length} 条</span>
           <Button danger icon={<DeleteOutlined />} disabled={selected.length === 0} onClick={handleBatchDelete}>删除</Button>
         </div>
       )}
@@ -401,7 +401,7 @@ export default function AiChatPage() {
           style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0 }}
           styles={{ body: { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0 } }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottom: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-base)', borderBottom: '1px solid var(--color-border)' }}>
             <h2 style={{ margin: 0, color: 'var(--color-text)', fontSize: 'var(--font-size-lg)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <RobotOutlined style={{ color: 'var(--color-primary)' }} />
               AI记账助手
@@ -410,17 +410,18 @@ export default function AiChatPage() {
               <Button
                 type="text"
                 icon={<MenuUnfoldOutlined />}
+                aria-label="展开历史对话"
                 onClick={() => setSidebarOpen(true)}
               />
             )}
           </div>
 
-          <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? 16 : 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: isMobile ? 'var(--space-base)' : 'var(--space-lg)', display: 'flex', flexDirection: 'column', gap: 'var(--space-base)' }}>
             {messages.length === 0 && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)' }}>
-                <RobotOutlined style={{ fontSize: 64, color: 'var(--color-text-tertiary)', opacity: 0.5, marginBottom: 16 }} />
-                <div style={{ fontSize: 16, marginBottom: 8, color: 'var(--color-text)' }}>你好！我是AI记账助手</div>
-                <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'inline-block', textAlign: 'left' }}>
+                <RobotOutlined style={{ fontSize: 64, color: 'var(--color-text-tertiary)', opacity: 0.5, marginBottom: 'var(--space-base)' }} />
+                <div style={{ fontSize: 'var(--font-size-lg)', marginBottom: 'var(--space-sm)', color: 'var(--color-text)' }}>你好！我是AI记账助手</div>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', display: 'inline-block', textAlign: 'left' }}>
                   我可以帮你：
                   <ul style={{ textAlign: 'left', margin: '8px 0 0', padding: '0 0 0 18px' }}>
                     <li>回答记账和财务相关问题</li>
@@ -434,19 +435,19 @@ export default function AiChatPage() {
               const isUser = msg.role === 'user'
               const typing = !isUser && msg.streaming && !msg.content
               return (
-                <div key={i} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', gap: 10 }}>
+                <div key={i} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', gap: 'var(--space-sm)' }}>
                   {!isUser && (
                     <Avatar size={40} icon={<RobotOutlined />} style={{ background: 'var(--color-primary)', flexShrink: 0 }} />
                   )}
                   <div style={{
                     maxWidth: isMobile ? '85%' : '70%', padding: '12px 16px',
                     borderRadius: isUser
-                      ? 'var(--radius-2xl) var(--radius-2xl) 4px var(--radius-2xl)'
-                      : 'var(--radius-2xl) var(--radius-2xl) var(--radius-2xl) 4px',
+                      ? 'var(--radius-2xl) var(--radius-2xl) var(--radius-xs) var(--radius-2xl)'
+                      : 'var(--radius-2xl) var(--radius-2xl) var(--radius-2xl) var(--radius-xs)',
                     background: isUser ? 'var(--gradient-primary)' : 'var(--color-surface)',
                     border: isUser ? 'none' : '1px solid var(--color-border)',
                     color: isUser ? 'var(--color-text-inverse)' : 'var(--color-text)',
-                    fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-relaxed)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                     boxShadow: 'var(--shadow-sm)',
                   }}>
                     {typing ? (
@@ -467,7 +468,7 @@ export default function AiChatPage() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div style={{ padding: 16, borderTop: '1px solid var(--color-border)', display: 'flex', gap: 12 }}>
+          <div style={{ padding: 'var(--space-base)', borderTop: '1px solid var(--color-border)', display: 'flex', gap: 'var(--space-md)' }}>
             <Input
               value={input} onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}

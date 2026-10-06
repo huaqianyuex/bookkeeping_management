@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Layout, Menu, Avatar, Dropdown, Button, theme, Drawer, Typography, Modal, Form, Input, Select, InputNumber, DatePicker, Tabs, App as AntdApp } from 'antd'
+import { Menu, Avatar, Dropdown, Button, Typography, Modal, Form, Input, Select, InputNumber, DatePicker, Tabs, App as AntdApp } from 'antd'
 import {
   BookOutlined,
   AppstoreOutlined,
@@ -14,84 +14,88 @@ import {
   FileTextOutlined,
   QuestionCircleOutlined,
   RobotOutlined,
-  HomeOutlined,
+  SettingOutlined,
   PlusCircleOutlined,
   LineChartOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
+  CrownOutlined,
+  TagsOutlined,
+  TransactionOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getCategoryList } from '../api/category'
 import { addRecord } from '../api/record'
 import useMediaQuery from '../hooks/useMediaQuery'
+import CommandPalette from './CommandPalette'
 import dayjs from 'dayjs'
 
-const { Header, Sider, Content } = Layout
 const { Text } = Typography
 
 const menuItems = [
-  { key: '/dashboard', icon: <LineChartOutlined />, label: '数据概览' },
-  { key: '/records',   icon: <BookOutlined />,      label: '账单管理' },
+  { key: '/dashboard',  icon: <LineChartOutlined />, label: '数据概览' },
+  { key: '/records',    icon: <BookOutlined />,      label: '账单管理' },
   { key: '/categories', icon: <AppstoreOutlined />,  label: '分类管理' },
   { key: '/ai-chat',   icon: <RobotOutlined />,     label: 'AI助手' },
+  { key: '/membership', icon: <CrownOutlined />,     label: '会员中心' },
 ]
 
 const adminMenuItems = [
-  { key: '/admin/dashboard', icon: <SafetyOutlined />,   label: '系统概览' },
-  { key: '/admin/users',    icon: <TeamOutlined />,      label: '用户管理' },
-  { key: '/admin/records',  icon: <FileTextOutlined />,  label: '全量账单' },
-  { key: '/admin/faq',      icon: <QuestionCircleOutlined />, label: 'FAQ管理' },
+  { key: '/admin/dashboard', icon: <SafetyOutlined />,        label: '系统概览' },
+  { key: '/admin/users',     icon: <TeamOutlined />,          label: '用户管理' },
+  { key: '/admin/records',   icon: <FileTextOutlined />,      label: '全量账单' },
+  { key: '/admin/faq',       icon: <QuestionCircleOutlined />, label: 'FAQ管理' },
+  { key: '/admin/membership', icon: <TagsOutlined />,         label: '会员管理' },
+  { key: '/admin/recharges', icon: <TransactionOutlined />,   label: '充值审批' },
 ]
 
 const breadcrumbMap = {
-  '/dashboard': '数据概览',
-  '/records': '账单管理',
-  '/categories': '分类管理',
-  '/user-info': '个人信息',
-  '/change-password': '修改密码',
-  '/ai-chat': 'AI助手',
-  '/admin/dashboard': '系统概览',
-  '/admin/users': '用户管理',
-  '/admin/records': '全量账单',
-  '/admin/faq': 'FAQ管理',
+  '/dashboard':         '数据概览',
+  '/records':           '账单管理',
+  '/categories':        '分类管理',
+  '/settings/profile':  '设置',
+  '/settings/password': '设置',
+  '/ai-chat':           'AI助手',
+  '/membership':        '会员中心',
+  '/admin/dashboard':   '系统概览',
+  '/admin/users':       '用户管理',
+  '/admin/records':     '全量账单',
+  '/admin/faq':         'FAQ管理',
+  '/admin/membership':  '会员管理',
+  '/admin/recharges':   '充值审批',
 }
 
 export default function MainLayout() {
-  const [collapsed, setCollapsed] = useState(false)
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const isMobile = useMediaQuery('(max-width: 767px)')
+  const [collapsed, setCollapsed]     = useState(false)
+  const [drawerOpen, setDrawerOpen]   = useState(false)
+  const isMobile                      = useMediaQuery('(max-width: 767px)')
+  const isMidWidth                    = useMediaQuery('(min-width: 768px) and (max-width: 1279px)')
   const [addModalOpen, setAddModalOpen] = useState(false)
-  const [categories, setCategories] = useState([])
-  const [form] = Form.useForm()
-  const [addLoading, setAddLoading] = useState(false)
-  const [quickType, setQuickType] = useState('0')
-  const navigate = useNavigate()
-  const location = useLocation()
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [categories, setCategories]   = useState([])
+  const [form]                        = Form.useForm()
+  const [addLoading, setAddLoading]   = useState(false)
+  const [quickType, setQuickType]     = useState('0')
+  const navigate                      = useNavigate()
+  const location                      = useLocation()
   const { user, fetchUserInfo, logout } = useAuth()
-  const { token: { colorBgContainer } } = theme.useToken()
-  const { message } = AntdApp.useApp()
+  const { message }                   = AntdApp.useApp()
 
   useEffect(() => {
-    getCategoryList().then(res => {
-      if (res.code === 200) setCategories(res.data)
-    })
+    getCategoryList().then(res => { if (res.code === 200) setCategories(res.data) })
   }, [])
 
-  // 切换到桌面端时收起移动端抽屉
-  useEffect(() => {
-    if (!isMobile) setDrawerOpen(false)
-  }, [isMobile])
+  useEffect(() => { if (!isMobile) setDrawerOpen(false) }, [isMobile])
+
+  // 三档响应式：笔电/平板宽度自动收起为 icon rail，宽屏自动展开（用户仍可手动切换）
+  useEffect(() => { if (!isMobile) setCollapsed(isMidWidth) }, [isMidWidth, isMobile])
 
   const handleQuickAdd = async () => {
     try {
       const values = await form.validateFields()
       setAddLoading(true)
-      const data = {
-        ...values,
-        recordDate: values.recordDate.format('YYYY-MM-DD'),
-      }
-      const res = await addRecord(data)
+      const res = await addRecord({ ...values, recordDate: values.recordDate.format('YYYY-MM-DD') })
       if (res.code === 200) {
         message.success('记账成功')
         setAddModalOpen(false)
@@ -101,251 +105,309 @@ export default function MainLayout() {
       } else {
         message.error(res.message)
       }
-    } catch (e) {
-      // validation error
-    } finally {
-      setAddLoading(false)
-    }
+    } catch { /* validation */ } finally { setAddLoading(false) }
   }
 
-  useEffect(() => {
-    fetchUserInfo()
-  }, [])
+  useEffect(() => { fetchUserInfo() }, [])
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login', { replace: true })
-  }
+  const handleLogout = () => { logout(); navigate('/login', { replace: true }) }
 
   const userMenuItems = [
-    {
-      key: 'info',
-      icon: <UserOutlined />,
-      label: '个人信息',
-      onClick: () => navigate('/user-info'),
-    },
-    {
-      key: 'password',
-      icon: <LockOutlined />,
-      label: '修改密码',
-      onClick: () => navigate('/change-password'),
-    },
+    { key: 'info',     icon: <UserOutlined />,   label: '个人信息', onClick: () => navigate('/settings/profile') },
+    { key: 'password', icon: <LockOutlined />,   label: '修改密码', onClick: () => navigate('/settings/password') },
     { type: 'divider' },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: '退出登录',
-      onClick: handleLogout,
-    },
+    { key: 'logout',   icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout },
   ]
 
   const allMenuItems = useMemo(() => {
-    if (user?.role === 1) {
-      return [...menuItems, { type: 'divider' }, ...adminMenuItems]
-    }
+    if (user?.role === 1) return [...menuItems, { type: 'group', label: '管理', children: adminMenuItems }]
     return menuItems
   }, [user?.role])
 
-  const currentPageTitle = useMemo(() => {
-    return breadcrumbMap[location.pathname] || ''
-  }, [location.pathname])
+  const currentPageTitle = useMemo(() => breadcrumbMap[location.pathname] || '', [location.pathname])
+  const quickCategories  = categories.filter(c => c.type === Number(quickType))
 
-  const quickCategories = categories.filter(c => c.type === Number(quickType))
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen(o => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
-  const siderContent = (
+  const paletteCommands = useMemo(() => {
+    const navCmds = (user?.role === 1 ? [...menuItems, ...adminMenuItems] : menuItems)
+      .map(m => ({ key: m.key, label: m.label, icon: m.icon, hint: '跳转', run: () => navigate(m.key) }))
+    return [
+      { key: 'quick-add', label: '快速记账', icon: <PlusCircleOutlined />, hint: '操作', run: () => setAddModalOpen(true) },
+      { key: '/settings/profile', label: '设置', icon: <SettingOutlined />, hint: '跳转', run: () => navigate('/settings/profile') },
+      ...navCmds,
+    ]
+  }, [user?.role])
+
+  /* ── Mobile Overlay ── */
+  const mobileDrawer = drawerOpen && isMobile && (
     <>
-      <div style={{
-        height: 'var(--header-height)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: isMobile ? 'center' : 'flex-start',
-        padding: isMobile ? '0' : '0 24px',
-        borderBottom: '1px solid var(--color-border)',
-      }}>
-        <div className="gradient-icon gradient-icon--primary" style={{
-          width: 36,
-          height: 36,
-          borderRadius: 'var(--radius-md)',
-          marginRight: collapsed || isMobile ? '0' : '12px',
-        }}>
-          <WalletOutlined style={{ fontSize: 18, color: '#fff' }} />
-        </div>
-        {(!collapsed || isMobile) && (
-          <Text strong style={{
-            fontSize: 'var(--font-size-lg)',
-            color: 'var(--color-text)',
-            letterSpacing: '0.5px',
-          }}>
-            记账本
-          </Text>
-        )}
-      </div>
-
-      <div style={{ padding: '16px 12px 8px' }}>
-        <Button
-          type="primary"
-          icon={<PlusCircleOutlined />}
-          block
-          size="large"
-          onClick={() => setAddModalOpen(true)}
-          style={{
-            height: 48,
-            fontSize: 16,
-            fontWeight: 600,
-            borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-primary)',
-          }}
-        >
-          {collapsed ? '' : '快速记账'}
-        </Button>
-      </div>
-
-      <Menu
-        theme="light"
-        mode="inline"
-        selectedKeys={[location.pathname]}
-        items={allMenuItems}
-        style={{
-          borderRight: 0,
-          padding: '8px 8px',
-        }}
-        onClick={({ key }) => {
-          navigate(key)
-          if (isMobile) setDrawerOpen(false)
-        }}
+      {/* Backdrop —— 遮罩配色/模糊度由 .overlay-mask 统一提供 */}
+      <div
+        className="overlay-mask"
+        aria-hidden="true"
+        onClick={() => setDrawerOpen(false)}
+        style={{ zIndex: 'var(--z-overlay)' }}
       />
+      {/* Sidebar Panel */}
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, bottom: 0,
+        width: 260,
+        background: 'var(--color-surface)',
+        borderRight: '1px solid var(--color-border)',
+        boxShadow: 'var(--shadow-xl)',
+        zIndex: 'calc(var(--z-overlay) + 1)',
+        display: 'flex', flexDirection: 'column',
+        transform: 'translateX(0)',
+        transition: 'transform var(--transition-slow)',
+      }}>
+        {sidebarInner(true)}
+      </nav>
     </>
   )
 
-  return (
-    <Layout style={{ minHeight: '100vh', position: 'relative', background: 'var(--color-bg)' }}>
-      {isMobile ? (
-        <Drawer
-          placement="left"
-          onClose={() => setDrawerOpen(false)}
-          open={drawerOpen}
-          width={260}
-          styles={{ body: { padding: 0, margin: 0 } }}
-          closable={false}
-        >
-          {siderContent}
-        </Drawer>
-      ) : (
-        <Sider
-          trigger={null}
-          collapsible
-          collapsed={collapsed}
-          theme="light"
-          width={240}
-          collapsedWidth={72}
-          style={{
-            borderRight: 'none',
-            boxShadow: 'var(--shadow-sider)',
-          }}
-        >
-          {siderContent}
-        </Sider>
-      )}
-      <Layout>
-        <Header style={{
-          padding: isMobile ? '0 16px' : '0 24px',
-          background: colorBgContainer,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: '1px solid var(--color-border)',
+  function sidebarInner(isMobilePanel = false) {
+    const logoHidden = !isMobilePanel && collapsed
+    return (
+      <>
+        {/* Logo */}
+        <div style={{
           height: 'var(--header-height)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 'var(--z-sticky)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: logoHidden ? '0 18px' : '0 20px',
+          borderBottom: '1px solid var(--color-border)',
+          flexShrink: 0,
+          justifyContent: logoHidden ? 'center' : 'flex-start',
+          transition: 'padding var(--transition-slow)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {isMobile ? (
-              <Button
-                type="text"
-                icon={<MenuUnfoldOutlined />}
-                onClick={() => setDrawerOpen(true)}
-                style={{ fontSize: 18 }}
-              />
-            ) : (
-              <Button
-                type="text"
-                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setCollapsed(!collapsed)}
-                style={{ fontSize: 18 }}
-              />
-            )}
-            {!isMobile && currentPageTitle && (
-              <div className="breadcrumb-nav">
-                <HomeOutlined style={{ marginRight: 6 }} />
-                <span style={{ color: 'var(--color-text-tertiary)' }}>首页</span>
-                <span style={{ margin: '0 6px', color: 'var(--color-text-tertiary)' }}>/</span>
-                <span className="breadcrumb-current">{currentPageTitle}</span>
+          <div
+            className="gradient-icon gradient-icon--primary"
+            style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', flexShrink: 0 }}
+          >
+            <WalletOutlined style={{ fontSize: 'var(--font-size-lg)', color: 'var(--color-text-inverse)' }} />
+          </div>
+          {!logoHidden && (
+            <div style={{ overflow: 'hidden', flex: 1 }}>
+              <Text style={{
+                fontSize: 'var(--font-size-md)',
+                fontWeight: 'var(--font-weight-bold)',
+                color: 'var(--color-text)',
+                letterSpacing: '0.3px',
+                whiteSpace: 'nowrap',
+                display: 'block',
+              }}>
+                记账本
+              </Text>
+              <Text style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                Personal Ledger
+              </Text>
+            </div>
+          )}
+        </div>
+
+        {/* CTA Button */}
+        <div style={{ padding: logoHidden ? '12px 8px 6px' : '12px 12px 6px' }}>
+          <Button
+            type="primary"
+            icon={<PlusCircleOutlined />}
+            block
+            aria-label="快速记账"
+            onClick={() => { setAddModalOpen(true); if (isMobilePanel) setDrawerOpen(false) }}
+            style={{
+              height: 36,
+              /* 收起态只隐藏文案即可（下方已条件渲染），
+                 不能再靠 fontSize: 0 隐藏 —— 图标字号继承自按钮，
+                 会被一起清零，rail 里只剩一个空的色块。 */
+              fontSize: 'var(--font-size-base)',
+              fontWeight: 'var(--font-weight-semibold)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-primary)',
+              transition: 'all var(--transition-base)',
+              paddingInline: logoHidden ? 0 : undefined,
+            }}
+          >
+            {!logoHidden && '快速记账'}
+          </Button>
+        </div>
+
+        {/* Nav Menu */}
+        <div style={{ flex: 1, overflow: 'auto', paddingBottom: 12 }}>
+          <Menu
+            theme="light"
+            mode="inline"
+            selectedKeys={[location.pathname]}
+            items={allMenuItems}
+            inlineCollapsed={!isMobilePanel && collapsed}
+            style={{ borderRight: 0, padding: '4px 8px' }}
+            onClick={({ key }) => { navigate(key); if (isMobilePanel) setDrawerOpen(false) }}
+          />
+        </div>
+
+        {/* User entry at bottom — the single user/menu affordance (visible when collapsed too) */}
+        <Dropdown menu={{ items: userMenuItems }} placement="topLeft" trigger={['click']}>
+          <div
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.click() }}
+            style={{
+              padding: logoHidden ? '12px 0' : '12px 16px',
+              borderTop: '1px solid var(--color-border)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              justifyContent: logoHidden ? 'center' : 'flex-start',
+              cursor: 'pointer',
+              transition: 'background-color var(--transition-fast)',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'var(--color-bg-subtle)' }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = '' }}
+          >
+            <Avatar
+              size={32}
+              src={user?.avatar}
+              icon={<UserOutlined />}
+              style={{ backgroundColor: 'var(--color-primary)', flexShrink: 0 }}
+            />
+            {!logoHidden && (
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <Text style={{
+                  fontSize: 'var(--font-size-sm)',
+                  fontWeight: 'var(--font-weight-semibold)',
+                  color: 'var(--color-text)',
+                  display: 'block',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {user?.username || '加载中...'}
+                </Text>
+                <Text style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+                  {user?.role === 1 ? '管理员' : '普通用户'}
+                </Text>
               </div>
             )}
           </div>
-          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <Button
-              type="text"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                transition: 'all var(--transition-fast)',
-              }}
-            >
-              <Avatar
-                size="small"
-                icon={<UserOutlined />}
-                style={{ backgroundColor: 'var(--color-primary)' }}
-              />
-              {!isMobile && (
-                <Text style={{ color: 'var(--color-text)', fontWeight: 500 }}>
-                  {user?.username || '加载中...'}
-                </Text>
-              )}
-            </Button>
-          </Dropdown>
-        </Header>
-        <Content
-          className="page-container"
-          style={{
-            margin: isMobile ? '16px 0 24px' : '24px auto',
-            padding: isMobile ? '0 16px' : '0 24px',
-            width: '100%',
-            maxWidth: 'calc(var(--content-max-width) + 48px)',
-            boxSizing: 'border-box',
-          }}
-        >
-          <Outlet />
-        </Content>
-      </Layout>
+        </Dropdown>
+      </>
+    )
+  }
 
-      {/* 浮动记账按钮 - 仅移动端显示 */}
-      {isMobile && (
-        <div
-          onClick={() => setAddModalOpen(true)}
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 20,
-            width: 56,
-            height: 56,
-            borderRadius: '50%',
-            background: 'var(--gradient-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: 'var(--shadow-fab)',
-            zIndex: 'var(--z-fab)',
-            cursor: 'pointer',
-          }}
-        >
-          <PlusCircleOutlined style={{ fontSize: 24, color: '#fff' }} />
-        </div>
+  return (
+    /* ── App Shell: full-height flex row ── */
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)' }}>
+
+      {/* ── Desktop Sidebar ── */}
+      {!isMobile && (
+        <aside style={{
+          width: collapsed ? 'var(--sider-collapsed-width)' : 'var(--sider-width)',
+          flexShrink: 0,
+          background: 'var(--color-surface)',
+          borderRight: '1px solid var(--color-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          transition: 'width var(--transition-slow)',
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+          overflow: 'hidden',
+        }}>
+          {sidebarInner(false)}
+        </aside>
       )}
 
-      {/* 快速记账弹窗（与账单管理页的记账表单保持一致的结构） */}
+      {/* ── Mobile Sidebar Overlay ── */}
+      {mobileDrawer}
+
+      {/* ── Main Column: Header + Content ── */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+
+        {/* ── Sticky Top Header ── */}
+        <header style={{
+          height: 'var(--header-height)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: isMobile ? '0 var(--space-base)' : '0 var(--space-xl)',
+          background: 'var(--color-surface)',
+          borderBottom: '1px solid var(--color-border)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 'var(--z-sticky)',
+          flexShrink: 0,
+          gap: 12,
+        }}>
+          {/* Left: toggle (+ mobile page title only; desktop titles live in page content) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            <Button
+              type="text"
+              icon={isMobile
+                ? <MenuUnfoldOutlined />
+                : (collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />)
+              }
+              onClick={() => isMobile ? setDrawerOpen(true) : setCollapsed(!collapsed)}
+              aria-label={isMobile ? '打开导航菜单' : (collapsed ? '展开侧边栏' : '收起侧边栏')}
+              style={{ fontSize: 'var(--font-size-lg)', flexShrink: 0 }}
+            />
+            {isMobile && currentPageTitle && (
+              <Text style={{
+                fontSize: 'var(--font-size-md)',
+                fontWeight: 'var(--font-weight-semibold)',
+                color: 'var(--color-text)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {currentPageTitle}
+              </Text>
+            )}
+          </div>
+        </header>
+
+        {/* ── Scrollable Content Area ── */}
+        <main style={{
+          flex: 1,
+          padding: isMobile
+            ? 'var(--space-base) var(--space-base) var(--space-2xl)'
+            : 'var(--space-xl)',
+          maxWidth: 'calc(var(--content-max-width) + 48px)',
+          width: '100%',
+          margin: '0 auto',
+          boxSizing: 'border-box',
+        }}>
+          <Outlet />
+        </main>
+      </div>
+
+      {/* ── Mobile FAB ── */}
+      {isMobile && (
+        <button
+          className="fab"
+          onClick={() => setAddModalOpen(true)}
+          aria-label="快速记账"
+        >
+          <PlusCircleOutlined style={{ fontSize: 'var(--font-size-2xl)', color: 'var(--color-text-inverse)' }} />
+        </button>
+      )}
+
+      {/* ── Command Palette (⌘K / Ctrl+K) ── */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={paletteCommands}
+      />
+
+      {/* ── Quick-Add Modal ── */}
       <Modal
         title="快速记账"
         open={addModalOpen}
@@ -355,33 +417,25 @@ export default function MainLayout() {
         okText="保存"
         cancelText="取消"
         width={480}
+        styles={{ body: { paddingTop: 'var(--space-sm)' } }}
       >
         <Tabs
           activeKey={quickType}
-          onChange={(k) => { setQuickType(k); form.setFieldValue('categoryId', undefined) }}
+          onChange={k => { setQuickType(k); form.setFieldValue('categoryId', undefined) }}
           items={[
             { key: '0', label: <span><ArrowUpOutlined style={{ color: 'var(--color-expense)' }} /> 支出</span> },
             { key: '1', label: <span><ArrowDownOutlined style={{ color: 'var(--color-income)' }} /> 收入</span> },
           ]}
-          style={{ marginBottom: 8 }}
+          style={{ marginBottom: 'var(--space-sm)' }}
         />
         <Form form={form} layout="vertical" initialValues={{ recordDate: dayjs() }}>
           <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
             <Select placeholder="选择分类">
-              {quickCategories.map(c => (
-                <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>
-              ))}
+              {quickCategories.map(c => <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>)}
             </Select>
           </Form.Item>
           <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请输入金额' }]}>
-            <InputNumber
-              min={0.01}
-              precision={2}
-              placeholder="0.00"
-              style={{ width: '100%' }}
-              prefix="¥"
-              size="large"
-            />
+            <InputNumber min={0.01} precision={2} placeholder="0.00" style={{ width: '100%' }} prefix="¥" size="large" />
           </Form.Item>
           <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: '请选择日期' }]}>
             <DatePicker style={{ width: '100%' }} />
@@ -391,6 +445,6 @@ export default function MainLayout() {
           </Form.Item>
         </Form>
       </Modal>
-    </Layout>
+    </div>
   )
 }

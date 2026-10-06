@@ -3,7 +3,7 @@ import { UserOutlined, EditOutlined, UploadOutlined, LockOutlined } from '@ant-d
 import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { updateUserInfo, uploadAvatar } from '../api/user'
-import { SectionTitle, PageHeader, AnimatedRoute } from '../components/ui'
+import { SectionTitle, AnimatedRoute } from '../components/ui'
 import useMediaQuery from '../hooks/useMediaQuery'
 import { formatDateTime } from '../utils/format'
 
@@ -22,12 +22,11 @@ export default function UserInfo() {
   if (!user) {
     return (
       <AnimatedRoute>
-        <PageHeader title="个人信息" />
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 16 }}>
-          <Card variant="borderless" className="card-base" styles={{ body: { padding: 24 } }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '280px 1fr', gap: 'var(--space-base)' }}>
+          <Card variant="borderless" className="card-base" styles={{ body: { padding: 'var(--space-xl)' } }}>
             <Skeleton avatar active paragraph={{ rows: 2 }} />
           </Card>
-          <Card variant="borderless" className="card-base" styles={{ body: { padding: 24 } }}>
+          <Card variant="borderless" className="card-base" styles={{ body: { padding: 'var(--space-xl)' } }}>
             <Skeleton active paragraph={{ rows: 5 }} />
           </Card>
         </div>
@@ -84,22 +83,20 @@ export default function UserInfo() {
 
   return (
     <AnimatedRoute>
-      <PageHeader title="个人信息" subtitle="查看与管理您的个人账户基本资料" />
-
       {/* Modern Responsive Grid: Sidebar profile card + Content panels */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: isMobile ? '1fr' : '280px 1fr',
-        gap: isMobile ? 16 : 24,
+        gap: isMobile ? 'var(--space-base)' : 'var(--space-xl)',
         alignItems: 'start',
       }}>
         {/* Left Column: Profile Card */}
         <Card
           variant="borderless"
           className="card-base"
-          styles={{ body: { padding: isMobile ? '20px 16px' : '24px 20px', textAlign: 'center' } }}
+          styles={{ body: { padding: isMobile ? 'var(--space-lg) var(--space-base)' : 'var(--space-xl) var(--space-lg)', textAlign: 'center' } }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-md)' }}>
             <Avatar
               size={88}
               src={avatarSrc}
@@ -123,19 +120,21 @@ export default function UserInfo() {
               支持 JPG/PNG，小于 2MB
             </Text>
 
-            <div style={{ marginTop: 4 }}>
-              <Title level={4} style={{ margin: 0, color: 'var(--color-text)', fontWeight: 700 }}>
+            <div style={{ marginTop: 'var(--space-xs)' }}>
+              <Title level={4} style={{ margin: 0, color: 'var(--color-text)', fontWeight: 'var(--font-weight-bold)' }}>
                 {user.username}
               </Title>
+              {/* 与用户管理页的角色标签同色（accent），角色标识全站一致 */}
               <span style={{
                 display: 'inline-block',
-                marginTop: 6,
-                padding: '2px 10px',
+                marginTop: 'var(--space-xs)',
+                padding: '2px var(--space-md)',
                 borderRadius: 'var(--radius-full)',
-                background: 'var(--color-primary-bg)',
-                color: 'var(--color-primary)',
+                background: 'var(--color-accent-bg)',
+                border: '1px solid var(--color-accent-border)',
+                color: 'var(--color-accent)',
                 fontSize: 'var(--font-size-xs)',
-                fontWeight: 600,
+                fontWeight: 'var(--font-weight-semibold)',
               }}>
                 {user.role === 1 ? '系统管理员' : '标准用户'}
               </span>
@@ -143,27 +142,27 @@ export default function UserInfo() {
 
             <div style={{
               width: '100%',
-              marginTop: 12,
-              paddingTop: 16,
+              marginTop: 'var(--space-md)',
+              paddingTop: 'var(--space-base)',
               borderTop: '1px solid var(--color-border)',
               display: 'flex',
               justifyContent: 'space-between',
               fontSize: 'var(--font-size-sm)',
             }}>
               <span style={{ color: 'var(--color-text-secondary)' }}>用户ID</span>
-              <span className="money" style={{ color: 'var(--color-text)', fontWeight: 600 }}>{user.id}</span>
+              <span className="money" style={{ color: 'var(--color-text)', fontWeight: 'var(--font-weight-semibold)' }}>{user.id}</span>
             </div>
           </div>
         </Card>
 
         {/* Right Column: Settings and Metadata */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-base)' }}>
           {/* Edit Form */}
           <Card
             title={<SectionTitle title="资料设置" dotColor="primary" />}
             variant="borderless"
             className="card-base"
-            styles={{ body: { padding: isMobile ? '16px' : '20px 24px' } }}
+            styles={{ body: { padding: isMobile ? 'var(--space-base)' : 'var(--space-lg) var(--space-xl)' } }}
           >
             <Form
               form={form}
@@ -178,7 +177,7 @@ export default function UserInfo() {
                   { required: true, message: '请输入用户名' },
                   { pattern: USERNAME_REGEX, message: '用户名需为2-20位中英文或数字组合' },
                 ]}
-                style={{ marginBottom: 16 }}
+                style={{ marginBottom: 'var(--space-base)' }}
               >
                 <Input
                   size="large"
@@ -200,12 +199,12 @@ export default function UserInfo() {
             title={<SectionTitle title="账户详情" dotColor="info" />}
             variant="borderless"
             className="card-base"
-            styles={{ body: { padding: isMobile ? '16px' : '20px 24px' } }}
+            styles={{ body: { padding: isMobile ? 'var(--space-base)' : 'var(--space-lg) var(--space-xl)' } }}
           >
             <Descriptions
               column={isMobile ? 1 : 2}
               size="middle"
-              labelStyle={{ color: 'var(--color-text-secondary)' }}
+              styles={{ label: { color: 'var(--color-text-secondary)' } }}
             >
               <Descriptions.Item label="注册时间">
                 <Text>{formatDateTime(user.created_at)}</Text>
@@ -214,14 +213,14 @@ export default function UserInfo() {
                 <Text>{formatDateTime(user.updated_at)}</Text>
               </Descriptions.Item>
               <Descriptions.Item label="账户状态">
-                <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>正常</span>
+                <span style={{ color: 'var(--color-success)', fontWeight: 'var(--font-weight-semibold)' }}>正常</span>
               </Descriptions.Item>
             </Descriptions>
 
-            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ marginTop: 'var(--space-lg)', paddingTop: 'var(--space-base)', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
               <Button
                 icon={<LockOutlined />}
-                onClick={() => navigate('/change-password')}
+                onClick={() => navigate('/settings/password')}
                 style={{ borderRadius: 'var(--radius-md)' }}
               >
                 修改安全密码

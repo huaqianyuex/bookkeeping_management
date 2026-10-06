@@ -30,10 +30,12 @@ export default function EmptyState({
     }}>
       <Empty
         image={image || Empty.PRESENTED_IMAGE_SIMPLE}
-        imageStyle={{
-          height: size === 'large' ? 96 : 60,
-          marginBottom: 'var(--space-lg)',
-          opacity: 0.6,
+        styles={{
+          image: {
+            height: size === 'large' ? 96 : 60,
+            marginBottom: 'var(--space-lg)',
+            opacity: 0.6,
+          },
         }}
         description={
           <div style={{ textAlign: 'center' }}>

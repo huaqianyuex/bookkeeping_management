@@ -1,10 +1,9 @@
 import { Form, Input, Button, Card, Typography, App as AntdApp } from 'antd'
-import { LockOutlined, SaveOutlined, ArrowLeftOutlined } from '@ant-design/icons'
-import { Link } from 'react-router-dom'
+import { LockOutlined, SaveOutlined } from '@ant-design/icons'
 import { updatePassword } from '../api/user'
 import { AnimatedRoute } from '../components/ui'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 const PASSWORD_REGEX = /^\d{6}$/
 
 export default function ChangePassword() {
@@ -32,32 +31,9 @@ export default function ChangePassword() {
     <AnimatedRoute>
       <div style={{ maxWidth: 500, margin: '0 auto' }}>
         <Card variant="borderless" className="card-base">
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            marginBottom: 'var(--space-2xl)',
-          }}>
-            <div style={{
-              width: 64,
-              height: 64,
-              borderRadius: 'var(--radius-xl)',
-              background: 'var(--color-primary-bg)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 'var(--space-base)',
-            }}>
-              <LockOutlined style={{ fontSize: 28, color: 'var(--color-primary)' }} />
-            </div>
-            <Title level={3} style={{ margin: 0, color: 'var(--color-text)' }}>
-              修改密码
-            </Title>
-            <Text style={{ color: 'var(--color-text-secondary)', marginTop: 'var(--space-sm)' }}>
-              新密码需为6位数字
-            </Text>
-          </div>
-
+          <Text type="secondary" style={{ display: 'block', marginBottom: 'var(--space-base)' }}>
+            新密码需为6位数字
+          </Text>
           <Form form={form} onFinish={onFinish} size="large" layout="vertical">
             <Form.Item
               name="oldPassword"
@@ -67,7 +43,7 @@ export default function ChangePassword() {
               <Input.Password
                 prefix={<LockOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
                 placeholder="请输入原密码"
-                style={{ height: 48, borderRadius: 'var(--radius-md)' }}
+                style={{ borderRadius: 'var(--radius-md)' }}
               />
             </Form.Item>
             <Form.Item
@@ -81,7 +57,7 @@ export default function ChangePassword() {
               <Input.Password
                 prefix={<LockOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
                 placeholder="请输入新密码"
-                style={{ height: 48, borderRadius: 'var(--radius-md)' }}
+                style={{ borderRadius: 'var(--radius-md)' }}
               />
             </Form.Item>
             <Form.Item
@@ -103,28 +79,22 @@ export default function ChangePassword() {
               <Input.Password
                 prefix={<LockOutlined style={{ color: 'var(--color-text-tertiary)' }} />}
                 placeholder="请再次输入新密码"
-                style={{ height: 48, borderRadius: 'var(--radius-md)' }}
+                style={{ borderRadius: 'var(--radius-md)' }}
               />
             </Form.Item>
-            <Form.Item style={{ marginTop: 32 }}>
+            <Form.Item style={{ marginTop: 'var(--space-2xl)' }}>
               <Button
                 type="primary"
                 htmlType="submit"
                 block
                 icon={<SaveOutlined />}
-                style={{ height: 48, fontSize: 16, fontWeight: 600 }}
+                style={{ fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}
               >
                 确认修改
               </Button>
             </Form.Item>
           </Form>
         </Card>
-        <div style={{ textAlign: 'center', marginTop: 'var(--space-lg)' }}>
-          <Link to="/user-info" style={{ color: 'var(--color-text-secondary)' }}>
-            <ArrowLeftOutlined style={{ marginRight: 6 }} />
-            返回个人信息
-          </Link>
-        </div>
       </div>
     </AnimatedRoute>
   )

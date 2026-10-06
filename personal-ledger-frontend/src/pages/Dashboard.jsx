@@ -8,6 +8,7 @@ import { ArrowUpOutlined, ArrowDownOutlined, WalletOutlined } from '@ant-design/
 import dayjs from 'dayjs'
 import { getMonthlyStatistics, getCategoryStatistics } from '../api/statistics'
 import { chartColors } from '../theme/palette'
+import { tokens } from '../theme/tokens'
 import { StatCard, PageHeader, SectionTitle, EmptyState, ErrorState, Money, SkeletonCard, StatsRowSkeleton, AnimatedRoute } from '../components/ui'
 import useMediaQuery from '../hooks/useMediaQuery'
 import { extractErrorMessage } from '../utils/error'
@@ -20,7 +21,7 @@ function ChartTooltip({ active, payload, label }) {
   return (
     <div className="card-base" style={{ padding: '8px 12px', fontSize: 'var(--font-size-sm)' }}>
       {label !== undefined && (
-        <div style={{ color: 'var(--color-text-secondary)', marginBottom: 4 }}>{label}</div>
+        <div style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)' }}>{label}</div>
       )}
       {payload.map((p, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -110,7 +111,7 @@ export default function Dashboard() {
       dataIndex: 'percentage',
       key: 'percentage',
       render: (v) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
           <div className="progress-bar-track">
             <div className="progress-bar-fill" style={{ width: `${v}%` }} />
           </div>
@@ -170,7 +171,7 @@ export default function Dashboard() {
       <PageHeader title="数据概览" action={monthPicker} />
 
       {/* Stats Cards: 8pt grid compliant gutter [16, 16] on desktop, [8, 8] on mobile */}
-      <Row gutter={isMobile ? [8, 8] : [16, 16]} style={{ marginBottom: 16 }}>
+      <Row gutter={isMobile ? [8, 8] : [16, 16]} style={{ marginBottom: 'var(--space-base)' }}>
         <Col xs={8} md={8}>
           <StatCard
             icon={ArrowUpOutlined}
@@ -202,38 +203,38 @@ export default function Dashboard() {
       </Row>
 
       {/* Charts: height optimized to 224px (28*8pt) to ensure above-the-fold visibility */}
-      <Row gutter={isMobile ? [8, 8] : [16, 16]} style={{ marginBottom: 16 }}>
+      <Row gutter={isMobile ? [8, 8] : [16, 16]} style={{ marginBottom: 'var(--space-base)' }}>
         <Col xs={24} lg={14}>
-          <div className="card-base" style={{ padding: isMobile ? '16px' : '16px 24px', height: '100%', boxSizing: 'border-box' }}>
+          <div className="card-base" style={{ padding: isMobile ? 'var(--space-base)' : 'var(--space-base) var(--space-xl)', height: '100%', boxSizing: 'border-box' }}>
             <SectionTitle title="近 6 个月收支趋势" dotColor="primary" />
-            <div style={{ marginTop: 12 }}>
-              <ResponsiveContainer width="100%" height={224}>
+            <div style={{ marginTop: 'var(--space-md)' }}>
+              <ResponsiveContainer width="100%" height={tokens.chart.height}>
                 <LineChart data={trendData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-secondary)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 12, fill: 'var(--color-text-tertiary)' }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: tokens.chart.tickFontSize, fill: 'var(--color-text-tertiary)' }} axisLine={false} tickLine={false} />
                   <YAxis
-                    tick={{ fontSize: 12, fill: 'var(--color-text-tertiary)' }}
+                    tick={{ fontSize: tokens.chart.tickFontSize, fill: 'var(--color-text-tertiary)' }}
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v) => (v >= 10000 ? `${(v / 10000).toFixed(1)}万` : v)}
                   />
                   <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--color-border)' }} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
-                  <Line type="monotone" dataKey="收入" stroke="var(--color-success)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--color-success)', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="支出" stroke="var(--color-danger)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--color-danger)', strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                  <Legend wrapperStyle={{ fontSize: tokens.chart.legendFontSize }} iconType="circle" iconSize={8} />
+                  <Line type="monotone" dataKey="收入" stroke="var(--color-success)" strokeWidth={tokens.chart.strokeWidth} dot={{ r: tokens.chart.dotRadius, fill: 'var(--color-success)', strokeWidth: 0 }} activeDot={{ r: tokens.chart.activeDotRadius }} />
+                  <Line type="monotone" dataKey="支出" stroke="var(--color-danger)" strokeWidth={tokens.chart.strokeWidth} dot={{ r: tokens.chart.dotRadius, fill: 'var(--color-danger)', strokeWidth: 0 }} activeDot={{ r: tokens.chart.activeDotRadius }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
         </Col>
         <Col xs={24} lg={10}>
-          <div className="card-base" style={{ padding: isMobile ? '16px' : '16px 24px', height: '100%', boxSizing: 'border-box' }}>
+          <div className="card-base" style={{ padding: isMobile ? 'var(--space-base)' : 'var(--space-base) var(--space-xl)', height: '100%', boxSizing: 'border-box' }}>
             <SectionTitle title="本月支出构成" dotColor="danger" />
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 'var(--space-md)' }}>
               {expenseData.length === 0 ? (
                 <EmptyState title="暂无支出数据" size="small" />
               ) : (
-                <ResponsiveContainer width="100%" height={224}>
+                <ResponsiveContainer width="100%" height={tokens.chart.height}>
                   <PieChart>
                     <Pie
                       data={expenseData}
@@ -250,7 +251,7 @@ export default function Dashboard() {
                     </Pie>
                     <Tooltip content={<ChartTooltip />} />
                     <Legend
-                      wrapperStyle={{ fontSize: 12 }}
+                      wrapperStyle={{ fontSize: tokens.chart.legendFontSize }}
                       iconType="circle"
                       iconSize={8}
                       formatter={(value) => <span style={{ color: 'var(--color-text-secondary)' }}>{value}</span>}
@@ -266,7 +267,7 @@ export default function Dashboard() {
       {/* Category Tables: Clean 8pt paddings and tabular density */}
       <Row gutter={isMobile ? [8, 8] : [16, 16]}>
         <Col xs={24} md={12}>
-          <div className="card-base" style={{ padding: isMobile ? '16px' : '16px 24px' }}>
+          <div className="card-base" style={{ padding: isMobile ? 'var(--space-base)' : 'var(--space-base) var(--space-xl)' }}>
             <SectionTitle title="支出分类统计" dotColor="danger" />
             <Table
               dataSource={expenseData}
@@ -281,7 +282,7 @@ export default function Dashboard() {
           </div>
         </Col>
         <Col xs={24} md={12}>
-          <div className="card-base" style={{ padding: isMobile ? '16px' : '16px 24px' }}>
+          <div className="card-base" style={{ padding: isMobile ? 'var(--space-base)' : 'var(--space-base) var(--space-xl)' }}>
             <SectionTitle title="收入分类统计" dotColor="success" />
             <Table
               dataSource={incomeData}
