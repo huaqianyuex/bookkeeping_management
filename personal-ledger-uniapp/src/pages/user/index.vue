@@ -41,6 +41,15 @@
 
 			<!-- 功能菜单 -->
 		<view class="menu-card">
+			<view class="menu-item" @click="goMembership">
+				<view class="menu-left">
+					<view class="menu-icon">
+						<app-icon name="crown-ink" :size="32"></app-icon>
+					</view>
+					<text class="menu-text">会员中心</text>
+				</view>
+				<text class="menu-arrow">›</text>
+			</view>
 			<view class="menu-item" @click="goPassword">
 				<view class="menu-left">
 					<view class="menu-icon">
@@ -265,6 +274,10 @@ export default {
 		},
 
 		// ── 导航 ──
+		goMembership() {
+			uni.navigateTo({ url: '/pages/membership/index' })
+		},
+
 		goPassword() {
 			uni.navigateTo({ url: '/pages/password/index' })
 		},

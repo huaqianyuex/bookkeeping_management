@@ -1,10 +1,17 @@
 <script>
+import { isTokenExpired } from '@/utils/token'
+
 export default {
 	onLaunch() {
 		// 启动时检查登录态，未登录则跳转到登录页。
 		// 注意：dashboard 页面的 onShow 也会做同样的检查，但启动瞬间只会有一个页面被加载，
 		// 这里负责首次进入时的全局跳转，避免与子页面跳转冲突导致"do not operate continuously"。
-		const token = uni.getStorageSync('token')
+		let token = uni.getStorageSync('token')
+		if (token && isTokenExpired(token)) {
+			// token 已过期：先于页面请求清理，避免首页带着死 token 发一轮注定 401 的请求
+			uni.removeStorageSync('token')
+			token = ''
+		}
 		if (!token) {
 			// 注册页允许未登录直达（分享/刷新场景），其余页面一律回登录页
 			const launchPath = (uni.getLaunchOptionsSync() || {}).path || ''
@@ -13,6 +20,17 @@ export default {
 			}
 		}
 		// 有 token 则正常进入 tabBar 首页（pages.json 第一个页面即 dashboard）
+	},
+	onShow() {
+		// 从后台切回时 token 可能已越过过期线：提前清理并回登录页，
+		// 不等下次发请求吃 401。已在登录/注册页（游客可达）时不打扰。
+		const token = uni.getStorageSync('token')
+		if (!token || !isTokenExpired(token)) return
+		uni.removeStorageSync('token')
+		const pages = getCurrentPages()
+		const route = (pages.length ? pages[pages.length - 1].route : '') || ''
+		if (route.includes('pages/login/index') || route.includes('pages/register/index')) return
+		uni.reLaunch({ url: '/pages/login/index' })
 	},
 }
 </script>

@@ -374,7 +374,10 @@ export default {
 				})
 			} catch (e) {
 				console.error('[Dashboard] 加载数据失败:', e)
-				uni.showToast({ title: '加载数据失败，请检查网络连接', icon: 'none' })
+				// 401 时 request.js 已清 token 并跳登录页，再弹"网络连接"提示会误导用户
+				if (!e || !e.isAuthError) {
+					uni.showToast({ title: '加载数据失败，请检查网络连接', icon: 'none' })
+				}
 			} finally {
 				this.loading = false
 				this.refreshing = false

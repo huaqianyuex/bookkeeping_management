@@ -1,5 +1,5 @@
 <template>
-  <view class="ai-chat-page" :style="{ height: pageHeight + 'px', paddingBottom: tabBarSpace + 'px' }">
+  <view class="ai-chat-page" :style="{ height: pageHeight + 'px', paddingBottom: (keyboardHeight > 0 ? 0 : tabBarSpace) + 'px' }">
     <!-- 状态栏占位 -->
     <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
     <!-- 顶部栏（设计稿04：左大标题 + 右操作） -->
@@ -72,16 +72,33 @@
       <view id="scroll-anchor-b" class="scroll-anchor" />
     </scroll-view>
 
-    <!-- 输入框 -->
+    <!-- 输入条：话筒（按住说话）+ 输入框 + 发送 -->
     <view class="input-bar">
+      <!-- 录音状态：悬浮在输入条上方，不挤压布局 -->
+      <view v-if="recording" class="recording-pill">
+        <view class="recording-dot"></view>
+        <text class="recording-pill-text">{{ recordSeconds }}s · 松开结束</text>
+      </view>
+      <view
+        v-if="voiceEnabled"
+        class="mic-btn"
+        :class="{ 'mic-btn--rec': recording }"
+        @touchstart.prevent="startRecord"
+        @touchend.prevent="stopRecord"
+        @touchcancel="stopRecord"
+        @mousedown="startRecord"
+        @mouseup="stopRecord"
+        @mouseleave="stopRecord"
+      >
+        <AppIcon :name="recording ? 'mic-rec' : 'mic'" :size="44" />
+      </view>
       <input
         class="input"
         v-model="inputText"
-        :placeholder="isLoggedIn ? '输入你的问题...' : '登录后即可使用 AI 助手'"
+        :placeholder="recording ? '正在听写，请讲话...' : (isLoggedIn ? '输入你的问题...' : '登录后即可使用 AI 助手')"
         placeholder-class="input-placeholder"
         confirm-type="send"
-        :adjust-position="true"
-        :cursor-spacing="24"
+        :adjust-position="false"
         :disabled="loading || streaming || !isLoggedIn"
         @confirm="handleSend"
         @focus="scrollToBottom"
@@ -95,8 +112,8 @@
       </view>
     </view>
 
-    <!-- 悬浮「+」抬升到输入条上方，避免遮挡发送按钮 -->
-    <TabBar currentPage="pages/ai-chat/index" :fab="true" :fab-gap="170" />
+    <!-- 键盘弹出时隐藏底部导航（保持最底层，不随输入框一起被顶起） -->
+    <TabBar v-show="keyboardHeight === 0" currentPage="pages/ai-chat/index" :fab="true" :fab-gap="170" />
   </view>
 </template>
 
@@ -104,6 +121,8 @@
 import { ref, nextTick, computed } from 'vue'
 import { onLoad, onUnload, onShow } from '@dcloudio/uni-app'
 import { createSession, sendChatStream, getMessages, aiBookkeeping } from '@/api/ai.js'
+import { transcribeVoice, getVoiceConfig } from '@/api/voice.js'
+import { attachRecorder, detachRecorder, getRecorder } from '@/utils/recorder.js'
 import AppIcon from '@/components/AppIcon.vue'
 
 const statusBarHeight = ref(20)
@@ -115,23 +134,161 @@ const messages = ref([])
 const loading = ref(false)      // 等待首字节（创建会话 / 建立连接）
 const streaming = ref(false)    // 正在流式输出
 const sessionId = ref('')
+// 键盘当前高度（0 = 收起）：弹出时手动压缩页面高度并隐藏 TabBar
+const keyboardHeight = ref(0)
 // 滚动锚点：在两个 id 之间来回切换，保证同一条消息持续更新时也能滚动到底部
 const scrollAnchor = ref('scroll-anchor-a')
 let streamTask = null           // 当前流式请求控制器（用于中断）
 let lastScrollAt = 0
 // 语义记账的追问草稿：clarify 返回 draftId，用户补金额的下一条消息带上续写
 const pendingDraftId = ref(null)
+// 本条输入的来源（text=键盘 / voice=话筒），随下一条记账请求上报审计
+let lastInputSource = 'text'
+
+let fullHeight = 600   // 键盘未弹出时的完整视口高度（仅在键盘收起时刷新，防污染）
 
 // 计算页面可用高度与底部安全距离
 function calcLayout() {
 	const systemInfo = uni.getSystemInfoSync()
 	statusBarHeight.value = systemInfo.statusBarHeight || 20
-	pageHeight.value = systemInfo.windowHeight || 600
 	const safeBottom = systemInfo.safeAreaInsets?.bottom || 0
 	// TabBar：悬浮胶囊约 170rpx 内容高度 + 安全区内边距（rpx -> px）
 	const tabBarContent = typeof uni.upx2px === 'function' ? uni.upx2px(170) : 85
 	tabBarSpace.value = tabBarContent + safeBottom
+	// ⚠️ 只在键盘收起时才信任 windowHeight：键盘开着（adjustResize 视口已被系统压矮）
+	// 时切后台再回来，onShow 会触发本函数，若此刻刷新 fullHeight，
+	// 之后每次开关键盘都会在已被压缩的基准上再减，页面越压越扁
+	if (keyboardHeight.value === 0) {
+		fullHeight = systemInfo.windowHeight || 600
+		pageHeight.value = fullHeight
+	}
 }
+
+// ── 键盘避让：页面锁定 softinputMode=adjustResize（pages.json），系统把视口压到
+// 键盘上沿，无原生平移；这里只需把页面高度同步为「完整视口 - 键盘高」，
+// 输入条（flex 底部元素）即贴住键盘；TabBar 隐藏，不再随页面一起被顶起 ──
+function onKeyboardChange(res) {
+	const kb = (res && res.height) || 0
+	keyboardHeight.value = kb
+	// 只用干净基准 fullHeight 计算，不读实时 windowHeight（键盘弹出时它已被
+	// 系统压矮，再减一次键盘高就是双重补偿——输入条会悬空一个键盘高度）
+	pageHeight.value = kb > 0 ? Math.max(320, fullHeight - kb) : fullHeight
+	if (kb > 0) scrollToBottom()
+}
+
+// ── 语音输入：按住话筒说话 → 转写 → 回填输入框（用户核对/修改后再发送）──
+const voiceEnabled = ref(false)
+const recording = ref(false)
+const transcribing = ref(false)
+const recordSeconds = ref(0)
+const STT_LOW_CONFIDENCE = 0.4   // 与后端 config.settings STT_LOW_CONFIDENCE 同值
+let recordTimer = null
+let recordStartAt = 0
+
+const recorder = getRecorder()   // 全局单例，回调经 utils/recorder.js 桥接（只注册一次）
+
+// 后端语音开关：失败/未开启一律隐藏话筒入口，避免「点了才知道不可用」
+async function loadVoiceConfig() {
+	try {
+		const res = await getVoiceConfig()
+		voiceEnabled.value = !!(res && res.enabled === true)
+	} catch (e) {
+		voiceEnabled.value = false
+	}
+}
+
+function startRecord() {
+	if (!voiceEnabled.value || recording.value || transcribing.value) return
+	if (loading.value || streaming.value) return
+	if (!isLoggedIn.value) {
+		uni.showToast({ title: '登录后即可语音输入', icon: 'none' })
+		return
+	}
+	if (!recorder) {
+		uni.showToast({ title: '当前环境不支持录音', icon: 'none' })
+		return
+	}
+	recordStartAt = Date.now()
+	try {
+		recorder.start({
+			duration: 60000,
+			sampleRate: 16000,
+			numberOfChannels: 1,
+			// #ifdef H5
+			format: 'webm',      // H5 端 MediaRecorder 只认 webm/opus（后端白名单已放行）
+			// #endif
+			// #ifndef H5
+			format: 'mp3',       // App / 小程序用 mp3
+			// #endif
+			bitRate: 48000
+		})
+	} catch (e) {
+		recording.value = false
+		uni.showToast({ title: '当前环境不支持录音', icon: 'none' })
+	}
+}
+
+function stopRecord() {
+	// 触摸事件与 H5 合成的鼠标事件可能双触发：仅录音中才响应
+	if (!recording.value) return
+	try { recorder.stop() } catch (e) {}
+}
+
+async function handleTranscribe(filePath) {
+	transcribing.value = true
+	uni.showLoading({ title: '识别中...', mask: true })
+	try {
+		const res = await transcribeVoice(filePath)
+		const text = (res && res.text ? res.text : '').trim()
+		if (!text) {
+			uni.showToast({ title: '没听清，请再说一次', icon: 'none' })
+			return
+		}
+		// 回填输入框而非直接发送：识别结果须过目，避免错记
+		inputText.value = inputText.value ? inputText.value + text : text
+		lastInputSource = 'voice'
+		if (res.confidence != null && res.confidence < STT_LOW_CONFIDENCE) {
+			uni.showToast({ title: '识别可能不准确，请核对', icon: 'none' })
+		}
+	} catch (e) {
+		uni.showModal({
+			title: '语音识别失败',
+			content: (e && e.message) || '请稍后重试',
+			confirmText: '改为键盘输入',
+			showCancel: false
+		})
+	} finally {
+		uni.hideLoading()
+		transcribing.value = false
+	}
+}
+
+// 录音单例回调桥：页面实例挂接/卸载（重复注册会叠加触发，见 utils/recorder.js）
+attachRecorder({
+	onStart: () => {
+		recording.value = true
+		recordSeconds.value = 0
+		recordTimer = setInterval(() => {
+			recordSeconds.value = Math.floor((Date.now() - recordStartAt) / 1000)
+			if (recordSeconds.value >= 60) stopRecord()   // 与 duration=60000 双保险
+		}, 1000)
+	},
+	onStop: (res) => {
+		if (recordTimer) { clearInterval(recordTimer); recordTimer = null }
+		recording.value = false
+		if (!res || !res.tempFilePath) return
+		if (Date.now() - recordStartAt < 500) {   // 误触：按一下就松
+			uni.showToast({ title: '说话时间太短', icon: 'none' })
+			return
+		}
+		handleTranscribe(res.tempFilePath)
+	},
+	onError: () => {
+		if (recordTimer) { clearInterval(recordTimer); recordTimer = null }
+		recording.value = false
+		uni.showToast({ title: '无法录音，请检查麦克风权限', icon: 'none' })
+	}
+})
 
 // 登录状态检查
 const isLoggedIn = computed(() => !!uni.getStorageSync('token'))
@@ -155,6 +312,7 @@ const quickActions = [
 function handleQuickAction(item) {
 	if (loading.value || streaming.value || !isLoggedIn.value) return
 	inputText.value = item.text
+	lastInputSource = 'text'
 	handleSend()
 }
 
@@ -253,14 +411,20 @@ function genClientMsgId() {
  * - created / duplicate / clarify（及部分 ignored 提示）→ 返回要展示的助手文案
  * - 纯聊天/查询（ignored: not_expense/query）或记账服务异常 → 返回 null，走对话流
  */
-async function tryBookkeeping(text) {
+async function tryBookkeeping(text, source) {
 	try {
 		const res = await aiBookkeeping({
 			sessionId: sessionId.value,
 			message: text,
 			clientMsgId: genClientMsgId(),
-			draftId: pendingDraftId.value || undefined
+			draftId: pendingDraftId.value || undefined,
+			source: source || 'text'
 		})
+		if (res && res.code === 'QUOTA_EXCEEDED') {
+			// 额度用尽（后端 429 裸 JSON）：不处理、不回复，直接弹窗终止
+			showQuotaModal()
+			return 'quota-blocked'
+		}
 		if (!res || res.error) {
 			// 会话失效（被删/过期清理）时重置，让对话流重建新会话
 			if (res && res.error === '会话不存在') sessionId.value = ''
@@ -289,6 +453,19 @@ async function tryBookkeeping(text) {
 		// 网络失败/登录过期：交由对话流统一展示错误（其内含 401 弹窗逻辑）
 		return null
 	}
+}
+
+// 额度用尽统一弹窗：无论文字/语音、记账/对话，命中闸门一律终止并提示
+function showQuotaModal() {
+	uni.showModal({
+		title: '额度已用完',
+		content: '额度已使用完毕，请充值后继续使用。',
+		confirmText: '去充值',
+		cancelText: '知道了',
+		success: (res) => {
+			if (res.confirm) uni.navigateTo({ url: '/pages/membership/index' })
+		}
+	})
 }
 
 // 发送消息（先语义记账，未命中再走流式对话）
@@ -328,7 +505,14 @@ async function handleSend() {
 	}
 
 	// ① 语义记账：命中（created/clarify/duplicate 等）直接渲染服务端回显
-	const handled = await tryBookkeeping(text)
+	const handled = await tryBookkeeping(text, lastInputSource)
+	lastInputSource = 'text'
+	if (handled === 'quota-blocked') {
+		// 额度用尽：不做任何回复或处理，撤回刚显示的用户消息
+		loading.value = false
+		messages.value.pop()
+		return
+	}
 	if (handled) {
 		loading.value = false
 		messages.value.push({ role: 'assistant', content: handled })
@@ -366,6 +550,12 @@ async function handleSend() {
 						if (res.confirm) uni.reLaunch({ url: '/pages/login/index' })
 					}
 				})
+			} else if (err && err.isQuotaExceeded) {
+				// 后端配额闸门 429（QUOTA_EXCEEDED）：不回复不处理，撤回占位气泡并弹窗
+				if (last && last.role === 'assistant') messages.value.pop()
+				showQuotaModal()
+				finishStream()
+				return
 			} else if (errMsg.includes('网络') || errMsg.includes('fail') || errMsg.includes('timeout')) {
 				uni.showToast({ title: '网络连接失败，请稍后重试', icon: 'none', duration: 2500 })
 			} else {
@@ -400,6 +590,7 @@ function finishStream() {
 // 此处不再主动 reLaunch，避免启动瞬间多个页面同时跳转造成 "do not operate continuously" 卡死。
 onShow(() => {
 	calcLayout()
+	loadVoiceConfig()
 	if (!isLoggedIn.value) {
 		// 不主动跳转，由全局拦截器处理
 	}
@@ -407,6 +598,10 @@ onShow(() => {
 
 onLoad((options) => {
 	calcLayout()
+	// 键盘高度监听：App / 小程序 / H5（部分版本）支持，不支持时保持原有表现
+	if (typeof uni.onKeyboardHeightChange === 'function') {
+		uni.onKeyboardHeightChange(onKeyboardChange)
+	}
 	// 从历史页面跳转过来时携带 sessionId，直接恢复上下文
 	if (options && options.sessionId) {
 		sessionId.value = options.sessionId
@@ -419,6 +614,7 @@ onLoad((options) => {
 		} catch (e) {
 			inputText.value = options.q
 		}
+		lastInputSource = 'text'
 	}
 })
 
@@ -441,6 +637,12 @@ onUnload(() => {
 		try { streamTask.abort() } catch (e) {}
 		streamTask = null
 	}
+	// 注销键盘监听与录音回调桥，防止泄漏到下一次页面实例
+	if (typeof uni.offKeyboardHeightChange === 'function') {
+		uni.offKeyboardHeightChange(onKeyboardChange)
+	}
+	detachRecorder()
+	if (recordTimer) { clearInterval(recordTimer); recordTimer = null }
 })
 </script>
 
@@ -673,14 +875,73 @@ onUnload(() => {
 	}
 }
 
-/* 输入条：纸面 + 顶部结构线 */
+/* 输入条：纸面 + 顶部结构线；作为录音提示胶囊的定位锚点 */
 .input-bar {
+	position: relative;
 	display: flex;
 	align-items: center;
 	padding: var(--space-md) var(--space-2xl) var(--space-md);
 	background: var(--color-bg);
 	border-top: var(--hairline) solid var(--color-border);
 	flex-shrink: 0;
+}
+
+/* 录音状态胶囊：悬浮在输入条上方，不挤压消息区布局 */
+.recording-pill {
+	position: absolute;
+	top: -72rpx;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	padding: 14rpx 32rpx;
+	background: var(--color-primary);
+	border-radius: var(--radius-full);
+	box-shadow: var(--shadow-primary);
+	z-index: 10;
+}
+
+.recording-pill-text {
+	color: var(--color-text-inverse);
+	font-size: var(--font-sm);
+	line-height: 1;
+}
+
+/* 录音中的红点呼吸 */
+.recording-dot {
+	width: 14rpx;
+	height: 14rpx;
+	border-radius: var(--radius-full);
+	background: var(--color-accent);
+	animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+	0%, 100% { opacity: 0.35; }
+	50% { opacity: 1; }
+}
+
+/* 话筒按钮：与输入框同高的圆形浅盒；录音中图标切语义红（AppIcon 内烘色） */
+.mic-btn {
+	width: 88rpx;
+	height: 88rpx;
+	border-radius: var(--radius-full);
+	background: var(--color-surface-raised);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	margin-right: var(--space-md);
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mic-btn:active {
+	background: var(--color-surface);
+}
+
+.mic-btn--rec {
+	background: var(--color-surface);
 }
 
 .input {

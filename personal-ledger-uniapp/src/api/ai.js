@@ -54,13 +54,14 @@ export const sendChat = (sessionId, message) => {
  *   duplicate 命中幂等，未重复入账（echo）
  * {"error":"中文"} 表示记账服务失败（如 LLM 不可用），调用方降级走对话。
  */
-export const aiBookkeeping = ({ sessionId, message, clientMsgId, draftId, dryRun, force } = {}) => {
+export const aiBookkeeping = ({ sessionId, message, clientMsgId, draftId, dryRun, force, source } = {}) => {
 	const data = { message }
 	if (sessionId) data.sessionId = sessionId
 	if (clientMsgId) data.clientMsgId = clientMsgId
 	if (draftId) data.draftId = draftId
 	if (dryRun) data.dryRun = dryRun
 	if (force) data.force = force
+	if (source) data.source = source   // text=手输 / voice=语音（仅审计，缺省服务端按 text）
 	return request({
 		url: AI_BASE + '/bookkeeping',
 		method: 'POST',
@@ -209,6 +210,15 @@ export const sendChatStream = (sessionId, message, handlers = {}) => {
 			handle401()
 			return
 		}
+		if (res.status === 429) {
+			// 配额闸门拒绝（后端 _quota_gate 裸 JSON：{code:"QUOTA_EXCEEDED", error, used, limit}）
+			let body = null
+			try { body = await res.json() } catch (e) {}
+			const err = new Error((body && body.error) || '今日对话额度已用完')
+			err.isQuotaExceeded = !!(body && body.code === 'QUOTA_EXCEEDED')
+			fail(err)
+			return
+		}
 		if (!res.ok) {
 			fail(new Error('请求失败（' + res.status + '）'))
 			return
@@ -243,6 +253,15 @@ export const sendChatStream = (sessionId, message, handlers = {}) => {
 		success: (res) => {
 			if (res.statusCode === 401) {
 				handle401()
+				return
+			}
+			if (res.statusCode === 429) {
+				// 配额闸门拒绝：非分块响应，success 直接携带完整裸 JSON 错误体
+				let body = null
+				try { body = typeof res.data === 'string' ? JSON.parse(res.data) : res.data } catch (e) {}
+				const err = new Error((body && body.error) || '今日对话额度已用完')
+				err.isQuotaExceeded = !!(body && body.code === 'QUOTA_EXCEEDED')
+				fail(err)
 				return
 			}
 			if (res.statusCode >= 500) {

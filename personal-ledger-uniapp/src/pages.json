@@ -61,10 +61,29 @@
 			}
 		},
 		{
+			"path": "pages/membership/index",
+			"style": {
+				"navigationBarTitleText": "会员中心",
+				"navigationBarBackgroundColor": "#F4F4F0",
+				"navigationBarTextStyle": "black"
+			}
+		},
+		{
+			"path": "pages/recharge/index",
+			"style": {
+				"navigationBarTitleText": "充值记录",
+				"navigationBarBackgroundColor": "#F4F4F0",
+				"navigationBarTextStyle": "black"
+			}
+		},
+		{
 			"path": "pages/ai-chat/index",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTextStyle": "black"
+				"navigationBarTextStyle": "black",
+				"app-plus": {
+					"softinputMode": "adjustResize"
+				}
 			}
 		},
 		{

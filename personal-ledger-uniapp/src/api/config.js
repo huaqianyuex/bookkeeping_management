@@ -23,7 +23,9 @@ function initBaseUrl() {
 
 		// #ifndef H5
 		// ⬇⬇⬇ 把下面的 IP 改成你电脑的局域网 IP ⬇⬇⬇
-		_BASE_URL = 'http://192.168.x.x:8000/api'
+		// 2026-10-05：本机 WLAN 网卡 IP（ipconfig 确认；VMware 虚拟网卡 192.168.49.1/17.1 不可用）
+		// 电脑换 WiFi 后 IP 会变，报 Unable to resolve host / timeout 时重新 ipconfig 核对
+		_BASE_URL = 'http://192.168.101.84:8000/api'
 		// #endif
 
 	return _BASE_URL

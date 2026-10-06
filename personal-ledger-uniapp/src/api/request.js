@@ -47,7 +47,10 @@ const request = (options) => {
 						return
 					}
 					redirectToLogin()
-					reject(new Error('未登录或登录已过期'))
+					const authErr = new Error('未登录或登录已过期')
+					// 标记为确定性认证失败，供 getWithRetry 跳过重试（重试只会刷屏并拖延跳转）
+					authErr.isAuthError = true
+					reject(authErr)
 					return
 				}
 				if (res.statusCode === 0 || !res.statusCode) {
@@ -93,6 +96,8 @@ export const getWithRetry = async (apiFn, params, retries = 2, delayMs = 800) =>
 			return await apiFn(params)
 		} catch (err) {
 			lastErr = err
+			// 401 等认证失败是确定性错误：token 已被清除并正在跳登录页，重试必然同样失败
+			if (err && err.isAuthError) break
 			if (attempt < retries) {
 				console.warn(`[Request] 第 ${attempt + 1} 次请求失败，${delayMs}ms 后重试...`, err.message || err)
 				await new Promise(r => setTimeout(r, delayMs))
