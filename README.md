@@ -25,6 +25,16 @@
 | **AI 助手** | **记账** |
 | ![AI 助手](docs/screenshots/ai-chat.png) | ![记账](docs/screenshots/add-edit.png) |
 
+**会员与充值**
+
+| 移动端 · 会员中心（档位 / 今日额度 / 套餐 / 权益对比） | 移动端 · 充值记录（含待审批状态） |
+| --- | --- |
+| ![会员中心](docs/screenshots/membership-center.png) | ![充值记录](docs/screenshots/recharge-records.png) |
+
+| Web 管理端 · 充值审批工作台（风控标记 / 通过 / 拒绝 / 审计轨迹） |
+| --- |
+| ![充值审批](docs/screenshots/admin-recharge-approval.png) |
+
 ## 项目简介
 
 - **fast_backend**：基于 FastAPI 的异步后端服务，使用 SQLAlchemy 2.0（asyncio）+ MySQL 8，内置 JWT 鉴权、统一响应格式与全局异常处理，并通过 OpenAI 兼容接口接入大模型（对话 / 分析 / Embedding 检索）。
