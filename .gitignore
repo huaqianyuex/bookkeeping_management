@@ -82,3 +82,21 @@ fast_backend/nul
 
 # 前端视觉验收截图（本地验证产物，不入库）
 .visual-check/
+
+# 包管理器缓存与本地依赖目录（不入库）
+.pnpm-store/
+.pnpm/
+open-design/
+
+# 代理工具临时产物（不入库）
+.dsh-acl-repair/
+.review_probe/
+.verify_deps/
+.verify_lost_update/
+.void_race_verify/
+
+# 文档/PPT 中间产物（不入库）
+开题报告/_sync_work/
+开题报告/_extract_tmp.py
+*_tmp.py
+build_ppt/tmp/

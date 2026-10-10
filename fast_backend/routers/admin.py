@@ -103,8 +103,6 @@ async def update_user_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
     await admin.update_user_status(db, user_id, body.status)
     return success_response(message="操作成功")
-
-
 @router.delete("/users/{user_id}", summary="删除用户")
 async def delete_user(
     user_id: int,
