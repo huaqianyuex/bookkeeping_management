@@ -326,7 +326,9 @@ def bookkeeping_env(client, monkeypatch):
 
 
 def _patch_parse(monkeypatch, items, intent="bookkeeping"):
-    async def _fake_parse(message, today, category_names):
+    # 签名必须镜像 ai.bookkeeping_chain.parse_bookkeeping 的真实签名：
+    # 4th 参数 user_id 用于按用户维度记录 Token/延迟用量（ai/observability.py）。
+    async def _fake_parse(message, today, category_names, user_id=None):
         return Parsed(intent=intent, items=items)
 
     monkeypatch.setattr(ai_router, "parse_bookkeeping", _fake_parse)

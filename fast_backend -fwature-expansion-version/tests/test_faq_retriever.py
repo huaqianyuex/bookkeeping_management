@@ -65,15 +65,21 @@ ROWS = [
 
 @pytest.fixture(autouse=True)
 def _reset_index(monkeypatch):
-    """每个用例独立索引与缓存，并注入 FakeEmbeddings"""
+    """每个用例独立索引、查询缓存、single-flight 冷却与 stale 标记，并注入 FakeEmbeddings"""
     fr._index = []
     fr._query_cache.clear()
+    fr._rebuild_locked_until = 0.0     # 冷却是进程级状态，不重置会让用例互相污染
+    fr._stale_reason = None
+    fr._dim_warned.clear()
     fake = FakeEmbeddings()
     import ai.llm as llm_mod
     monkeypatch.setattr(llm_mod, "get_embeddings", lambda: fake)
     yield fake
     fr._index = []
     fr._query_cache.clear()
+    fr._rebuild_locked_until = 0.0
+    fr._stale_reason = None
+    fr._dim_warned.clear()
 
 
 class TestCosine:
@@ -299,8 +305,66 @@ class TestIndexHelpers:
     async def test_rebuild_empty_rows_clears_index(self, _reset_index):
         await fr.rebuild(ROWS)
         assert fr.index_size() == 3
+        # 第二次重建会命中冷却（这是预期行为），先解冷却再验证空表分支
+        fr._rebuild_locked_until = 0.0
         assert await fr.rebuild([]) == 0
         assert fr.index_size() == 0
+
+    @pytest.mark.asyncio
+    async def test_cooldown_blocks_rapid_second_rebuild(self, _reset_index):
+        """冷却：刚重建完就再点「重建」应被拒，避免重复计费"""
+        await fr.rebuild(ROWS)
+        assert await fr.rebuild_cooldown_left() > 0
+        with pytest.raises(fr.RebuildBusy):
+            await fr.rebuild(ROWS)
+        # 关键：被拒的那次**没有**真的调用 embedding
+        assert _reset_index.doc_calls == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_rebuild_runs_once(self, _reset_index):
+        """single-flight：并发调用只有一个真正执行"""
+        import asyncio as _aio
+        results = await _aio.gather(*[fr.rebuild(ROWS) for _ in range(3)],
+                                    return_exceptions=True)
+        assert len(results) == 3
+        ok = [r for r in results if isinstance(r, int) and not isinstance(r, bool)]
+        busy = [r for r in results if isinstance(r, fr.RebuildBusy)]
+        assert len(ok) == 1, f"应有且仅有 1 次成功，实际 {results}"
+        assert len(busy) == 2, f"其余 2 次应被拒为 RebuildBusy，实际 {results}"
+        assert _reset_index.doc_calls == 1, "只有一次真正调用了 embedding"
+
+    @pytest.mark.asyncio
+    async def test_failed_rebuild_does_not_hold_cooldown(self, _reset_index, monkeypatch):
+        """失败不应占住冷却，否则管理员修完问题还得干等一分钟"""
+        import ai.llm as llm_mod
+
+        async def boom(texts):
+            raise RuntimeError("gateway down")
+
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: type(
+            "E", (), {"aembed_documents": staticmethod(boom)}
+        )())
+        with pytest.raises(RuntimeError):
+            await fr.rebuild(ROWS)
+        assert await fr.rebuild_cooldown_left() == 0
+
+    @pytest.mark.asyncio
+    async def test_stale_flag_cleared_after_rebuild(self, _reset_index):
+        await fr.rebuild(ROWS)
+        await fr.mark_stale("faq_changed")
+        assert fr.stale_reason() == "faq_changed"
+        assert (await fr.search_faq_detailed("预算"))[1] == "stale"
+        fr._rebuild_locked_until = 0.0        # 解冷却，模拟重建按钮被再次点击
+        await fr.rebuild(ROWS)
+        assert fr.stale_reason() is None
+
+    @pytest.mark.asyncio
+    async def test_stale_blocks_untrusted_results(self, _reset_index):
+        """索引过期时不返回结果——旧索引的命中不可信"""
+        await fr.rebuild(ROWS)
+        await fr.mark_stale("faq_changed")
+        results, mode = await fr.search_faq_detailed("预算")
+        assert results == [] and mode == "stale"
 
     @pytest.mark.asyncio
     async def test_failed_rebuild_keeps_old_index(self, monkeypatch):
@@ -317,3 +381,115 @@ class TestIndexHelpers:
         with pytest.raises(RuntimeError):
             await fr.rebuild(ROWS + [faq(4, "新增", "新增答案")])
         assert fr.index_size() == 3
+
+
+class _RaggedEmbeddings:
+    """返回长度不一致的向量，模拟「换了 EMBEDDING_MODEL 但索引没重建」"""
+
+    def __init__(self):
+        self.n = 0
+
+    async def aembed_documents(self, texts):
+        out = []
+        for _ in texts:
+            self.n += 1
+            out.append([1.0, 0.0] if self.n % 2 == 0 else [1.0, 0.0, 0.0, 0.0])
+        return out
+
+    async def aembed_query(self, text):
+        return [1.0, 0.0, 0.0, 0.0]
+
+
+class TestEmbeddingDimensionGuard:
+    """维度守卫：宁可显式失败，也不静默截断算出错分数
+
+    历史隐患：``zip(a, b)`` 遇长度不等会静默截断，相似度看起来正常实则全错。
+    """
+
+    @pytest.mark.asyncio
+    async def test_rebuild_rejects_ragged_dimensions(self, monkeypatch):
+        import ai.llm as llm_mod
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: _RaggedEmbeddings())
+        with pytest.raises(ValueError, match="维度不一致"):
+            await fr.rebuild(ROWS)
+        assert fr.index_size() == 0, "维度不一致时不应留下半成品索引"
+
+    @pytest.mark.asyncio
+    async def test_rebuild_rejects_count_mismatch(self, monkeypatch):
+        class ShortEmbeddings:
+            async def aembed_documents(self, texts):
+                return [[1.0, 0.0] for _ in texts][:-1]   # 少返回一条
+
+            async def aembed_query(self, text):
+                return [1.0, 0.0]
+
+        import ai.llm as llm_mod
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: ShortEmbeddings())
+        with pytest.raises(ValueError, match="条数不匹配"):
+            await fr.rebuild(ROWS)
+        assert fr.index_size() == 0
+
+    @pytest.mark.asyncio
+    async def test_search_skips_stale_index_entries(self, monkeypatch):
+        """索引维度过期时该条被跳过，而不是用错分数返回结果"""
+        await fr.rebuild(ROWS)                 # 正常维度
+        import ai.llm as llm_mod
+
+        # 伪造「索引是旧维度、query 是新维度」
+        for it in fr._index:
+            it["vector"] = [1.0, 0.0]         # 2 维
+            it["vector_answer"] = [1.0, 0.0]
+
+        class NewDimEmbeddings:
+            async def aembed_documents(self, texts):
+                return [[1.0, 0.0, 0.0, 0.0] for _ in texts]
+
+            async def aembed_query(self, text):
+                return [1.0, 0.0, 0.0, 0.0]
+
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: NewDimEmbeddings())
+        fr._query_cache.clear()
+        results, mode = await fr.search_faq_detailed("预算")
+        assert results == [], "维度不匹配时不应返回任何结果"
+        assert mode == "vector"
+
+    @pytest.mark.asyncio
+    async def test_cosine_raw_never_sees_mismatched_lengths(self, monkeypatch):
+        """拦截 _cosine_raw，证明守卫在调用前就拦住了维度不匹配的条目
+
+        为什么必须拦：zip() 截断是**静默**的。``_cosine_raw([1,0], [1,0,0])``
+        实测返回 1.0（最大相似度）——换了模型维度后，旧索引会跟"完美命中"
+        长得一模一样，肉眼和日志都看不出来。
+        """
+        await fr.rebuild(ROWS)
+        for it in fr._index:                  # 伪造旧维度索引
+            it["vector"] = [1.0, 0.0]
+            it["vector_answer"] = [1.0, 0.0]
+
+        import ai.llm as llm_mod
+
+        class NewDimEmbeddings:
+            async def aembed_documents(self, texts):
+                return [[1.0, 0.0, 0.0, 0.0] for _ in texts]
+
+            async def aembed_query(self, text):
+                return [1.0, 0.0, 0.0, 0.0]
+
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: NewDimEmbeddings())
+        fr._query_cache.clear()
+
+        seen = []
+        real = fr._cosine_raw
+
+        def _spy(a, b):
+            seen.append((len(a), len(b)))
+            return real(a, b)
+
+        monkeypatch.setattr(fr, "_cosine_raw", _spy)
+        await fr.search_faq_detailed("预算")
+        assert seen == [], f"维度不匹配时不应调用 _cosine_raw，实际调用了 {seen}"
+
+    def test_zip_truncation_is_silently_wrong(self):
+        """记录 zip 截断的具体危害：结果看起来是满分相似度"""
+        assert fr._cosine_raw([1.0, 0.0], [1.0, 0.0, 0.0]) == 1.0
+        # -> 换模型后旧索引会「完美命中」，故必须在调用前做长度守卫

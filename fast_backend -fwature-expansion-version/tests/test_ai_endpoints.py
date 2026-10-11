@@ -170,7 +170,8 @@ class TestChatPromptAssembly:
             captured["knowledge_query"] = query
             return knowledge
 
-        async def _chat(messages, premium=False):
+        # 签名镜像 ai.chat_chain.chat：含 user_id（按用户记录 Token/延迟）
+        async def _chat(messages, premium=False, user_id=None):
             captured["messages"] = messages
             return "回复内容"
 

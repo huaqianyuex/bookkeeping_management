@@ -46,7 +46,26 @@ async def lifespan(_: FastAPI):
             logger.info("startup: FAQ keyword index loaded, %d rows", count)
     except Exception:
         logger.exception("startup: FAQ index preload failed (FAQ 检索暂不可用)")
-    yield
+
+    # 软删物理清理（可选依赖）：APScheduler 未安装时返回 False，仅少一项增强，
+    # 不影响服务启动。
+    try:
+        from tasks.purge import start_scheduler
+
+        if start_scheduler():
+            logger.info("startup: purge scheduler enabled")
+    except Exception:
+        logger.exception("startup: purge scheduler 启动异常（不影响服务）")
+
+    try:
+        yield
+    finally:
+        try:
+            from tasks.purge import stop_scheduler
+
+            stop_scheduler()
+        except Exception:
+            logger.exception("shutdown: 停止 purge scheduler 失败")
 
 
 app = FastAPI(lifespan=lifespan)

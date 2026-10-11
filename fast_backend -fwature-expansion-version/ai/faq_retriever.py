@@ -13,20 +13,84 @@
 两者混用会让 FAQ_SIMILARITY_THRESHOLD 失效（原始余弦 0 → 归一化 0.5，
 恰好等于旧默认值 0.5，等价于不设阈值）。
 """
+import asyncio
+import logging
 import re
+import time
 from collections import OrderedDict
 
 from config.settings import (
     FAQ_SIMILARITY_THRESHOLD, FAQ_TOP_K, FAQ_QUERY_CACHE_SIZE,
 )
 
-# 内存索引：[{id, question, answer, category, vector, vector_answer}]
+logger = logging.getLogger(__name__)
+
+# 内存索引：[{id, question, answer, category, vector, vector_answer, dim}]
 # vector/vector_answer 为 None 表示该条目处于降级（关键词）模式
 _index: list[dict] = []
 
 # query(归一化) -> 查询向量。FAQ 问题重复率极高，命中即省一次 Embedding 计费。
 # 进程内缓存：重建索引不影响其有效性（查询向量只与 query 有关，与索引无关）。
 _query_cache: "OrderedDict[str, list[float]]" = OrderedDict()
+
+
+def _log_dim_mismatch(q_dim: int, idx_dim: int) -> None:
+    """维度不一致只记一次日志，避免每次检索刷屏"""
+    key = (q_dim, idx_dim)
+    if _dim_warned.get(key):
+        return
+    _dim_warned[key] = True
+    logger.error(
+        "FAQ 索引维度过期：query=%d 索引=%d —— EMBEDDING_MODEL 可能已变更，"
+        "请调 POST /api/ai/faq/rebuild 重建（本次已跳过该条）",
+        q_dim, idx_dim,
+    )
+
+
+_dim_warned: dict[tuple[int, int], bool] = {}
+
+# ── single-flight 与冷却 ──────────────────────────────────────────────────
+# rebuild 会调全量 Embedding，是**真金白银**的外部调用。原先没有任何互斥：
+# 两个管理员同时点「重建」就会付两次钱，连续点击更是线性放大。
+#
+# 这里用「布尔标志 + 冷却时间」而非 asyncio.Lock：
+#   - 检查与置位之间没有 await，单事件循环下天然原子，不需要锁；
+#   - asyncio.Lock 在创建时会绑定当时的 event loop，模块级实例在多 loop
+#     场景（测试用例会各自新建 loop）会抛 "bound to a different event loop"，
+#     是比它想解决的问题更麻烦的坑。
+_rebuilding = False
+_rebuild_locked_until: float = 0.0        # 冷却截止时间戳
+REBUILD_COOLDOWN_SECONDS = 60
+REBUILD_REJECTED = "重建正在进行中或刚完成，请稍后再试"
+
+
+class RebuildBusy(RuntimeError):
+    """重建正在执行或处于冷却中——调用方应转成友好提示，不要当系统错误"""
+
+
+async def rebuild_cooldown_left() -> int:
+    """剩余冷却秒数；0 表示可重建"""
+    left = _rebuild_locked_until - time.time()
+    return int(left) + 1 if left > 0 else 0
+
+
+async def mark_stale(reason: str = "faq_changed") -> None:
+    """标记索引已过期。
+
+    管理端增删改 FAQ 后调用。此前 CRUD 不通知检索层，管理员新增一条 FAQ，
+    /faq/search 依然搜不到（索引里没有），且**系统自己无法感知已过期**。
+    标记后下一次检索会明确告知 mode=stale，运维/管理员能立刻看出来。
+    """
+    global _stale_reason
+    if _stale_reason is None:
+        _stale_reason = reason
+
+
+def stale_reason() -> str | None:
+    return _stale_reason
+
+
+_stale_reason: str | None = None
 
 
 def _cosine_raw(a: list[float], b: list[float]) -> float:
@@ -98,8 +162,8 @@ async def ensure_index(rows) -> int:
     return len(_index)
 
 
-async def rebuild(rows) -> int:
-    """6.12 全量重建向量索引。Embedding 失败时抛异常，由路由兜底返回错误结构。
+async def _rebuild_uncached(rows) -> int:
+    """真正的重建逻辑（调用方已持有 single-flight 锁）
 
     question 与 answer 各算一条向量，检索时取较大者——只 embed question 时，
     「用户按答案里的措辞提问」这一路召回恒为 0。
@@ -119,6 +183,21 @@ async def rebuild(rows) -> int:
     # async 批量，不阻塞事件循环
     vectors = await embeddings.aembed_documents(texts)
 
+    # ⚠️ 维度一致性校验：若换过 EMBEDDING_MODEL 而未清索引，各条向量长度可能不一致。
+    # 旧的 zip(a, b) 遇长度不等会**静默截断**，算出看似合理实则错误的相似度且全程
+    # 不报错——这类静默错误比崩溃更难发现。这里显式拒绝。
+    dims = {len(v) for v in vectors if v is not None}
+    if len(dims) > 1:
+        raise ValueError(
+            f"embedding 维度不一致：{sorted(dims)}——"
+            "疑似 EMBEDDING_MODEL 已变更，请先清空索引再重建"
+        )
+    if len(vectors) != len(texts):
+        raise ValueError(
+            f"embedding 返回条数不匹配：请求 {len(texts)} 条，返回 {len(vectors)} 条"
+        )
+    dim = dims.pop() if dims else 0
+
     new_index = []
     for i, r in enumerate(rows):
         new_index.append({
@@ -127,11 +206,47 @@ async def rebuild(rows) -> int:
             "answer": r.answer,
             "category": r.category,
             "vector": vectors[2 * i],
-            "vector_answer": vectors[2 * i + 1] if len(vectors) > 2 * i + 1 else None,
+            "vector_answer": vectors[2 * i + 1],
+            "dim": dim,
         })
     # 全部算完再整体替换：中途异常时旧索引仍可用，不留半新半旧状态
     _index = new_index
     return len(_index)
+
+
+async def rebuild(rows) -> int:
+    """6.12 全量重建向量索引。Embedding 失败时抛异常，由路由兜底返回错误结构。
+
+    single-flight：并发调用只有第一个真正执行，其余直接抛 RebuildBusy，
+    由路由转成中文错误。避免多个管理员同时点「重建」重复计费。
+    冷却：成功后再锁 REBUILD_COOLDOWN_SECONDS 秒，挡住连续点击。
+
+    ⚠️ 维度一致性：换过 EMBEDDING_MODEL 而未重建时，各条向量长度可能不一致；
+    旧实现用 zip() 求点积，长度不等会**静默截断**，算出看似合理实则全错的
+    相似度且不报错。_rebuild_uncached 里已改为显式拒绝。
+    """
+    global _rebuilding, _rebuild_locked_until, _stale_reason
+
+    if _rebuilding:
+        raise RebuildBusy(REBUILD_REJECTED)
+    left = _rebuild_locked_until - time.time()
+    if left > 0:
+        raise RebuildBusy(f"{REBUILD_REJECTED}（还需 {int(left) + 1} 秒）")
+
+    # 检查与置位之间没有 await，单事件循环下这一步是原子的
+    _rebuilding = True
+    _rebuild_locked_until = time.time() + REBUILD_COOLDOWN_SECONDS
+    try:
+        n = await _rebuild_uncached(rows)
+    except Exception:
+        # 失败不占冷却，允许管理员立即重试
+        _rebuild_locked_until = 0.0
+        raise
+    finally:
+        _rebuilding = False
+    _stale_reason = None          # 重建成功即视为新鲜
+    _dim_warned.clear()           # 维度告警随之失效
+    return n
 
 
 async def _embed_query(query: str) -> list[float] | None:
@@ -164,13 +279,18 @@ async def search_faq(query: str, top_k: int = FAQ_TOP_K) -> list[dict]:
 async def search_faq_detailed(query: str, top_k: int = FAQ_TOP_K) -> tuple[list[dict], str]:
     """同 search_faq，但额外返回检索模式，便于路由透出降级状态给前端。
 
-    返回 (results, mode)：mode ∈ {"vector", "keyword", "empty"}
+    返回 (results, mode)：mode ∈ {"vector", "keyword", "empty", "stale"}
     历史问题：降级是「静默」的——search_faq 内部吞掉异常后直接换关键词检索，
     路由层的 `except → {"fallback": true}` 几乎永远不触发，前端无从判断
     「没命中」与「向量服务挂了只能凑合答」，两种 score 量纲还不可比。
+    新增 stale：管理端改了 FAQ 但未重建时，用旧索引检索出来的结果不可信，
+    必须让调用方看见，否则会误以为「知识库里就是没有这条」。
     """
     if not query or not query.strip() or not _index:
         return [], "empty"
+
+    if _stale_reason is not None:
+        return [], "stale"
 
     q_vec = await _embed_query(query)
 
@@ -179,9 +299,17 @@ async def search_faq_detailed(query: str, top_k: int = FAQ_TOP_K) -> tuple[list[
         vec = item.get("vector")
         vec_ans = item.get("vector_answer")
         if q_vec is not None and vec is not None:
+            # ⚠️ 维度守卫：换模型后旧索引未重建时，这里会长度不等。
+            # 绝不能让它走到 _cosine_raw —— 那里 zip() 会静默截断算出错分数。
+            if len(q_vec) != len(vec):
+                _log_dim_mismatch(len(q_vec), len(vec))
+                continue
             raw = _cosine_raw(q_vec, vec)
             if vec_ans is not None:
-                raw = max(raw, _cosine_raw(q_vec, vec_ans))
+                if len(q_vec) == len(vec_ans):
+                    raw = max(raw, _cosine_raw(q_vec, vec_ans))
+                else:
+                    _log_dim_mismatch(len(q_vec), len(vec_ans))
             if raw < FAQ_SIMILARITY_THRESHOLD:
                 continue
             score = _to_display_score(raw)

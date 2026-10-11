@@ -13,6 +13,7 @@ from starlette import status
 
 from config.db_config import get_db
 from crud import admin, user
+from ai import faq_retriever
 from models.chat import Faq
 from schemas.admin import (
     AdminRecordOut,
@@ -216,6 +217,10 @@ async def create_faq(
         db, Faq(question=body.question, answer=body.answer, category=body.category)
     )
     await db.commit()
+    # 知识库变更 -> 索引过期。此前 CRUD 不通知检索层：新增的 FAQ 立即搜不到，
+    # 且系统无法感知自己已过期。现标记后，/faq/search 会返回 mode="stale"，
+    # 提示管理员去点「重建索引」而不是让人以为「知识库里没有这条」。
+    await faq_retriever.mark_stale("faq_created")
     return success_response(message="创建成功", data=FaqOut.model_validate(faq))
 
 
@@ -234,6 +239,7 @@ async def update_faq(
     if faq is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="FAQ 不存在")
     await db.commit()
+    await faq_retriever.mark_stale("faq_updated")   # 见 create_faq 的同名注释
     return success_response(message="更新成功", data=FaqOut.model_validate(faq))
 
 
@@ -247,4 +253,5 @@ async def delete_faq(
     if not await admin.delete_faq(db, faq_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="FAQ 不存在")
     await db.commit()
+    await faq_retriever.mark_stale("faq_deleted")   # 见 create_faq 的同名注释
     return success_response(message="删除成功")

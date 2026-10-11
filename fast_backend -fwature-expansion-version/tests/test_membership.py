@@ -419,7 +419,7 @@ class TestMembershipBadge:
         async def _fake_finance(db, user_id):
             return ""
 
-        async def _fake_chat(messages, premium=False):
+        async def _fake_chat(messages, premium=False, user_id=None):
             return "好的"
 
         async def _fake_add_message(db, session_id, role, content):

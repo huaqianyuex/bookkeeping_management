@@ -366,7 +366,8 @@ def main():
         # 只替换 LLM 调用（chat_stream），闸门 / 并发槽 / 落库 / SSE 全部走真实代码
         from routers import ai as ai_router
 
-        async def fake_stream(messages):
+        # 签名镜像 ai.chat_chain.chat_stream：premium / user_id 两个可选参数
+        async def fake_stream(messages, premium=False, user_id=None):
             yield "你好"
             yield "，已记下"
 

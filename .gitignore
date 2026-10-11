@@ -39,6 +39,7 @@ unpackage/
 # Generated reports
 项目技术报告.md
 毕设项目完整介绍.md
+项目清理报告_*.md
 
 # Lock files
 skills-lock.json

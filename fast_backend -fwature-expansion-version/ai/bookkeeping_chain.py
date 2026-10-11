@@ -14,6 +14,7 @@ from datetime import date
 from pydantic import BaseModel, Field
 
 from ai.llm import get_analyze_llm
+from ai.observability import KIND_BOOKKEEPING, Timer, record_call
 
 
 class ParsedItem(BaseModel):
@@ -48,7 +49,8 @@ _PROMPT = """你是记账解析器。今天是 {today}。
 5. 一条消息含多笔消费时拆成多个条目。"""
 
 
-async def parse_bookkeeping(message: str, today: str, category_names: list[str]) -> Parsed:
+async def parse_bookkeeping(message: str, today: str, category_names: list[str],
+                            user_id: int | None = None) -> Parsed:
     """解析口语化消息为 Parsed；LLM 失败时向上抛异常（路由兜底 ai_error）"""
     llm = get_analyze_llm()
     # method=function_calling：智谱 v4 等兼容端点不支持 json_schema 严格模式
@@ -59,5 +61,15 @@ async def parse_bookkeeping(message: str, today: str, category_names: list[str])
         message=message,
         categories="、".join(category_names) if category_names else "（无，自行归类）",
     )
-    result = await structured_llm.ainvoke(prompt)
+    timer = Timer()
+    try:
+        result = await structured_llm.ainvoke(prompt)
+    except Exception as e:
+        record_call(KIND_BOOKKEEPING, getattr(llm, "model_name", "?"), user_id,
+                    timer=timer, ok=False, error=type(e).__name__)
+        raise
+    # structured_output 返回的是 Pydantic 实例，取不到 usage_metadata，
+    # 这里 token 记 0、延迟照记；如需精确 token 需改用 invoke + 手动校验。
+    record_call(KIND_BOOKKEEPING, getattr(llm, "model_name", "?"), user_id,
+                timer=timer)
     return result if isinstance(result, Parsed) else Parsed.model_validate(result)

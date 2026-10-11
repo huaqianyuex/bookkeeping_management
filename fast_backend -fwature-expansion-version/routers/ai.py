@@ -35,6 +35,8 @@ from ai import memory, chat_chain, analyze_chain, faq_retriever
 from ai import context as ai_context
 from ai import normalizers as bk_norm
 from ai import category_alias as bk_alias
+from ai import security as ai_security
+from ai import observability as ai_obs
 from ai import stt as ai_stt
 from ai.stt import ProviderNotConfigured
 from ai.bookkeeping_chain import parse_bookkeeping
@@ -231,6 +233,21 @@ async def _build_system_prompt(db: AsyncSession, user_id: int, query: str) -> st
     return chat_chain.build_system_prompt(*blocks)
 
 
+def _safe_user_text(text: str) -> str:
+    """用户输入送入 Prompt 前的统一清洗（方案 §3.5 P0）。
+
+    手机号 / 银行卡 / 身份证 / 邮箱本地脱敏为占位符，同时过滤提示词注入话术。
+    落库仍保留原文（用户要看到自己发过什么），**只有上云的那一份是脱敏的**。
+    """
+    cleaned = ai_security.sanitize(text)
+    if cleaned != (text or ""):
+        # 记录命中类型与脱敏后长度即可，绝不把原文写进日志
+        logger.info("ai input sanitized: raw_len=%d clean_len=%d injection=%s",
+                    len(text or ""), len(cleaned),
+                    ai_security.has_injection_risk(text))
+    return cleaned
+
+
 @router.post("/chat", summary="非流式对话")
 async def chat(
     body: ChatIn,
@@ -264,14 +281,15 @@ async def chat(
         # 组装消息：system(含财务数据块 + 知识库块) + 历史窗口 + 本次 human
         history = await memory.build_history(db, body.session_id)
         system_prompt = await _build_system_prompt(db, user_id, body.message)
-        messages = [SystemMessage(content=system_prompt), *history, HumanMessage(content=body.message)]
+        messages = [SystemMessage(content=system_prompt), *history,
+                    HumanMessage(content=_safe_user_text(body.message))]
 
         # 落库用户消息
         await ai_crud.add_message(db, body.session_id, "user", body.message)
 
         # 调 LLM（非流式，一次拿全）
         try:
-            content = await chat_chain.chat(messages, premium=plan["premium_model"])
+            content = await chat_chain.chat(messages, premium=plan["premium_model"], user_id=user_id)
         except Exception:
             logger.exception("chat failed, user_id=%s", user_id)
             return ai_error("AI 服务暂不可用，请稍后重试")
@@ -345,11 +363,12 @@ async def chat_stream(
                 # 2) 组装消息并流式产出（注入实时财务数据，模型才能分析当月账单）
                 history = await memory.build_history(gen_db, body.session_id)
                 system_prompt = await _build_system_prompt(gen_db, user_id, body.message)
-                messages = [SystemMessage(content=system_prompt), *history, HumanMessage(content=body.message)]
+                messages = [SystemMessage(content=system_prompt), *history,
+                    HumanMessage(content=_safe_user_text(body.message))]
 
                 full = []
                 try:
-                    async for chunk in chat_chain.chat_stream(messages, premium=plan["premium_model"]):
+                    async for chunk in chat_chain.chat_stream(messages, premium=plan["premium_model"], user_id=user_id):
                         full.append(chunk)
                         yield sse({"type": "content", "content": chunk})
                 except Exception:
@@ -446,6 +465,7 @@ async def faq_search(
     - "vector"  向量检索命中（score 为归一化余弦，0~1）
     - "keyword" 降级为字符重合度检索（Embedding 不可用或向量索引未构建）
     - "empty"   空 query / 索引为空，无从检索
+    - "stale"   知识库已变更但索引未重建，结果不可信，故不返回结果
 
     两种失败形态要区分：无命中**没有** fallback 键；整体抛异常才有。
     历史问题：top_k 硬编码 3，绕过 FAQ_TOP_K 配置；且降级是静默的，
@@ -468,11 +488,18 @@ async def faq_rebuild(
     """6.12 重建 FAQ 索引：成功 {success: true, count: n}；失败 {error: "重建失败"}
 
     重建会调全量 embedding，需仅管理员调用；异常详情只记日志，不透出原始报错。
+
+    并发保护：faq_retriever.rebuild 内部是 single-flight + 60s 冷却，
+    多个管理员同时点「重建」只有第一个真正执行（否则重复付费），
+    其余返回 RebuildBusy 的中文提示而不是系统错误。
     """
     try:
         rows = await ai_crud.list_faq(db)
         count = await faq_retriever.rebuild(rows)   # 清空->重载->算向量->存内存
         return {"success": True, "count": count}
+    except faq_retriever.RebuildBusy as e:
+        # 并发/冷却：属正常业务提示，不是系统故障
+        return {"error": str(e), "retryAfter": await faq_retriever.rebuild_cooldown_left()}
     except Exception:
         logger.exception("FAQ rebuild failed, user_id=%s", user_id)
         return {"error": "重建失败"}
@@ -600,10 +627,15 @@ async def ai_admin_stats(
     user_id: int = Depends(get_current_admin),   # 6.14：仅管理员可见（路径带 admin 前缀，权限应一致）
     db: AsyncSession = Depends(get_db),
 ):
-    """6.14 AI 使用统计（仅管理员）：{totalSessions, totalMessages, totalFeedback, averageRating}
+    """6.14 AI 使用统计（仅管理员）：会话/消息/反馈计数 + Token 与延迟报表
 
     返回的是全站总体统计（带跨用户聚合数据），不适用普通用户。
     历史版本挂 get_current_user 且存在签名错位，已修正为 admin 专用。
+
+    usage 字段是「本次进程启动后」的 Token/TTFT 聚合（ai/observability.py），
+    单 worker 内存态，**进程重启即清零**，且不跨实例累加。
+    它用于排障与调优的即时可见性，不是财务级账单；要长期核算需把 token
+    落库（ai_usage_daily 加列）。usage 为 {} 表示本次启动后尚无调用。
     """
     stats = await ai_crud.ai_stats(db)   # 全量 COUNT 不过滤 deleted_at；AVG(rating) 空回 0
     return {
@@ -611,6 +643,7 @@ async def ai_admin_stats(
         "totalMessages": stats["totalMessages"],
         "totalFeedback": stats["totalFeedback"],
         "averageRating": stats["averageRating"],
+        "usage": ai_obs.recorder.snapshot(),
     }
 
 
@@ -731,18 +764,47 @@ async def bookkeeping(
                 await ai_crud.update_bookkeeping_log(db, draft_log.id, status=2)
             await db.commit()           # 占位必须先落库，撞键才有意义
         except IntegrityError:
-            # 并发重发同一 client_msg_id：回查首次日志走 duplicate
+            # 撞 uk_abk_client_msg。分两种情况，必须区分，否则用户会被永久卡死：
+            #  a) 首次请求真的还在处理中/已完成 -> 回显 duplicate
+            #  b) 首次请求已经死了（进程被 kill、OOM、断电），日志占着键但没产出
+            #     record —— find_log_by_client_msg 刻意只认 status=1 且 record_ids
+            #     非空，所以查不到。此时必须释放该键并让用户重试，
+            #     否则同一 clientMsgId 永远返回「请求处理中」。
             first = await ai_crud.find_log_by_client_msg(db, user_id, body.client_msg_id)
             if first and first.record_ids:
                 return await _duplicate_response(db, first, user_id)
+            dead = await ai_crud.find_any_by_client_msg(db, user_id, body.client_msg_id)
+            if dead is not None and not dead.record_ids:
+                # 死日志：无 record 说明从未成功入账，释放幂等键
+                await ai_crud.release_client_msg_id(db, dead.id)
+                await db.commit()
+                logger.warning(
+                    "released stale idempotency key: log_id=%s user_id=%s action=%s",
+                    dead.id, user_id, dead.action,
+                )
+                return ai_error("上一次请求未完成，请重新发送")
             return ai_error("请求处理中，请稍后重试")
 
-    async def _bk_fail(msg: str) -> dict:
+    async def _bk_fail(msg: str, *, stage: str = "unknown") -> dict:
         """解析/校验失败善后：占位日志回写 error（status=0），被消费的草稿恢复为 0，
-        避免留下 action='created' 的脏日志或断掉追问续写链。配额不回退（防刷惯例）。"""
+        避免留下 action='created' 的脏日志或断掉追问续写链。配额不回退（防刷惯例）。
+
+        error_msg 记录「阶段:中文原因」，用于事后分析失败率与失败类型分布——
+        此前该列全项目零写入，所有失败只回前端一句文案，运营侧完全黑盒。
+        落库前用 security.mask_for_log 压长度，防止上游报错把内部路径/连接串带进库。
+        """
+        detail = f"{stage}: {msg}"[:200]
         try:
             if log is not None:
-                await ai_crud.update_bookkeeping_log(db, log.id, action="error", status=0)
+                await ai_crud.update_bookkeeping_log(
+                    db, log.id, action="error", status=0, error_msg=detail,
+                    # ⚠️ 必须释放幂等键：本条没产出 record，却占着 uk_abk_client_msg。
+                    # 两个去重查询都要求 status=1 且 record_ids 非空，查不到它；
+                    # 用户若用**同一个 clientMsgId** 重试（这正是客户端幂等键的用途
+                    # ——弱网重发），会直接撞唯一键，走到 IntegrityError 分支后
+                    # 又查不到成功日志，于是永远返回「请求处理中」，再也记不进去。
+                    client_msg_id=None,
+                )
             if draft_log is not None:
                 await ai_crud.update_bookkeeping_log(db, draft_log.id, status=0)
             if log is not None or draft_log is not None:
@@ -768,11 +830,11 @@ async def bookkeeping(
         user_cats = [c for c in cat_rows if c.user_id == user_id]
         sys_cats = [c for c in cat_rows if c.user_id != user_id]
         parsed = await parse_bookkeeping(
-            message, today.isoformat(), [c.name for c in cat_rows]
+            _safe_user_text(message), today.isoformat(), [c.name for c in cat_rows], user_id=user_id
         )
     except Exception:
         logger.exception("bookkeeping parse failed, user_id=%s", user_id)
-        return await _bk_fail("记账解析失败，请换个说法再试")
+        return await _bk_fail("记账解析失败，请换个说法再试", stage="parse")
 
     # 审计载荷：parse_json 全项目只写不读，用保留键追加 overrides 记录是安全的
     parse_payload = parsed.model_dump()
@@ -802,7 +864,7 @@ async def bookkeeping(
     # 原实现用 continue 跳过缺金额条目时把下标丢了，确认卡（overrides）无法定位
     # 第 N 笔，因此 ok_items 从 4 元组扩为 (idx, item, amount, rec_date, cat) 5 元组。
     if len(parsed.items) > 10:
-        return await _bk_fail("一次最多识别 10 笔消费，请分开发送")
+        return await _bk_fail("一次最多识别 10 笔消费，请分开发送", stage="too_many_items")
 
     ov_map = {o.index: o for o in (body.overrides or [])}
     ok_items: list[tuple] = []
@@ -828,7 +890,7 @@ async def bookkeeping(
             try:
                 rec_date = _date.fromisoformat(ov.date)
             except ValueError:
-                return await _bk_fail("日期格式应为 yyyy-MM-dd")
+                return await _bk_fail("日期格式应为 yyyy-MM-dd", stage="bad_date")
         else:
             rec_date = bk_norm.normalize_date(item.date_expr, item.date, today)
 
@@ -840,9 +902,9 @@ async def bookkeeping(
         if ov is not None and ov.category_id is not None:
             cat = next((c for c in cat_rows if c.id == ov.category_id), None)
             if cat is None:
-                return await _bk_fail("分类不存在或不可用")
+                return await _bk_fail("分类不存在或不可用", stage="bad_category_override")
             if override_type and cat.type != item.type:
-                return await _bk_fail("分类类型与收支类型不一致")
+                return await _bk_fail("分类类型与收支类型不一致", stage="category_type_mismatch")
             fallback = False
         else:
             cat, fallback = bk_alias.resolve_category(item.category_name, user_cats + sys_cats)
@@ -855,7 +917,7 @@ async def bookkeeping(
             if cat is None:
                 # 归类失败且系统没有「其他」分类：中止本单。
                 # 继续走会在 NOT NULL 列 records.category_id 插 NULL 触发 IntegrityError（P0）
-                return await _bk_fail("未识别到明确分类，且系统缺少「其他」分类，请先创建后重试")
+                return await _bk_fail("未识别到明确分类，且系统缺少「其他」分类，请先创建后重试", stage="no_fallback_category")
             fallback_count += 1
 
         # 无显式 override 类型时，以最终入账分类为准（分类是强数据约束，
@@ -1046,7 +1108,7 @@ async def amend_bookkeeping(
         sys_cats = [c for c in cat_rows if c.user_id != user_id]
         try:
             parsed = await parse_bookkeeping(
-                msg, _date.today().isoformat(), [c.name for c in cat_rows]
+                _safe_user_text(msg), _date.today().isoformat(), [c.name for c in cat_rows], user_id=user_id
             )
         except Exception:
             logger.exception("amend parse failed, user_id=%s record_id=%s", user_id, record_id)

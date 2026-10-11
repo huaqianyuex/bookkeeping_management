@@ -3,6 +3,7 @@
 from langchain_core.messages import BaseMessage
 
 from ai.llm import get_chat_llm
+from ai.observability import KIND_CHAT, Timer, record_call
 
 # 分四段写，每段一个明确职责：
 # 1) 身份与场景 2) 行为边界（能做什么/不能做什么）3) 数据口径（防幻觉）
@@ -38,13 +39,37 @@ def build_system_prompt(*blocks: str) -> str:
     return "".join(parts)
 
 
-async def chat(messages: list[BaseMessage], premium: bool = False) -> str:
+async def chat(messages: list[BaseMessage], premium: bool = False,
+               user_id: int | None = None) -> str:
     """非流式（6.7）：一次拿到完整回复；premium=会员档走高级模型"""
-    return (await get_chat_llm(premium=premium).ainvoke(messages)).content
+    llm = get_chat_llm(premium=premium)
+    timer = Timer()
+    try:
+        resp = await llm.ainvoke(messages)
+    except Exception as e:
+        record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
+                    timer=timer, ok=False, error=type(e).__name__)
+        raise
+    record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
+                response=resp, timer=timer)
+    return resp.content
 
 
-async def chat_stream(messages: list, premium: bool = False):
-    """逐块 yield 文本；messages = [system, *history, human]"""
-    async for chunk in get_chat_llm(premium=premium).astream(messages):
-        if chunk.content:
-            yield chunk.content
+async def chat_stream(messages: list, premium: bool = False,
+                      user_id: int | None = None):
+    """逐块 yield 文本；messages = [system, *history, human]
+
+    TTFT：首个 chunk 到达即打点，用于观测「首字延迟」而非整段耗时。
+    """
+    llm = get_chat_llm(premium=premium)
+    timer = Timer()
+    try:
+        async for chunk in llm.astream(messages):
+            if chunk.content:
+                timer.mark_first_chunk()
+                yield chunk.content
+    except Exception as e:
+        record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
+                    timer=timer, ok=False, error=type(e).__name__)
+        raise
+    record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id, timer=timer)

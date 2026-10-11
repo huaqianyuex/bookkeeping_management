@@ -340,6 +340,39 @@ async def list_faq(db: AsyncSession) -> list[Faq]:
 
 # ── 记账日志 ai_bookkeeping_logs（6.15-6.17）────────────────────────────
 
+async def find_any_by_client_msg(db: AsyncSession, user_id: int, client_msg_id: str):
+    """按 client_msg_id 取**任意**状态的日志（不过滤 status / record_ids）。
+
+    用途：识别「占住了 uk_abk_client_msg 唯一键但没产出 record」的死日志。
+    find_log_by_client_msg 刻意要求 status=1 且 record_ids 非空（只认成功），
+    所以查不到这类死日志——而正是它让同一个 client_msg_id 的重试永久撞键。
+    """
+    result = await db.execute(
+        select(AiBookkeepingLog)
+        .where(
+            AiBookkeepingLog.user_id == user_id,
+            AiBookkeepingLog.client_msg_id == client_msg_id,
+        )
+        .order_by(AiBookkeepingLog.id.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def release_client_msg_id(db: AsyncSession, log_id: int) -> None:
+    """释放某条日志占用的幂等键：把 client_msg_id 置 NULL。
+
+    为什么置 NULL 而不是删行：MySQL 唯一索引对多行 NULL **不冲突**
+    （见 models/bookkeeping.py 的类注释），置 NULL 正好复用这条既有语义，
+    既释放了 uk_abk_client_msg，又完整保留了审计痕迹（哪次失败了、为什么）。
+    """
+    await db.execute(
+        update(AiBookkeepingLog)
+        .where(AiBookkeepingLog.id == log_id)
+        .values(client_msg_id=None)
+    )
+
+
 async def get_records_by_ids(db: AsyncSession, ids: list[int], user_id: int | None = None) -> list:
     """按 ID 数组查本人记账记录（duplicate 回显用）
 

@@ -28,5 +28,9 @@ langchain-openai>=0.2.0
 # 显式声明避免上游改依赖时被动断链）
 httpx>=0.27.0
 
-# 以下为定时任务的可选依赖，实现对应模块时再安装：
-# apscheduler
+# 定时任务：软删物理清理（tasks/purge.py）。
+# ⚠️ 仍是**可选依赖**——tasks/purge.py 在 ImportError 时只记 warning 并跳过，
+# 不会让服务起不来。但不装就意味着被删除的会话与消息会永久堆积，
+# AI 相关表体积只增不减。生产环境建议安装：
+#   pip install apscheduler>=3.10
+apscheduler>=3.10
