@@ -34,6 +34,9 @@ def _reset_in_memory_throttles():
         recharge_crud.create_rate_limiter._hits.clear()
         recharge_crud.pay_fail_throttle._buckets.clear()
         recharge_crud.pay_fail_throttle._locked.clear()
+        # 会员模块：兑换码核销限流（routers.membership 模块级单例）
+        from routers import membership as membership_router
+        membership_router.redeem_rate_limiter._hits.clear()
 
     _clear()
     yield

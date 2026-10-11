@@ -24,13 +24,21 @@ from schemas.membership import (
     MembershipCodeOut,
     MembershipStatusOut,
     RedeemIn,
+    UserRedemptionOut,
 )
 from utils.auth import get_current_admin, get_current_user
 from utils.response import success_response
+from utils.throttle import SlidingWindowRateLimiter
 
 # 用户侧与管理侧分两个 router（prefix 不同、同一 tag 便于 Swagger 分组）
 router = APIRouter(prefix="/api/membership", tags=["membership"])
 admin_router = APIRouter(prefix="/api/admin/membership", tags=["membership"])
+
+# 兑换码核销限流：redeem 是「SELECT ... FOR UPDATE 行锁 + 会员期 UPSERT」的写操作。
+# 16 位码取自 32 字符表（32^16 ≈ 1.2e24）本就无法爆破，这里挡的是**脚本高频空转打库**
+# ——行锁请求堆积会拖慢同库其他事务。口径与 utils/throttle 的语音限流一致（成功也计数）。
+# ⚠️ 进程内存态（同 LoginThrottle / ai_concurrency）：多 worker 部署时需换 Redis。
+redeem_rate_limiter = SlidingWindowRateLimiter(max_calls=10, window=60)
 
 
 def _benefits(plan: dict) -> dict:
@@ -88,13 +96,50 @@ async def redeem(
     user_id: int = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """兑换码核销：叠加语义从 max(NOW, 现有到期) 起加天数（未过期续费不损失剩余天数）。"""
+    """兑换码核销：叠加语义从 max(NOW, 现有到期) 起加天数（未过期续费不损失剩余天数）。
+
+    完整链路：管理员 `POST /api/admin/membership/codes` 生成码 →
+    用户 `POST /api/membership/redeem` 核销 → `crud.redeem_code` 行锁置 status=1
+    并与会员期 UPSERT 同事务提交 → 用户即获得会员（体验）资格，到期时间见响应 expiresAt。
+
+    限流先于业务：核销是带行锁的写操作，超频直接 429（见 redeem_rate_limiter）。
+    """
+    ok, retry_after = redeem_rate_limiter.allow(f"redeem:{user_id}")
+    if not ok:
+        raise HTTPException(status_code=429, detail=f"操作过于频繁，请 {retry_after} 秒后再试")
+
     ok, msg, membership = await membership_crud.redeem_code(db, user_id, body.code)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return success_response(message=msg, data={
         "tier": 1,
         "expiresAt": membership.expires_at.isoformat() if membership else None,
+    })
+
+
+@router.get("/redemptions", summary="我的兑换记录")
+async def my_redemptions(
+    user_id: int = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=1, le=100),
+):
+    """普通用户查看自己核销过的兑换码（体验资格的来源追溯），id 倒序分页。
+
+    与 /status 同属「账号自身」功能，故用 get_current_user 而非
+    get_current_regular_user —— 角色功能范围矩阵见 utils/auth.py 模块 docstring。
+    """
+    result = await membership_crud.list_user_redemptions(db, user_id, page, size)
+    total = result["total"]
+    return success_response(data={
+        "records": [
+            UserRedemptionOut.model_validate(r).model_dump(by_alias=True)
+            for r in result["rows"]
+        ],
+        "total": total,
+        "pages": (total + size - 1) // size,
+        "current": page,
+        "size": size,
     })
 
 

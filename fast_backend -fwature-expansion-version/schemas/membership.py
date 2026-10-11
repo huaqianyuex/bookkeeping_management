@@ -66,6 +66,20 @@ class MembershipCodeOut(OrmBase):
     created_at: Optional[datetime] = Field(None, alias="createdAt")
 
 
+class UserRedemptionOut(OrmBase):
+    """GET /api/membership/redemptions 行出参（普通用户视角的兑换记录）
+
+    刻意**不含** usedBy（就是本人）与 batchNo（运营内部批次号，对用户无意义），
+    避免把管理侧字段泄漏到用户侧接口。
+    """
+
+    id: int
+    code: str = Field(..., description="核销时使用的兑换码原文")
+    days: int = Field(..., description="该码开通的会员天数")
+    used_at: Optional[datetime] = Field(None, alias="usedAt", description="核销时间")
+    created_at: Optional[datetime] = Field(None, alias="createdAt", description="兑换码生成时间")
+
+
 class CodeGenerateIn(BaseModel):
     """POST /api/admin/membership/codes 入参"""
 

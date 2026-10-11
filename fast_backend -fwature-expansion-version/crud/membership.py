@@ -176,23 +176,36 @@ async def generate_codes(
 ) -> list[MembershipCode]:
     """批量生成兑换码（count 1-500、days 1-3650 由 schema 层校验）。
 
-    去重两道防线：内存 seen 集合 + 库内 SELECT 预查，唯一键
+    去重三道防线：候选池内去重 + 库内**批量**预查 + 唯一键
     uk_membership_codes_code 兜底（极端并发下由 DB 拒绝，不静默串码）。
+
+    性能：历史实现是「生成一个码 → 查一次库」的逐条循环，count=500 时最多
+    500 次 DB 往返；改为「按批生成候选 → 一次 IN 查库过滤」，往返次数降为 1~2 次。
     """
     batch = batch_no or datetime.now().strftime("%Y%m%d%H%M%S")
-    rows: list[MembershipCode] = []
-    seen: set[str] = set()
-    while len(rows) < count:
-        code = _gen_code()
-        if code in seen:
+    picked: list[str] = []
+    picked_set: set[str] = set()
+
+    while len(picked) < count:
+        # 候选池：一次凑够剩余所需数量（_gen_code 空间 32^16，池内碰撞概率可忽略）
+        pool: set[str] = set()
+        need = count - len(picked)
+        while len(pool) < need:
+            pool.add(_gen_code())
+        pool -= picked_set
+        if not pool:
             continue
-        exists = (await db.execute(
-            select(MembershipCode.id).where(MembershipCode.code == code)
-        )).first()
-        if exists:
-            continue
-        seen.add(code)
-        rows.append(MembershipCode(code=code, days=days, status=0, batch_no=batch))
+        # 一次 IN 查库，剔除库中已存在的码（替代逐条 SELECT 的 N+1）
+        existing = set((await db.execute(
+            select(MembershipCode.code).where(MembershipCode.code.in_(pool))
+        )).scalars().all())
+        for code in pool - existing:
+            if len(picked) >= count:
+                break
+            picked.append(code)
+            picked_set.add(code)
+
+    rows = [MembershipCode(code=c, days=days, status=0, batch_no=batch) for c in picked]
     db.add_all(rows)
     await db.commit()
     # 回读主键与 DB 侧默认值（created_at 由 DDL CURRENT_TIMESTAMP 填充）：
@@ -214,6 +227,30 @@ async def list_codes(
     if status is not None:
         conditions.append(MembershipCode.status == status)
 
+    total = (await db.execute(
+        select(func.count(MembershipCode.id)).where(*conditions)
+    )).scalar_one()
+    rows = (await db.execute(
+        select(MembershipCode)
+        .where(*conditions)
+        .order_by(MembershipCode.id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )).scalars().all()
+    return {"rows": rows, "total": total}
+
+
+async def list_user_redemptions(
+    db: AsyncSession, user_id: int, page: int = 1, size: int = 20
+) -> dict:
+    """普通用户的兑换记录：该用户核销过的兑换码（体验资格来源），id 倒序分页。
+
+    只取 status=1（已核销）且 used_by==user_id 的行——这是「我的体验资格从哪来」
+    的唯一可查来源；未使用/已作废的码与用户无关，不返回。
+
+    返回 {"rows": [...], "total": n}，由路由层组 PageResult。
+    """
+    conditions = (MembershipCode.used_by == user_id, MembershipCode.status == 1)
     total = (await db.execute(
         select(func.count(MembershipCode.id)).where(*conditions)
     )).scalar_one()
