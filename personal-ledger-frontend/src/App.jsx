@@ -2,11 +2,12 @@ import './styles/design-tokens.css'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider, App as AntdApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { antdTheme } from './theme/antdTheme'
 import MainLayout from './components/MainLayout'
 import AuthRoute from './components/guards/AuthRoute'
 import AdminRoute from './components/guards/AdminRoute'
+import RegularUserRoute from './components/guards/RegularUserRoute'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import Dashboard from './pages/Dashboard'
@@ -24,6 +25,13 @@ import AdminFaq from './pages/admin/AdminFaq'
 import AdminMembership from './pages/admin/AdminMembership'
 import AdminRecharges from './pages/admin/AdminRecharges'
 
+/** 首页落地：管理员进管理后台，普通用户进账单页 */
+function HomeRedirect() {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  return <Navigate to={user?.role === 1 ? '/admin/dashboard' : '/records'} replace />
+}
+
 function AppContent() {
   return (
     <Routes>
@@ -34,10 +42,10 @@ function AppContent() {
           <MainLayout />
         </AuthRoute>
       }>
-        <Route index element={<Navigate to="/records" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="records" element={<Records />} />
-        <Route path="categories" element={<Categories />} />
+        <Route index element={<HomeRedirect />} />
+        <Route path="dashboard" element={<RegularUserRoute><Dashboard /></RegularUserRoute>} />
+        <Route path="records" element={<RegularUserRoute><Records /></RegularUserRoute>} />
+        <Route path="categories" element={<RegularUserRoute><Categories /></RegularUserRoute>} />
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="profile" replace />} />
           <Route path="profile" element={<UserInfo />} />
@@ -49,8 +57,8 @@ function AppContent() {
         <Route path="admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
         <Route path="admin/records" element={<AdminRoute><AdminRecords /></AdminRoute>} />
         <Route path="admin/faq" element={<AdminRoute><AdminFaq /></AdminRoute>} />
-        <Route path="ai-chat" element={<AiChatPage />} />
-        <Route path="membership" element={<Membership />} />
+        <Route path="ai-chat" element={<RegularUserRoute><AiChatPage /></RegularUserRoute>} />
+        <Route path="membership" element={<RegularUserRoute><Membership /></RegularUserRoute>} />
         <Route path="admin/membership" element={<AdminRoute><AdminMembership /></AdminRoute>} />
         <Route path="admin/recharges" element={<AdminRoute><AdminRecharges /></AdminRoute>} />
       </Route>

@@ -68,7 +68,7 @@ export default {
 		onLoad() {
 			// 已登录则直接跳主页，避免在登录页卡住
 			if (uni.getStorageSync('token')) {
-				uni.reLaunch({ url: '/pages/dashboard/index' })
+				this.resumeSession()
 				return
 			}
 			// 注册成功后回填用户名，省一次输入
@@ -79,6 +79,20 @@ export default {
 			}
 		},
 		methods: {
+			/**
+			 * 会话恢复：管理员不进入业务页。
+			 * 移动端没有管理后台，管理员进来只会落到必然 403 的页面，
+			 * 故清掉本地 token 并留在登录页（权限边界在服务端，这里只是体验对齐）。
+			 */
+			async resumeSession() {
+				const store = useUserStore()
+				const info = await store.fetchUserInfo()
+				if (info && info.role === 1) {
+					store.clearToken()
+					return
+				}
+				uni.reLaunch({ url: '/pages/dashboard/index' })
+			},
 			async handleLogin() {
 				if (!this.username || !this.password) {
 					uni.showToast({ title: '请输入用户名和密码', icon: 'none' })
@@ -93,7 +107,18 @@ export default {
 					if (res.code === 200) {
 						const store = useUserStore()
 						store.setToken(res.data?.token || '')
-						await store.fetchUserInfo()
+						const info = await store.fetchUserInfo()
+						// 移动端无管理后台：管理员账号拦下并引导到 Web 端
+						if (info && info.role === 1) {
+							store.clearToken()
+							uni.showModal({
+								title: '请使用 Web 端管理后台',
+								content: '管理员账号不在移动端提供功能，请前往 Web 端登录管理后台。',
+								showCancel: false,
+								confirmText: '知道了'
+							})
+							return
+						}
 						uni.reLaunch({ url: '/pages/dashboard/index' })
 					} else {
 						uni.showToast({ title: res.message || '登录失败', icon: 'none' })

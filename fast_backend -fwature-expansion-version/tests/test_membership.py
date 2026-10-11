@@ -18,7 +18,7 @@ from crud import membership as membership_crud
 from main import app
 from utils import ai_concurrency
 from utils import auth as auth_utils
-from utils.auth import get_current_user
+from utils.auth import get_current_regular_user, get_current_user
 
 
 class FakeDB:
@@ -41,6 +41,8 @@ def client():
 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = lambda: 1   # 登录态：固定 user_id=1
+    # 用户侧业务端点挂 get_current_regular_user（管理员 403）；测试统一按普通用户放行
+    app.dependency_overrides[get_current_regular_user] = lambda: 1
     with TestClient(app) as c:      # with 触发 lifespan，与 test_app.py 一致
         c.get("/api/health")
         yield c

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.db_config import get_db
 from crud import statistics
 from schemas.statistics import CategoryStatisticsOut, MonthlyStatsOut
-from utils.auth import get_current_user
+from utils.auth import get_current_regular_user
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/statistics", tags=["statistics"])
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/statistics", tags=["statistics"])
 async def get_summary(
         year: int = Query(..., ge=2000, le=2100, description="年份"),
         month: int = Query(..., ge=1, le=12, description="月份 1-12"),
-        user_id: int = Depends(get_current_user),
+        user_id: int = Depends(get_current_regular_user),
         db: AsyncSession = Depends(get_db),
 ):
     """月度收支汇总（API文档.md §四.1）"""
@@ -43,7 +43,7 @@ async def get_summary(
 
 @router.get("/category")
 async def get_category_stats(
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
     year: int = Query(..., ge=2000, le=2100, description="年份"),
     month: int = Query(..., ge=1, le=12, description="月份 1-12"),

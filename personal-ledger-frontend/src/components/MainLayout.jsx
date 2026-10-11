@@ -82,9 +82,14 @@ export default function MainLayout() {
   const { user, fetchUserInfo, logout } = useAuth()
   const { message }                   = AntdApp.useApp()
 
+  // 管理员的功能范围是管理后台，不参与记账与对话（权限矩阵见 utils/auth.py）
+  const isAdmin = user?.role === 1
+
   useEffect(() => {
+    // 等登录态就绪再判断：管理员无记账功能，拉分类列表会被后端 403，直接跳过
+    if (!user || isAdmin) return
     getCategoryList().then(res => { if (res.code === 200) setCategories(res.data) })
-  }, [])
+  }, [user, isAdmin])
 
   useEffect(() => { if (!isMobile) setDrawerOpen(false) }, [isMobile])
 
@@ -120,9 +125,10 @@ export default function MainLayout() {
   ]
 
   const allMenuItems = useMemo(() => {
-    if (user?.role === 1) return [...menuItems, { type: 'group', label: '管理', children: adminMenuItems }]
+    // 管理员只看到管理菜单：记账 / 分类 / AI 助手 / 会员中心对管理员均不可用（后端 403）
+    if (isAdmin) return adminMenuItems
     return menuItems
-  }, [user?.role])
+  }, [isAdmin])
 
   const currentPageTitle = useMemo(() => breadcrumbMap[location.pathname] || '', [location.pathname])
   const quickCategories  = categories.filter(c => c.type === Number(quickType))
@@ -139,14 +145,19 @@ export default function MainLayout() {
   }, [])
 
   const paletteCommands = useMemo(() => {
-    const navCmds = (user?.role === 1 ? [...menuItems, ...adminMenuItems] : menuItems)
+    const navCmds = (isAdmin ? adminMenuItems : menuItems)
       .map(m => ({ key: m.key, label: m.label, icon: m.icon, hint: '跳转', run: () => navigate(m.key) }))
-    return [
-      { key: 'quick-add', label: '快速记账', icon: <PlusCircleOutlined />, hint: '操作', run: () => setAddModalOpen(true) },
+    const baseCmds = [
       { key: '/settings/profile', label: '设置', icon: <SettingOutlined />, hint: '跳转', run: () => navigate('/settings/profile') },
       ...navCmds,
     ]
-  }, [user?.role])
+    // 「快速记账」是用户侧功能，管理员不提供该入口
+    if (isAdmin) return baseCmds
+    return [
+      { key: 'quick-add', label: '快速记账', icon: <PlusCircleOutlined />, hint: '操作', run: () => setAddModalOpen(true) },
+      ...baseCmds,
+    ]
+  }, [isAdmin])
 
   /* ── Mobile Overlay ── */
   const mobileDrawer = drawerOpen && isMobile && (
@@ -216,30 +227,32 @@ export default function MainLayout() {
           )}
         </div>
 
-        {/* CTA Button */}
-        <div style={{ padding: logoHidden ? '12px 8px 6px' : '12px 12px 6px' }}>
-          <Button
-            type="primary"
-            icon={<PlusCircleOutlined />}
-            block
-            aria-label="快速记账"
-            onClick={() => { setAddModalOpen(true); if (isMobilePanel) setDrawerOpen(false) }}
-            style={{
-              height: 36,
-              /* 收起态只隐藏文案即可（下方已条件渲染），
-                 不能再靠 fontSize: 0 隐藏 —— 图标字号继承自按钮，
-                 会被一起清零，rail 里只剩一个空的色块。 */
-              fontSize: 'var(--font-size-base)',
-              fontWeight: 'var(--font-weight-semibold)',
-              borderRadius: 'var(--radius-md)',
-              boxShadow: 'var(--shadow-primary)',
-              transition: 'all var(--transition-base)',
-              paddingInline: logoHidden ? 0 : undefined,
-            }}
-          >
-            {!logoHidden && '快速记账'}
-          </Button>
-        </div>
+        {/* CTA Button —— 记账入口，仅普通用户可见 */}
+        {!isAdmin && (
+          <div style={{ padding: logoHidden ? '12px 8px 6px' : '12px 12px 6px' }}>
+            <Button
+              type="primary"
+              icon={<PlusCircleOutlined />}
+              block
+              aria-label="快速记账"
+              onClick={() => { setAddModalOpen(true); if (isMobilePanel) setDrawerOpen(false) }}
+              style={{
+                height: 36,
+                /* 收起态只隐藏文案即可（下方已条件渲染），
+                   不能再靠 fontSize: 0 隐藏 —— 图标字号继承自按钮，
+                   会被一起清零，rail 里只剩一个空的色块。 */
+                fontSize: 'var(--font-size-base)',
+                fontWeight: 'var(--font-weight-semibold)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-primary)',
+                transition: 'all var(--transition-base)',
+                paddingInline: logoHidden ? 0 : undefined,
+              }}
+            >
+              {!logoHidden && '快速记账'}
+            </Button>
+          </div>
+        )}
 
         {/* Nav Menu */}
         <div style={{ flex: 1, overflow: 'auto', paddingBottom: 12 }}>
@@ -389,8 +402,8 @@ export default function MainLayout() {
         </main>
       </div>
 
-      {/* ── Mobile FAB ── */}
-      {isMobile && (
+      {/* ── Mobile FAB —— 记账入口，仅普通用户可见 ── */}
+      {isMobile && !isAdmin && (
         <button
           className="fab"
           onClick={() => setAddModalOpen(true)}
@@ -407,44 +420,46 @@ export default function MainLayout() {
         commands={paletteCommands}
       />
 
-      {/* ── Quick-Add Modal ── */}
-      <Modal
-        title="快速记账"
-        open={addModalOpen}
-        onOk={handleQuickAdd}
-        onCancel={() => { setAddModalOpen(false); form.resetFields(); setQuickType('0') }}
-        confirmLoading={addLoading}
-        okText="保存"
-        cancelText="取消"
-        width={480}
-        styles={{ body: { paddingTop: 'var(--space-sm)' } }}
-      >
-        <Tabs
-          activeKey={quickType}
-          onChange={k => { setQuickType(k); form.setFieldValue('categoryId', undefined) }}
-          items={[
-            { key: '0', label: <span><ArrowUpOutlined style={{ color: 'var(--color-expense)' }} /> 支出</span> },
-            { key: '1', label: <span><ArrowDownOutlined style={{ color: 'var(--color-income)' }} /> 收入</span> },
-          ]}
-          style={{ marginBottom: 'var(--space-sm)' }}
-        />
-        <Form form={form} layout="vertical" initialValues={{ recordDate: dayjs() }}>
-          <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
-            <Select placeholder="选择分类">
-              {quickCategories.map(c => <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>)}
-            </Select>
-          </Form.Item>
-          <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请输入金额' }]}>
-            <InputNumber min={0.01} precision={2} placeholder="0.00" style={{ width: '100%' }} prefix="¥" size="large" />
-          </Form.Item>
-          <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: '请选择日期' }]}>
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea placeholder="添加备注（可选）" rows={2} />
-          </Form.Item>
-        </Form>
-      </Modal>
+      {/* ── Quick-Add Modal —— 记账入口，仅普通用户可见 ── */}
+      {!isAdmin && (
+        <Modal
+          title="快速记账"
+          open={addModalOpen}
+          onOk={handleQuickAdd}
+          onCancel={() => { setAddModalOpen(false); form.resetFields(); setQuickType('0') }}
+          confirmLoading={addLoading}
+          okText="保存"
+          cancelText="取消"
+          width={480}
+          styles={{ body: { paddingTop: 'var(--space-sm)' } }}
+        >
+          <Tabs
+            activeKey={quickType}
+            onChange={k => { setQuickType(k); form.setFieldValue('categoryId', undefined) }}
+            items={[
+              { key: '0', label: <span><ArrowUpOutlined style={{ color: 'var(--color-expense)' }} /> 支出</span> },
+              { key: '1', label: <span><ArrowDownOutlined style={{ color: 'var(--color-income)' }} /> 收入</span> },
+            ]}
+            style={{ marginBottom: 'var(--space-sm)' }}
+          />
+          <Form form={form} layout="vertical" initialValues={{ recordDate: dayjs() }}>
+            <Form.Item name="categoryId" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
+              <Select placeholder="选择分类">
+                {quickCategories.map(c => <Select.Option key={c.id} value={c.id}>{c.name}</Select.Option>)}
+              </Select>
+            </Form.Item>
+            <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请输入金额' }]}>
+              <InputNumber min={0.01} precision={2} placeholder="0.00" style={{ width: '100%' }} prefix="¥" size="large" />
+            </Form.Item>
+            <Form.Item name="recordDate" label="日期" rules={[{ required: true, message: '请选择日期' }]}>
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="remark" label="备注">
+              <Input.TextArea placeholder="添加备注（可选）" rows={2} />
+            </Form.Item>
+          </Form>
+        </Modal>
+      )}
     </div>
   )
 }

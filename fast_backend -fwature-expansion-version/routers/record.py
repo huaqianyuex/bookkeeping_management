@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.db_config import get_db
 from crud import record
 from schemas.record import RecordCreate, RecordOut, RecordUpdate
-from utils.auth import get_current_user
+from utils.auth import get_current_regular_user
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/records", tags=["record"])
@@ -33,7 +33,7 @@ def _record_out(record_obj, category) -> RecordOut:
 
 @router.get("")
 async def list_records(
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
     # 修复 C2①: 接收分页与筛选查询参数（API 文档列表接口参数表）
     page: int = Query(1, ge=1, description="页码"),
@@ -63,7 +63,7 @@ async def list_records(
 @router.post("")
 async def create_record(
     data: RecordCreate,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """新增记账记录"""
@@ -78,7 +78,7 @@ async def create_record(
 @router.get("/{record_id}")
 async def get_record(
     record_id: int,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """获取账单详情"""
@@ -94,7 +94,7 @@ async def get_record(
 async def update_record(
     record_id: int,
     data: RecordUpdate,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """更新记账记录"""
@@ -110,7 +110,7 @@ async def update_record(
 @router.delete("/{record_id}")
 async def delete_record(
     record_id: int,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """删除记账记录（软删除）"""

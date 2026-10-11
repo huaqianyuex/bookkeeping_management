@@ -7,7 +7,7 @@ from config.db_config import get_db
 from crud import category
 
 from schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
-from utils.auth import get_current_user
+from utils.auth import get_current_regular_user
 from utils.response import success_response
 
 router = APIRouter(prefix="/api/categories", tags=["category"])
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/categories", tags=["category"])
 
 @router.get("")
 async def list_categories(
-        user_id: int = Depends(get_current_user),
+        user_id: int = Depends(get_current_regular_user),
         db: AsyncSession = Depends(get_db),
         type_: int | None = Query(None, alias="type"),
 ):
@@ -29,7 +29,7 @@ async def list_categories(
 @router.post("")
 async def create_category(
     data: CategoryCreate,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """新增分类"""
@@ -42,7 +42,7 @@ async def create_category(
 async def update_category(
     category_id: int,
     data: CategoryUpdate,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """更新分类"""
@@ -53,7 +53,7 @@ async def update_category(
 @router.delete("/{category_id}")
 async def delete_category(
     category_id: int,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """删除分类"""

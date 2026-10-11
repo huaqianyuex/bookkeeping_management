@@ -20,7 +20,7 @@ from crud import ai as ai_crud
 from crud import membership as membership_crud
 from main import app
 from routers import ai as ai_router
-from utils.auth import get_current_user
+from utils.auth import get_current_regular_user, get_current_user
 from utils.throttle import SlidingWindowRateLimiter
 
 
@@ -94,6 +94,8 @@ def client():
 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = lambda: 1
+    # 用户侧业务端点挂 get_current_regular_user（管理员 403）；测试统一按普通用户放行
+    app.dependency_overrides[get_current_regular_user] = lambda: 1
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()

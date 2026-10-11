@@ -18,6 +18,13 @@
 
 ⚠️ 路由注册顺序：`/sessions/batch-delete` 必须在 `/sessions/{session_id}` **之前**，
 Starlette 按注册顺序匹配，否则 "batch-delete" 会被当成 session_id 吃掉。
+
+⚠️ **权限边界（管理员不参与 AI 对话与记账）**：
+本模块绝大多数端点是「用户侧业务功能」，统一挂 `get_current_regular_user` ——
+**管理员账号（role=1）调用一律 403**（矩阵见 utils/auth.py 模块 docstring）。
+仅两个端点是管理员专用，挂 `get_current_admin`，**不要改成普通用户依赖**：
+- `POST /faq/rebuild`（全量 Embedding 有真金白银成本，需管理员触发）；
+- `GET  /admin/stats`（全站跨用户聚合统计，不适用普通用户）。
 """
 import hashlib
 import json
@@ -60,7 +67,7 @@ from schemas.ai import (
     BkCreatedOut, BkIgnoredOut, BkClarifyOut, BkDuplicateOut, BkRecordItem, BkPreviewItem, MessageOut,
 )
 from utils import ai_concurrency
-from utils.auth import get_current_user, get_current_admin
+from utils.auth import get_current_admin, get_current_regular_user
 from utils.throttle import voice_rate_limiter, SlidingWindowRateLimiter
 
 logger = logging.getLogger(__name__)
@@ -110,7 +117,7 @@ async def _quota_gate(db: AsyncSession, user_id: int, kind: str,
 @router.post("/sessions", summary="创建会话")
 async def create_session(
     body: SessionCreateIn,
-    user: int = Depends(get_current_user),
+    user: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     title = (body.title or "").strip() or "新对话"[:50]
@@ -120,7 +127,7 @@ async def create_session(
 
 @router.get("/sessions", summary="会话列表")
 async def list_sessions(
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
     keyword: str = Query(""),
     sort: str = Query("updated"),   # 仅 updated / created
@@ -149,7 +156,7 @@ async def list_sessions(
 @router.post("/sessions/batch-delete", summary="批量删除会话")
 async def batch_delete_sessions(
     body: SessionIdsIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     ids=list(dict.fromkeys(body.ids)) #去重
@@ -164,7 +171,7 @@ async def batch_delete_sessions(
 async def rename_session(
     session_id: str,
     body: SessionRenameIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.3 重命名：返回 {success: true, session: {...}}；改名后 autoTitle 置 0（锁定标题）"""
@@ -177,7 +184,7 @@ async def rename_session(
 @router.delete("/sessions/{session_id}", summary="删除会话")
 async def delete_session(
     session_id: str,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
 
@@ -189,7 +196,7 @@ async def delete_session(
 @router.get("/sessions/{session_id}/messages", summary="会话消息")
 async def session_messages(
     session_id: str,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.6 会话消息：返回**裸数组**（MessageOut 列表，按 timestamp 升序）；
@@ -251,7 +258,7 @@ def _safe_user_text(text: str) -> str:
 @router.post("/chat", summary="非流式对话")
 async def chat(
     body: ChatIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     if not (body.session_id or "").strip() or not (body.message or "").strip():
@@ -305,7 +312,7 @@ async def chat(
 @router.post("/chat/stream", summary="流式对话（SSE）")
 async def chat_stream(
     body: ChatIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.8 流式对话：text/event-stream
@@ -394,7 +401,7 @@ async def chat_stream(
 @router.post("/analyze/expenses", summary="消费分析")
 async def analyze_expenses(
     body: ExpenseAnalyzeIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.9 消费分析：返回 {success: true, data: ExpenseAnalysis}
@@ -426,7 +433,7 @@ async def analyze_expenses(
 @router.post("/analyze/budget", summary="预算规划")
 async def analyze_budget(
     body: BudgetPlanIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.10 预算规划：返回 {success: true, data: BudgetPlan}"""
@@ -456,7 +463,7 @@ async def analyze_budget(
 @router.get("/faq/search", summary="FAQ 语义检索")
 async def faq_search(
     query: str,
-    user: int = Depends(get_current_user),
+    user: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.11 FAQ 检索：正常 {"results":[...], "mode": ...}
@@ -536,7 +543,7 @@ voice_rate_limiter_member = SlidingWindowRateLimiter(
 
 
 @router.get("/voice/config", summary="语音功能开关")
-async def voice_config(user_id: int = Depends(get_current_user)):
+async def voice_config(user_id: int = Depends(get_current_regular_user)):
     """6.18 前端据此决定是否渲染话筒按钮（实施指南 §2.4 的开关下发）"""
     return {"enabled": STT_ENABLED, "maxSeconds": STT_MAX_SECONDS}
 
@@ -544,7 +551,7 @@ async def voice_config(user_id: int = Depends(get_current_user)):
 @router.post("/voice/transcribe", summary="语音转写")
 async def voice_transcribe(
     file: UploadFile = File(...),
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.19 语音转写：裸 {text, language, confidence}；失败 ai_error
@@ -606,7 +613,7 @@ async def voice_transcribe(
 @router.post("/feedback", summary="保存反馈")
 async def submit_feedback(
     body: FeedbackIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     # submit_feedback 里，写库前加一步归属校验
@@ -680,7 +687,7 @@ async def _duplicate_response(db: AsyncSession, hit, user_id: int) -> dict:
 @router.post("/bookkeeping", summary="自然语言记账")
 async def bookkeeping(
     body: BookkeepingIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.15 自然语言记账：四种 action 形态 created/clarify/ignored/duplicate + {"error"}
@@ -1063,7 +1070,7 @@ async def bookkeeping(
 async def amend_bookkeeping(
     record_id: int,
     body: BookkeepingAmendIn,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.16 修改 AI 记账：返回 {success, record, changes, echo}；changes 只列实际变动字段"""
@@ -1258,7 +1265,7 @@ async def amend_bookkeeping(
 @router.delete("/bookkeeping/{record_id}", summary="删除 AI 记账记录")
 async def delete_bookkeeping(
     record_id: int,
-    user_id: int = Depends(get_current_user),
+    user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
     """6.17 删除 AI 记账（软删 status=0）：返回 {success, echo}"""
