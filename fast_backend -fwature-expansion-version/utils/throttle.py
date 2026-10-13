@@ -166,3 +166,70 @@ class SlidingWindowRateLimiter:
 voice_rate_limiter = SlidingWindowRateLimiter(
     max_calls=VOICE_RATE_LIMIT_PER_MIN, window=60
 )
+
+
+class TtlCache:
+    """带 TTL 的进程内键值缓存（单 worker 口径，与限流器同生命周期约束）。
+
+    用途：把「一次昂贵计算的产物」在短时间内复用，避免同一业务流程重复付费。
+    当前服务于记账预览——dryRun 预览已跑过一次 LLM 解析，确认时按 previewId
+    读回同一份 Parsed，**省掉第二次模型调用**。
+
+    设计取舍：
+    - **有容量上限**：超过 max_entries 时按插入顺序淘汰最旧的一批（dict 保持
+      插入序，等价 FIFO）。不设上限的话，被反复预览却从不确认的请求会把内存撑大。
+    - **读取不删除**：确认请求可能因网络抖动重发，删掉就没得复用了；过期与容量
+      淘汰已足以回收，无需 pop 语义。
+    - **多 worker 部署命中率下降但不影响正确性**：各进程独立缓存，未命中一律
+      回退到重新计算（调用方必须实现该回退），因此只是变慢、不会算错。
+    """
+
+    def __init__(self, ttl: float = 300.0, max_entries: int = 500,
+                 gc_interval: int = 60) -> None:
+        self.ttl = ttl
+        self.max_entries = max_entries
+        self.gc_interval = gc_interval
+        self._store: dict[str, tuple[float, object]] = {}
+        self._last_gc = time.time()
+        self._lock = threading.Lock()
+
+    def _purge_expired(self, now: float) -> None:
+        expired = [k for k, (exp, _) in self._store.items() if exp <= now]
+        for k in expired:
+            self._store.pop(k, None)
+
+    def _gc_if_needed(self, now: float) -> None:
+        if now - self._last_gc < self.gc_interval:
+            return
+        self._purge_expired(now)
+        self._last_gc = now
+
+    def _evict_overflow(self) -> None:
+        while len(self._store) > self.max_entries:
+            oldest = next(iter(self._store), None)
+            if oldest is None:
+                return
+            self._store.pop(oldest, None)
+
+    def set(self, key: str, value: object) -> None:
+        with self._lock:
+            now = time.time()
+            self._gc_if_needed(now)
+            self._store[key] = (now + self.ttl, value)
+            self._evict_overflow()
+
+    def get(self, key: str) -> object | None:
+        """命中且未过期则返回值；未命中/已过期返回 None（过期项顺手删除）"""
+        with self._lock:
+            item = self._store.get(key)
+            if item is None:
+                return None
+            exp, value = item
+            if exp <= time.time():
+                self._store.pop(key, None)
+                return None
+            return value
+
+    def clear(self) -> None:
+        with self._lock:
+            self._store.clear()

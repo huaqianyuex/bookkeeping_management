@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from ai.llm import get_analyze_llm
 from ai.observability import KIND_ANALYZE, Timer, record_call
+from ai.retry import with_retry
 from schemas.ai import BudgetPlan, ExpenseAnalysis
 
 ANALYZE_SYSTEM = (
@@ -113,9 +114,10 @@ async def analyze_expense(ctx: dict, query: str | None = None,
     )
     timer = Timer()
     try:
-        part: _ExpenseInsightPart = await llm.ainvoke(
-            [SystemMessage(content=ANALYZE_SYSTEM), HumanMessage(content=prompt)]
-        )
+        # 上游 429/5xx 指数退避重试（审查报告 P1-6）：与记账链同口径。
+        # 把消息列表提到重试之外构造，重试只重放「一次完整调用」。
+        _msgs = [SystemMessage(content=ANALYZE_SYSTEM), HumanMessage(content=prompt)]
+        part: _ExpenseInsightPart = await with_retry(lambda: llm.ainvoke(_msgs))
     except Exception as e:
         record_call(KIND_ANALYZE, getattr(base_llm, "model_name", "?"), user_id,
                     timer=timer, ok=False, error=type(e).__name__)
@@ -157,9 +159,8 @@ async def plan_budget(monthly_income: float, savings_goal: float | None, ctx: di
     )
     timer = Timer()
     try:
-        plan: BudgetPlan = await llm.ainvoke(
-            [SystemMessage(content=BUDGET_SYSTEM), HumanMessage(content=prompt)]
-        )
+        _msgs = [SystemMessage(content=BUDGET_SYSTEM), HumanMessage(content=prompt)]
+        plan: BudgetPlan = await with_retry(lambda: llm.ainvoke(_msgs))
     except Exception as e:
         record_call(KIND_ANALYZE, getattr(base_llm, "model_name", "?"), user_id,
                     timer=timer, ok=False, error=type(e).__name__)

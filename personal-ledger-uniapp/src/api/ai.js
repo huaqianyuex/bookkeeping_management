@@ -48,20 +48,35 @@ export const sendChat = (sessionId, message) => {
 /**
  * 语义记账（05 §6）：服务端解析口语化消息并入账。
  * 响应为裸 JSON（HTTP 200），顶层 action 字段：
+ *   preview  仅解析未入账（dryRun=true），preview.items[] 供金额确认框渲染
  *   created  已入账（echo 可直接渲染）
  *   clarify  信息不全，追问（question + draftId，下一条消息带上续写）
  *   ignored  非消费类消息（reason 区分 not_expense/query 等，调用方应降级走对话）
  *   duplicate 命中幂等，未重复入账（echo）
  * {"error":"中文"} 表示记账服务失败（如 LLM 不可用），调用方降级走对话。
+ *
+ * ── 金额确认框两步契约 ──
+ * ① dryRun=true 预览：拿到 preview.items[]（含 index/amount/...），渲染确认框；
+ * ② dryRun=false + overrides + previewId：用户改完金额后按 index 回传覆盖值，真正入账。
+ * 两次请求必须复用同一个 clientMsgId，否则连点确认会入账两笔。
+ *
+ * previewId 传预览响应的 requestId：服务端据此复用预览时的解析结果，
+ * **跳过第二次 AI 解析**（确认从秒级降到毫秒级）。不传/未命中会自动回退重新解析，
+ * 只影响速度不影响正确性。
+ *
+ * @param {Array<{index:number, amount?:number}>} [overrides] 确认框金额覆盖
+ * @param {string} [previewId] 预览响应的 requestId，用于服务端复用解析结果
  */
-export const aiBookkeeping = ({ sessionId, message, clientMsgId, draftId, dryRun, force, source } = {}) => {
+export const aiBookkeeping = ({ sessionId, message, clientMsgId, draftId, dryRun, force, source, overrides, previewId } = {}) => {
 	const data = { message }
 	if (sessionId) data.sessionId = sessionId
 	if (clientMsgId) data.clientMsgId = clientMsgId
 	if (draftId) data.draftId = draftId
 	if (dryRun) data.dryRun = dryRun
+	if (previewId) data.previewId = previewId
 	if (force) data.force = force
 	if (source) data.source = source   // text=手输 / voice=语音（仅审计，缺省服务端按 text）
+	if (overrides && overrides.length) data.overrides = overrides   // 确认框金额覆盖（按 preview.items[].index 定位）
 	return request({
 		url: AI_BASE + '/bookkeeping',
 		method: 'POST',

@@ -63,7 +63,18 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 # 失败不重试，配额闸门只能限「次数」限不住「单次烧多少」，且网关挂起时会
 # 长时间占住并发槽（concurrency 是进程内槽位，占住即对用户限流）。
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
-LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "1"))
+# 上游失败时的**额外重试次数**（总尝试次数 = 1 + 本值），由 ai/retry.with_retry 执行
+# 指数退避（0.8s→1.6s→3.2s，±25% 抖动）。
+# ⚠️ 语义变更：此值原先直接交给 openai SDK 的 max_retries，SDK 重试与自研重试若同时
+# 开启会**相乘**放大上游调用量，故 ai/llm.py 已把 SDK 重试统一关掉（max_retries=0），
+# 本值现在只由 ai/retry 消费。
+# 为什么要重试：Agnes 网关在模型过载时返回 429 + code 1305「该模型当前访问量过大」，
+# 属持续数秒的瞬时故障；只重试 1 次（SDK 默认退避约 0.5s）几乎必然再失败，
+# 表现为记账「解析失败」+ 对话直接报错。
+LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
+# 重试累计等待上限（秒）：超预算就放弃重试、快速失败，避免把请求拖过前端 timeout
+# （记账 60s / 对话 120s），也不该长时间占着 ai_concurrency 并发槽。
+LLM_RETRY_TOTAL_BUDGET_SECONDS = float(os.getenv("LLM_RETRY_TOTAL_BUDGET_SECONDS", "8"))
 # 按用途分档：对话要说人话给上限，结构化抽取输出短，超限会被截断成非法 JSON。
 CHAT_MAX_TOKENS = int(os.getenv("CHAT_MAX_TOKENS", "1024"))
 ANALYZE_MAX_TOKENS = int(os.getenv("ANALYZE_MAX_TOKENS", "1536"))
@@ -153,6 +164,17 @@ FAQ_INJECT_ENABLED = os.getenv("FAQ_INJECT_ENABLED", "true").lower() == "true"
 # GET /faq/search 的 per-user 滑动窗口限流（次/分钟）：cache miss 即一次 Embedding 计费，
 # 认证用户可无限刷 /faq/search 放大成本（审查报告 P0-4），需独立成本防护（口径同语音限流）。
 FAQ_RATE_LIMIT_PER_MIN = int(os.getenv("FAQ_RATE_LIMIT_PER_MIN", "30"))
+# POST /bookkeeping 的 dryRun=true 预览请求限流（次/分钟）。
+# 预览只解析不入账，故**不计入 daily_bookkeeping 配额**（否则「预览 + 确认」一次记账
+# 要扣 2 次额度，免费档 daily_bookkeeping=5 实际只剩 2.5 次）。但预览仍会真实调用
+# 一次 LLM 解析，不是免费操作，故用独立滑动窗口限流防刷（口径同 FAQ / 语音限流）。
+BK_PREVIEW_RATE_LIMIT_PER_MIN = int(os.getenv("BK_PREVIEW_RATE_LIMIT_PER_MIN", "20"))
+# 记账预览结果缓存：dryRun 预览已真实跑过一次 LLM 解析，确认时按 previewId 读回同一份
+# Parsed，**省掉第二次模型调用**（确认请求从「1 次 LLM + 若干 DB」降到「若干 DB」）。
+# TTL 与弱幂等窗口（find_recent_by_dedup 的 300s）对齐：超过这个窗口，用户重发同一条
+# 消息本就该重新解析。容量上限防「只预览不确认」的请求把进程内存撑大。
+BK_PREVIEW_CACHE_TTL_SECONDS = int(os.getenv("BK_PREVIEW_CACHE_TTL_SECONDS", "300"))
+BK_PREVIEW_CACHE_MAX_ENTRIES = int(os.getenv("BK_PREVIEW_CACHE_MAX_ENTRIES", "500"))
 # 低于该 confidence 的记账条目在响应里给出「请核对」提示（不阻断入账）
 BK_LOW_CONFIDENCE = float(os.getenv("BK_LOW_CONFIDENCE", "0.5"))
 

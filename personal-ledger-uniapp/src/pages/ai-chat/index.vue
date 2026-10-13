@@ -112,6 +112,17 @@
       </view>
     </view>
 
+    <!-- 金额确认框：语音/文字记账预览命中后弹出，改完金额再入账 -->
+    <AmountConfirmPanel
+      :visible="confirmVisible"
+      :items="confirmItems"
+      :warnings="confirmWarnings"
+      :source="confirmSource"
+      :submitting="confirmSubmitting"
+      @confirm="handleConfirm"
+      @cancel="handleConfirmCancel"
+    />
+
     <!-- 键盘弹出时隐藏底部导航（保持最底层，不随输入框一起被顶起） -->
     <TabBar v-show="keyboardHeight === 0" currentPage="pages/ai-chat/index" :fab="true" :fab-gap="170" />
   </view>
@@ -124,6 +135,7 @@ import { createSession, sendChatStream, getMessages, aiBookkeeping } from '@/api
 import { transcribeVoice, getVoiceConfig } from '@/api/voice.js'
 import { attachRecorder, detachRecorder, getRecorder } from '@/utils/recorder.js'
 import AppIcon from '@/components/AppIcon.vue'
+import AmountConfirmPanel from '@/components/AmountConfirmPanel.vue'
 
 const statusBarHeight = ref(20)
 // 页面可视高度 + 底部自定义 TabBar 占位高度（避免输入框被 TabBar 遮挡）
@@ -144,6 +156,16 @@ let lastScrollAt = 0
 const pendingDraftId = ref(null)
 // 本条输入的来源（text=键盘 / voice=话筒），随下一条记账请求上报审计
 let lastInputSource = 'text'
+
+// ── 金额确认框：语义记账「预览 → 确认」两步流程的中间态 ──
+// 预览命中消费时挂起 pendingConfirm（尚未落库），用户改完金额再确认入账。
+const confirmVisible = ref(false)
+const confirmItems = ref([])
+const confirmWarnings = ref([])
+const confirmSource = ref('text')
+const confirmSubmitting = ref(false)
+// 挂起的预览上下文：确认时复用同一 clientMsgId / draftId / 原文，保证幂等与追问续写
+const pendingConfirm = ref(null)
 
 let fullHeight = 600   // 键盘未弹出时的完整视口高度（仅在键盘收起时刷新，防污染）
 
@@ -346,6 +368,9 @@ function handleNewChat() {
 	messages.value = []
 	inputText.value = ''
 	pendingDraftId.value = null
+	// 关闭并丢弃未确认的记账预览，避免串到新会话
+	confirmVisible.value = false
+	pendingConfirm.value = null
 }
 
 // 滚动到列表底部（切换锚点 id 以触发 scroll-into-view 重新滚动）
@@ -407,52 +432,133 @@ function genClientMsgId() {
 }
 
 /**
- * 先走语义记账（05 §6：前端据 action 分支渲染，非记账才降级对话）：
- * - created / duplicate / clarify（及部分 ignored 提示）→ 返回要展示的助手文案
- * - 纯聊天/查询（ignored: not_expense/query）或记账服务异常 → 返回 null，走对话流
+ * 语义记账第一步：dryRun 预览（05 §6 + 金额确认框契约）。
+ *
+ * 返回「动作指令」，由 handleSend 决定后续走向：
+ *   { type:'quota' }            额度用尽 → 弹窗终止
+ *   { type:'error', message }   预览失败（限流等）→ 提示，且不落库
+ *   { type:'reply', content }   非消费但服务端有提示文案 → 直接渲染
+ *   { type:'confirm', ... }     命中消费 → 弹金额确认框（含 clientMsgId / 原文 / 条目）
+ *   null                        非记账（查询/闲聊）或服务异常 → 降级流式对话
+ *
+ * ⚠️ 预览不落库、不扣 daily_bookkeeping 配额，但会真实跑一次 LLM 解析，
+ *    故服务端另有 bookkeeping_preview_rate_limiter 独立限流。
  */
-async function tryBookkeeping(text, source) {
+async function previewBookkeeping(text, source) {
+	// clientMsgId 在此生成并随预览结果挂起，确认时复用：
+	// 同一 key 连点确认会被服务端幂等键拦成 duplicate，不会重复入账。
+	const clientMsgId = genClientMsgId()
 	try {
 		const res = await aiBookkeeping({
 			sessionId: sessionId.value,
 			message: text,
-			clientMsgId: genClientMsgId(),
+			clientMsgId,
 			draftId: pendingDraftId.value || undefined,
-			source: source || 'text'
+			source: source || 'text',
+			dryRun: true
 		})
-		if (res && res.code === 'QUOTA_EXCEEDED') {
-			// 额度用尽（后端 429 裸 JSON）：不处理、不回复，直接弹窗终止
-			showQuotaModal()
-			return 'quota-blocked'
-		}
+		if (res && res.code === 'QUOTA_EXCEEDED') return { type: 'quota' }
 		if (!res || res.error) {
 			// 会话失效（被删/过期清理）时重置，让对话流重建新会话
 			if (res && res.error === '会话不存在') sessionId.value = ''
-			pendingDraftId.value = null
-			return null
-		}
-		if (res.action === 'created' || res.action === 'duplicate') {
-			pendingDraftId.value = null
-			return res.echo || (res.action === 'created' ? '已记下这笔消费。' : '这条已经记过啦，没有重复记账。')
-		}
-		if (res.action === 'clarify') {
-			// 缺金额：展示追问，draftId 挂起，用户下一句「500块」自动续写
-			pendingDraftId.value = res.draftId || null
-			return res.question || '这笔消费的金额是多少？比如「35元」。'
+			// 预览限流：明确提示并终止（不落库），避免用户误以为已记账
+			if (res && res.code === 'RATE_LIMIT') return { type: 'error', message: res.error }
+			return null   // 其余（LLM 不可用等）→ 降级对话，与旧行为一致
 		}
 		if (res.action === 'ignored') {
 			pendingDraftId.value = null
 			// 找不到要修正/撤销的目标记录等服务端提示，比闲聊回复更有用
 			const hintReasons = ['no_recent_record', 'income_unsupported', 'too_ambiguous']
-			if (hintReasons.includes(res.reason) && res.echo) return res.echo
+			if (hintReasons.includes(res.reason) && res.echo) return { type: 'reply', content: res.echo }
 			return null   // not_expense / query → 降级为对话
 		}
-		pendingDraftId.value = null
+		if (res.action === 'preview') {
+			const items = (res.preview && res.preview.items) || []
+			if (!items.length) return null
+			return {
+				type: 'confirm',
+				clientMsgId,
+				// 预览响应的 requestId：确认时回传，服务端据此复用本次解析结果、跳过第二次 AI 解析
+				previewId: res.requestId || null,
+				text,
+				source: source || 'text',
+				draftId: pendingDraftId.value || undefined,
+				items,
+				warnings: res.warnings || []
+			}
+		}
+		// created / duplicate / clarify 不应出现在 dryRun 分支；兜底降级对话
 		return null
 	} catch (e) {
 		// 网络失败/登录过期：交由对话流统一展示错误（其内含 401 弹窗逻辑）
 		return null
 	}
+}
+
+/**
+ * 金额确认框「确认记账」：带着用户改后的金额（overrides）真正入账。
+ * 与预览复用同一 clientMsgId，落库只发生在这里一次。
+ */
+async function handleConfirm({ overrides }) {
+	const p = pendingConfirm.value
+	if (!p) return
+	confirmSubmitting.value = true
+	try {
+		const res = await aiBookkeeping({
+			sessionId: sessionId.value,
+			message: p.text,
+			clientMsgId: p.clientMsgId,
+			previewId: p.previewId,     // 复用预览的解析结果，跳过第二次 AI 解析（毫秒级入账）
+			draftId: p.draftId,
+			source: p.source,
+			overrides
+		})
+		confirmVisible.value = false
+		pendingConfirm.value = null
+
+		if (res && res.code === 'QUOTA_EXCEEDED') {
+			showQuotaModal()
+			return
+		}
+		if (!res || res.error) {
+			if (res && res.error === '会话不存在') sessionId.value = ''
+			messages.value.push({ role: 'assistant', content: (res && res.error) || '记账失败，请稍后重试。' })
+			scrollToBottom()
+			return
+		}
+		if (res.action === 'created' || res.action === 'duplicate') {
+			pendingDraftId.value = null
+			messages.value.push({
+				role: 'assistant',
+				content: res.echo || (res.action === 'created' ? '已记下这笔消费。' : '这条已经记过啦，没有重复记账。')
+			})
+		} else if (res.action === 'clarify') {
+			// 兜底：确认后仍缺金额（确认框已保证有值，此处防御服务端二次解析差异）
+			pendingDraftId.value = res.draftId || null
+			messages.value.push({ role: 'assistant', content: res.question || '这笔消费的金额是多少？' })
+		} else if (res.action === 'ignored') {
+			pendingDraftId.value = null
+			messages.value.push({ role: 'assistant', content: res.echo || '这不像一笔消费记录，我没有记账。' })
+		} else {
+			messages.value.push({ role: 'assistant', content: '已完成。' })
+		}
+		scrollToBottom()
+	} catch (e) {
+		confirmVisible.value = false
+		pendingConfirm.value = null
+		messages.value.push({ role: 'assistant', content: '记账失败，请稍后重试。' })
+		scrollToBottom()
+	} finally {
+		confirmSubmitting.value = false
+	}
+}
+
+/** 取消确认：丢弃本次预览，不落库、不占用配额 */
+function handleConfirmCancel() {
+	if (confirmSubmitting.value) return
+	confirmVisible.value = false
+	pendingConfirm.value = null
+	uni.showToast({ title: '已取消，本次未记账', icon: 'none' })
 }
 
 // 额度用尽统一弹窗：无论文字/语音、记账/对话，命中闸门一律终止并提示
@@ -504,19 +610,42 @@ async function handleSend() {
 		}
 	}
 
-	// ① 语义记账：命中（created/clarify/duplicate 等）直接渲染服务端回显
-	const handled = await tryBookkeeping(text, lastInputSource)
+	// ① 语义记账预览：命中消费 → 弹金额确认框（确认前不落库）
+	const outcome = await previewBookkeeping(text, lastInputSource)
 	lastInputSource = 'text'
-	if (handled === 'quota-blocked') {
+	if (outcome && outcome.type === 'quota') {
 		// 额度用尽：不做任何回复或处理，撤回刚显示的用户消息
 		loading.value = false
 		messages.value.pop()
+		showQuotaModal()
 		return
 	}
-	if (handled) {
+	if (outcome && outcome.type === 'error') {
 		loading.value = false
-		messages.value.push({ role: 'assistant', content: handled })
+		messages.value.push({ role: 'assistant', content: outcome.message })
 		scrollToBottom()
+		return
+	}
+	if (outcome && outcome.type === 'reply') {
+		loading.value = false
+		messages.value.push({ role: 'assistant', content: outcome.content })
+		scrollToBottom()
+		return
+	}
+	if (outcome && outcome.type === 'confirm') {
+		// 命中消费：挂起预览上下文，弹出金额确认框，等用户核对/改金额后再入账
+		loading.value = false
+		pendingConfirm.value = {
+			clientMsgId: outcome.clientMsgId,
+			previewId: outcome.previewId,
+			text: outcome.text,
+			source: outcome.source,
+			draftId: outcome.draftId
+		}
+		confirmItems.value = outcome.items
+		confirmWarnings.value = outcome.warnings
+		confirmSource.value = outcome.source
+		confirmVisible.value = true
 		return
 	}
 

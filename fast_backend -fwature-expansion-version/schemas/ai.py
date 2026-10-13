@@ -101,6 +101,8 @@ class BookkeepingIn(BaseModel):
     - client_msg_id 是强幂等键：重发同一条消息必须带同一个值；
     - draft_id 用于追问续写：把本次内容补进指定草稿（ai_bookkeeping_logs.id）；
     - dry_run=true 只解析不入账，返回 preview；
+    - preview_id 回传预览响应里的 requestId：命中服务端预览缓存则复用解析结果、
+      跳过二次 LLM 调用（未命中自动回退重新解析，只影响速度不影响正确性）；
     - source 标记来源（text=手输 / voice=语音），仅落审计日志；
     - overrides 为确认卡字段覆盖（按 preview.items[].index 定位）。
     """
@@ -109,6 +111,7 @@ class BookkeepingIn(BaseModel):
     client_msg_id: Optional[str] = Field(None, alias="clientMsgId", description="客户端 UUID 强幂等键")
     draft_id: Optional[int] = Field(None, alias="draftId", description="追问续写：目标草稿日志 ID")
     dry_run: bool = Field(False, alias="dryRun", description="true=只解析不入账")
+    preview_id: Optional[str] = Field(None, alias="previewId", description="预览响应的 requestId，用于复用解析结果")
     force: bool = Field(False, alias="force", description="true=跳过 5 分钟弱幂等窗口")
     source: str = Field("text", description="text=手输 / voice=语音")
     overrides: Optional[List[BookkeepingOverride]] = Field(None, description="确认卡字段覆盖")

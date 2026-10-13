@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from ai.llm import get_analyze_llm
 from ai.observability import KIND_BOOKKEEPING, Timer, record_call
+from ai.retry import with_retry
 
 
 class ParsedItem(BaseModel):
@@ -63,7 +64,10 @@ async def parse_bookkeeping(message: str, today: str, category_names: list[str],
     )
     timer = Timer()
     try:
-        result = await structured_llm.ainvoke(prompt)
+        # 上游 429/5xx 指数退避重试（审查报告 P1-6）：网关过载时不再让用户
+        # 看到「解析失败，请换个说法」——重试往往能直接成功。
+        # 非流式整次调用可安全重放，不涉及「已产出内容」的重复问题。
+        result = await with_retry(lambda: structured_llm.ainvoke(prompt))
     except Exception as e:
         record_call(KIND_BOOKKEEPING, getattr(llm, "model_name", "?"), user_id,
                     timer=timer, ok=False, error=type(e).__name__)

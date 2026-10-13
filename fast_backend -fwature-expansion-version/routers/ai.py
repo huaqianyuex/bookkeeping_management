@@ -45,6 +45,7 @@ from ai import normalizers as bk_norm
 from ai import category_alias as bk_alias
 from ai import security as ai_security
 from ai import observability as ai_obs
+from ai import retry as ai_retry
 from ai import stt as ai_stt
 from ai.stt import ProviderNotConfigured
 from ai.bookkeeping_chain import parse_bookkeeping
@@ -52,7 +53,8 @@ from config.db_config import get_db, AsyncSessionLocal
 from config.settings import (
     MEMBERSHIP_PLANS, STT_ENABLED, STT_MAX_SECONDS, STT_MAX_SIZE_MB,
     VOICE_RATE_LIMIT_PER_MIN, FAQ_INJECT_ENABLED, FAQ_RATE_LIMIT_PER_MIN,
-    BK_LOW_CONFIDENCE,
+    BK_LOW_CONFIDENCE, BK_PREVIEW_RATE_LIMIT_PER_MIN,
+    BK_PREVIEW_CACHE_TTL_SECONDS, BK_PREVIEW_CACHE_MAX_ENTRIES,
 )
 from crud import ai as ai_crud
 from crud import membership as membership_crud
@@ -70,7 +72,7 @@ from schemas.ai import (
 )
 from utils import ai_concurrency
 from utils.auth import get_current_admin, get_current_regular_user
-from utils.throttle import voice_rate_limiter, SlidingWindowRateLimiter
+from utils.throttle import voice_rate_limiter, SlidingWindowRateLimiter, TtlCache
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,10 @@ async def _quota_gate(db: AsyncSession, user_id: int, kind: str,
     幂等/去重短路未触达 LLM 的请求不应调用本闸门（如 bookkeeping 的 duplicate 分支）。
     等级判定只走 membership_crud.get_tier 单一入口，勿在此自行比较 expires_at。
     plan 可由调用方传入（已算过 tier 时避免重复查询）。
+
+    例外：bookkeeping 的 dryRun=true 预览**不走本闸门**——它只解析不入账，若也扣一次
+    daily_bookkeeping，「预览→确认」确认框流程会让一次记账扣 2 次额度；预览改走
+    bookkeeping_preview_rate_limiter（见 bookkeeping() 第 3.5 步）。
     """
     if plan is None:
         tier = await membership_crud.get_tier(db, user_id)
@@ -307,8 +313,10 @@ async def chat(
         # 调 LLM（非流式，一次拿全）
         try:
             content = await chat_chain.chat(messages, premium=plan["premium_model"], user_id=user_id)
-        except Exception:
+        except Exception as e:
             logger.exception("chat failed, user_id=%s", user_id)
+            if ai_retry.is_upstream_busy(e):
+                return ai_error("AI 助手当前繁忙，请稍后重试", code="UPSTREAM_BUSY")
             return ai_error("AI 服务暂不可用，请稍后重试")
 
         # 落库助手消息
@@ -388,9 +396,15 @@ async def chat_stream(
                     async for chunk in chat_chain.chat_stream(messages, premium=plan["premium_model"], user_id=user_id):
                         full.append(chunk)
                         yield sse({"type": "content", "content": chunk})
-                except Exception:
+                except Exception as e:
                     logger.exception("stream: LLM failed, user_id=%s", user_id)
-                    yield sse({"type": "error", "error": "AI 服务暂不可用，请稍后重试"})
+                    # 上游过载与「服务故障」分开报，前端可据此展示「稍后重试」而不是
+                    # 让用户怀疑自己的输入（P1-6）。code 为附加字段，旧前端只读 error 不受影响。
+                    if ai_retry.is_upstream_busy(e):
+                        yield sse({"type": "error", "code": "UPSTREAM_BUSY",
+                                   "error": "AI 助手当前繁忙，请稍后重试"})
+                    else:
+                        yield sse({"type": "error", "error": "AI 服务暂不可用，请稍后重试"})
                     return
 
                 # 3) 全部产出后，落库助手完整回复，再发 done
@@ -752,6 +766,48 @@ async def ai_admin_stats(
 
 # ── 自然语言记账 ────────────────────────────────────────────────────────
 
+# 确认框（前端「金额确认卡」）的预览限流：dryRun=true 不写库、不计 daily_bookkeeping
+# 配额，故必须另有成本闸门——预览仍会真实跑一次 LLM 解析。口径同 FAQ / 语音限流：
+# 进程内滑动窗口，单 worker 语义。端点内必须直接引用模块全局，否则测试的
+# monkeypatch 不生效。
+bookkeeping_preview_rate_limiter = SlidingWindowRateLimiter(
+    max_calls=BK_PREVIEW_RATE_LIMIT_PER_MIN, window=60
+)
+
+# 预览结果缓存：dryRun 预览已经真实跑过一次 LLM 解析，确认时按 previewId 读回同一份
+# Parsed，**省掉第二次模型调用**——「确认」从「1 次 LLM + 若干 DB」降到「若干 DB」，
+# 耗时由秒级降到毫秒级。
+#
+# 未命中一律回退重新解析（只影响速度、不影响正确性）：进程重启、多 worker、TTL 过期、
+# 换用户/换消息、客户端未回传 previewId —— 这些情况都必须走回退分支。
+# 与限流器同属进程内存态，端点内必须直接引用模块全局，否则测试 monkeypatch 不生效。
+bookkeeping_preview_cache = TtlCache(
+    ttl=BK_PREVIEW_CACHE_TTL_SECONDS, max_entries=BK_PREVIEW_CACHE_MAX_ENTRIES
+)
+
+
+def _cached_preview_parsed(preview_id: str | None, user_id: int, message: str):
+    """按 previewId 取回预览时的解析结果；任一校验不过返回 None（调用方回退重新解析）。
+
+    三重校验缺一不可：
+    - ``user_id`` —— 防串号（A 的 previewId 被 B 拿来复用会读到 A 的解析结果）；
+    - ``message``  —— 防「同一 previewId 换了另一条消息」，否则会把旧消息的解析结果
+      套到新消息上，比慢更糟；
+    - TTL（由缓存自身保证）—— 防陈旧结果被无限期复用。
+    """
+    if not preview_id:
+        return None
+    entry = bookkeeping_preview_cache.get(preview_id)
+    if not entry:
+        return None
+    if entry.get("user_id") != user_id or entry.get("message") != message:
+        return None
+    parsed = entry.get("parsed")
+    # 返回深拷贝：第 7 步会就地改写 item.type，直接交出缓存对象会让缓存被污染，
+    # 同一 previewId 被复用第二次时读到已被改过的结果。
+    return parsed.model_copy(deep=True) if parsed is not None else None
+
+
 async def _duplicate_response(db: AsyncSession, hit, user_id: int) -> dict:
     """按命中的首次日志组包 duplicate 响应（预检查与 IntegrityError 兜底共用）
 
@@ -786,9 +842,29 @@ async def bookkeeping(
     user_id: int = Depends(get_current_regular_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """6.15 自然语言记账：四种 action 形态 created/clarify/ignored/duplicate + {"error"}
+    """6.15 自然语言记账：五种 action 形态 preview/created/clarify/ignored/duplicate + {"error"}
 
     解析链 BookkeepingChain 见 06 §11；幂等日志表 ai_bookkeeping_logs（models/bookkeeping.py 已有）。
+
+    ── 「金额确认卡」两步契约（dryRun 预览 → overrides 确认）──
+    前端在语音/文字输入后先发一次 ``dryRun=true`` 拿到 ``action="preview"``，把
+    ``preview.items[]``（含 ``index / amount / amountRaw / categoryName / date /
+    confidence``）渲染成可编辑的金额确认卡；用户改完金额后，再发一次
+    ``dryRun=false`` 并携带 ``overrides=[{index, amount}]`` 落到对应条目上。
+
+    四条必须遵守的约定：
+    1. **``index`` 是覆盖键**：``overrides`` 按 ``preview.items[].index`` 定位，对应
+       LLM 输出顺序（不是数组下标——缺金额的条目也在 items 里占一个 index）。改错
+       index 会写到别的条目上。
+    2. **两次请求必须复用同一个 ``clientMsgId``**：预览不写日志、不占幂等键，真正
+       落库只发生在确认那次；确认连点两次会被 ``find_log_by_client_msg`` 拦成
+       ``duplicate``，因此不会重复入账。若两次用了不同的 key，连点就会入账两笔。
+    3. **配额只在确认那次扣一次**：``dryRun=true`` 不计 ``daily_bookkeeping``，
+       改走 ``bookkeeping_preview_rate_limiter`` 防刷。
+    4. **确认请求应回传 ``previewId``（= 预览响应的 ``requestId``）**：命中
+       ``bookkeeping_preview_cache`` 时直接复用预览的解析结果，**跳过第二次 LLM 调用**
+       （确认耗时由秒级降到毫秒级）。未命中（重启/多 worker/TTL 过期/换用户/换消息/
+       未回传）一律回退到重新解析，因此**只是变慢、不会算错**，客户端可以不传。
     """
 
 
@@ -834,13 +910,27 @@ async def bookkeeping(
     if hit is not None and hit.record_ids:
         return await _duplicate_response(db, hit, user_id)
 
-    # ── 第 3.5 步：会员配额（解析即计费；幂等/duplicate 短路的请求走不到这里，不计）──
-    # 必须前移到日志占位 INSERT 之前：占位 commit 后才发现超额，会留下
+    # ── 第 3.5 步：成本闸门（dryRun 预览 / 真正落库 两种口径，勿混用）──
+    # 幂等/duplicate 短路的请求在上面已 return，走不到这里，不计费。
+    #
+    # 配额只在**真正落库**的那一次计：dryRun=true 只解析不入账，若它也扣一次
+    # daily_bookkeeping，则「预览 → 确认」确认框流程会让一次记账扣掉 2 次额度
+    # （免费档 daily_bookkeeping=5 → 实际只剩 2.5 次），属额度口径回归。
+    # 但预览仍要真实调用一次 LLM 解析，不是免费操作，因此改用独立滑动窗口限流防刷。
+    #
+    # 这两条都必须在日志占位 INSERT 之前判定：占位 commit 后才发现超额，会留下
     # action='created' 的假成功脏日志。
     # bookkeeping 前端只消费裸 {"error"}，故用 HTTP 200 + error 文案（与 chat 的 429 二选一，勿混用）
-    quota_error = await _quota_gate(db, user_id, "bookkeeping")
-    if quota_error:
-        return ai_error(quota_error["error"], code=quota_error["code"])
+    if body.dry_run:
+        ok, retry_after = bookkeeping_preview_rate_limiter.allow(f"bk-preview:{user_id}")
+        if not ok:
+            return ai_error(
+                f"预览太频繁，请 {retry_after} 秒后再试", code="RATE_LIMIT"
+            )
+    else:
+        quota_error = await _quota_gate(db, user_id, "bookkeeping")
+        if quota_error:
+            return ai_error(quota_error["error"], code=quota_error["code"])
 
     # ── 第 4 步：先 INSERT 日志占位（唯一键 uk_abk_client_msg 兜底并发）──
     # dry_run 不写日志、不参与去重
@@ -888,13 +978,16 @@ async def bookkeeping(
                 return ai_error("上一次请求未完成，请重新发送")
             return ai_error("请求处理中，请稍后重试")
 
-    async def _bk_fail(msg: str, *, stage: str = "unknown") -> dict:
+    async def _bk_fail(msg: str, *, stage: str = "unknown",
+                       code: str | None = None) -> dict:
         """解析/校验失败善后：占位日志回写 error（status=0），被消费的草稿恢复为 0，
         避免留下 action='created' 的脏日志或断掉追问续写链。配额不回退（防刷惯例）。
 
         error_msg 记录「阶段:中文原因」，用于事后分析失败率与失败类型分布——
         此前该列全项目零写入，所有失败只回前端一句文案，运营侧完全黑盒。
         落库前用 security.mask_for_log 压长度，防止上游报错把内部路径/连接串带进库。
+
+        code 为附加的机器可读标记（如 UPSTREAM_BUSY），旧前端只读 error 不受影响。
         """
         detail = f"{stage}: {msg}"[:200]
         try:
@@ -915,13 +1008,18 @@ async def bookkeeping(
         except Exception:
             await db.rollback()
             logger.exception("bookkeeping fail-log cleanup error, user_id=%s", user_id)
-        return ai_error(msg)
+        return ai_error(msg, code=code)
 
-    # ── 第 5 步：LLM 解析 ──
+    # ── 第 5 步：LLM 解析（确认时若命中预览缓存则跳过，省掉第二次模型调用）──
     from datetime import date as _date
     from models.category import Category
 
     today = _date.today()
+    # 预览请求自己就是缓存产出方，不走缓存；只有确认请求才尝试复用。
+    # 命中后「确认」路径不再调用 LLM，耗时由秒级降到毫秒级。
+    cached_parsed = None if body.dry_run else _cached_preview_parsed(
+        body.preview_id, user_id, message
+    )
     try:
         cat_rows = (await db.execute(
             select(Category).where(
@@ -932,11 +1030,21 @@ async def bookkeeping(
         # 用户自定义分类放前面，resolve_category 的精确匹配优先命中自定义
         user_cats = [c for c in cat_rows if c.user_id == user_id]
         sys_cats = [c for c in cat_rows if c.user_id != user_id]
-        parsed = await parse_bookkeeping(
-            _safe_user_text(message), today.isoformat(), [c.name for c in cat_rows], user_id=user_id
-        )
-    except Exception:
+        if cached_parsed is not None:
+            # 命中预览缓存：直接复用解析结果。分类仍走上面的实时分类表，
+            # 因此用户在预览与确认之间新增/禁用的分类同样生效。
+            parsed = cached_parsed
+        else:
+            parsed = await parse_bookkeeping(
+                _safe_user_text(message), today.isoformat(), [c.name for c in cat_rows], user_id=user_id
+            )
+    except Exception as e:
         logger.exception("bookkeeping parse failed, user_id=%s", user_id)
+        # 上游过载 ≠ 用户说法有问题：过载时让用户「换个说法」纯属误导（改了也一样失败），
+        # 且会在审计日志里把上游故障记成用户的解析失败（P1-6）。
+        if ai_retry.is_upstream_busy(e):
+            return await _bk_fail("AI 助手当前繁忙，请稍后重试",
+                                  stage="upstream_busy", code="UPSTREAM_BUSY")
         return await _bk_fail("记账解析失败，请换个说法再试", stage="parse")
 
     # 审计载荷：parse_json 全项目只写不读，用保留键追加 overrides 记录是安全的
@@ -1087,6 +1195,14 @@ async def bookkeeping(
         return [r for _, r in rows]
 
     if body.dry_run:
+        # 把解析结果连同「属于谁 / 解析的是哪条消息」暂存，确认时按 requestId 读回，
+        # 省掉第二次 LLM 调用。deep copy 是必须的：第 7 步会就地改写 item.type，
+        # 不复制会让缓存与本次返回值共享同一批可变对象。
+        bookkeeping_preview_cache.set(request_id, {
+            "user_id": user_id,
+            "message": message,
+            "parsed": parsed.model_copy(deep=True),
+        })
         return {"action": "preview", "requestId": request_id,
                 "preview": {"items": _preview_items()},
                 "warnings": warnings, "records": []}

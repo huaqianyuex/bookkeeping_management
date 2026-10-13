@@ -1,9 +1,16 @@
 """对话链 — 组装 system prompt 与流式产出 LLM chunk"""
 
+import asyncio
+import logging
+import time
+
 from langchain_core.messages import BaseMessage
 
 from ai.llm import get_chat_llm
 from ai.observability import KIND_CHAT, Timer, record_call
+from ai.retry import max_attempts, retry_delay, with_retry
+
+logger = logging.getLogger(__name__)
 
 # 分四段写，每段一个明确职责：
 # 1) 身份与场景 2) 行为边界（能做什么/不能做什么）3) 数据口径（防幻觉）
@@ -41,11 +48,14 @@ def build_system_prompt(*blocks: str) -> str:
 
 async def chat(messages: list[BaseMessage], premium: bool = False,
                user_id: int | None = None) -> str:
-    """非流式（6.7）：一次拿到完整回复；premium=会员档走高级模型"""
+    """非流式（6.7）：一次拿到完整回复；premium=会员档走高级模型
+
+    上游 429/5xx 走指数退避重试（审查报告 P1-6）：非流式整次调用可安全重放。
+    """
     llm = get_chat_llm(premium=premium)
     timer = Timer()
     try:
-        resp = await llm.ainvoke(messages)
+        resp = await with_retry(lambda: llm.ainvoke(messages))
     except Exception as e:
         record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
                     timer=timer, ok=False, error=type(e).__name__)
@@ -65,22 +75,44 @@ async def chat_stream(messages: list, premium: bool = False,
     response_metadata.token_usage，此前 record_call 不传 response 导致
     流式对话 token 恒记 0。捕获携带用量信息的 chunk 用于落库；
     网关不返回用量时保持记 0，不抛异常（extract_tokens 兜底）。
+
+    P1-6：上游 429/5xx 指数退避重试，但**仅限首字节之前**——一旦已经 yield 过
+    内容就不能重试：那会让用户看到重复文本，且上游被重复计费。首字节前的重试
+    等待计入 TTFT，这与用户「提问后多久出字」的真实体感一致。
     """
     llm = get_chat_llm(premium=premium)
     timer = Timer()
     last_usage = None
-    try:
-        async for chunk in llm.astream(messages):
-            meta = getattr(chunk, "usage_metadata", None)
-            rm = getattr(chunk, "response_metadata", None) or {}
-            if meta or (isinstance(rm, dict) and rm.get("token_usage")):
-                last_usage = chunk
-            if chunk.content:
-                timer.mark_first_chunk()
-                yield chunk.content
-    except Exception as e:
-        record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
-                    timer=timer, ok=False, error=type(e).__name__)
-        raise
+    yielded = False
+    attempt_limit = max_attempts()
+    started = time.monotonic()
+    attempt = 0
+
+    while True:
+        attempt += 1
+        try:
+            async for chunk in llm.astream(messages):
+                meta = getattr(chunk, "usage_metadata", None)
+                rm = getattr(chunk, "response_metadata", None) or {}
+                if meta or (isinstance(rm, dict) and rm.get("token_usage")):
+                    last_usage = chunk
+                if chunk.content:
+                    timer.mark_first_chunk()
+                    yielded = True
+                    yield chunk.content
+            break
+        except Exception as e:
+            # 已产出内容 → 不允许重试（delay=None 直接走失败打点并抛出）
+            delay = None if yielded else retry_delay(
+                attempt, e, elapsed=time.monotonic() - started, attempts=attempt_limit,
+            )
+            if delay is None:
+                record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
+                            timer=timer, ok=False, error=type(e).__name__)
+                raise
+            logger.warning("chat stream retry %d/%d after %.2fs (%s)",
+                           attempt, attempt_limit, delay, type(e).__name__)
+            await asyncio.sleep(delay)
+
     record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
                 response=last_usage, timer=timer)

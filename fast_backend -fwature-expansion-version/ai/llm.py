@@ -3,7 +3,7 @@ from langchain_openai import ChatOpenAI
 from config.settings import (
     CHAT_MODEL, CHAT_MODEL_PREMIUM, ANALYZE_MODEL, EMBEDDING_MODEL,
     OPENAI_BASE_URL, AGNES_API_KEY,
-    LLM_TIMEOUT_SECONDS, LLM_MAX_RETRIES,
+    LLM_TIMEOUT_SECONDS,
     CHAT_MAX_TOKENS, ANALYZE_MAX_TOKENS,
 )
 
@@ -17,7 +17,9 @@ def _new_chat_llm(model: str) -> ChatOpenAI:
     # timeout / max_retries / max_tokens 必须显式给：
     # - 无 timeout：网关挂起时请求长挂，占住 ai_concurrency 的进程内并发槽，
     #   表现为「并发已达上限」但其实上一条早已失联；
-    # - max_retries 默认 2，配合 SSE 会把一次用户请求放大成 3 次上游计费；
+    # - max_retries **必须为 0**：重试统一由 ai/retry.with_retry 负责（指数退避 +
+    #   总预算 + 只重试瞬时故障）。若这里再留 SDK 重试，两层相乘会把一次用户请求
+    #   放大成 N×M 次上游调用与计费——这正是审查报告 P1-6 要避免的；
     # - 无 max_tokens：输出无界，异常情况下可烧掉大量 token 且全量落库。
     return ChatOpenAI(
         model=model,
@@ -27,7 +29,7 @@ def _new_chat_llm(model: str) -> ChatOpenAI:
         streaming=True,          # /chat/stream 需要
         max_tokens=CHAT_MAX_TOKENS,
         timeout=LLM_TIMEOUT_SECONDS,
-        max_retries=LLM_MAX_RETRIES,
+        max_retries=0,
     )
 
 
@@ -54,7 +56,7 @@ def get_analyze_llm() -> ChatOpenAI:
                                   base_url=OPENAI_BASE_URL, temperature=0,
                                   max_tokens=ANALYZE_MAX_TOKENS,
                                   timeout=LLM_TIMEOUT_SECONDS,
-                                  max_retries=LLM_MAX_RETRIES)
+                                  max_retries=0)   # 重试见 ai/retry.with_retry
     return _analyze_llm
 
 
