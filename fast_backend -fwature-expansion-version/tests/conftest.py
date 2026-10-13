@@ -29,6 +29,12 @@ def _reset_in_memory_throttles():
         throttle.login_ip_throttle._locked.clear()
         throttle.voice_rate_limiter._hits.clear()
         ai_concurrency._slots.clear()
+        # AI 路由模块级滑动窗口限流器（FAQ 检索 P0-4 / 语音转写 P1-7）也是进程内存态，
+        # 同一测试用户会跨用例累计命中，不清理会让后续用例出现假 429。
+        from routers import ai as ai_router
+        ai_router.faq_search_rate_limiter._hits.clear()
+        ai_router.voice_rate_limiter._hits.clear()
+        ai_router.voice_rate_limiter_member._hits.clear()
         # 充值模块：创建频率限流 + 支付失败冷却（crud.recharge 模块级单例）
         from crud import recharge as recharge_crud
         recharge_crud.create_rate_limiter._hits.clear()

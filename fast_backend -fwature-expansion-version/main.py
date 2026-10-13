@@ -67,6 +67,15 @@ async def lifespan(_: FastAPI):
         except Exception:
             logger.exception("shutdown: 停止 purge scheduler 失败")
 
+        # 释放 STT provider 持有的 httpx 连接池（连接复用后需显式关闭，
+        # 否则停机时会留 unclosed client 警告）。未启用 STT 时是空操作。
+        try:
+            from ai.stt import aclose_stt_provider
+
+            await aclose_stt_provider()
+        except Exception:
+            logger.exception("shutdown: 关闭 STT 连接池失败（不影响停机）")
+
 
 app = FastAPI(lifespan=lifespan)
 

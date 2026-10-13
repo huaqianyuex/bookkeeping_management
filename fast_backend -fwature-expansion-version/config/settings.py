@@ -150,6 +150,9 @@ FAQ_SIMILARITY_THRESHOLD = float(os.getenv("FAQ_SIMILARITY_THRESHOLD", "0.45"))
 FAQ_QUERY_CACHE_SIZE = int(os.getenv("FAQ_QUERY_CACHE_SIZE", "256"))
 # 对话链路是否把 FAQ 命中注入 system prompt（见 ai/faq_retriever.build_knowledge_block）。
 FAQ_INJECT_ENABLED = os.getenv("FAQ_INJECT_ENABLED", "true").lower() == "true"
+# GET /faq/search 的 per-user 滑动窗口限流（次/分钟）：cache miss 即一次 Embedding 计费，
+# 认证用户可无限刷 /faq/search 放大成本（审查报告 P0-4），需独立成本防护（口径同语音限流）。
+FAQ_RATE_LIMIT_PER_MIN = int(os.getenv("FAQ_RATE_LIMIT_PER_MIN", "30"))
 # 低于该 confidence 的记账条目在响应里给出「请核对」提示（不阻断入账）
 BK_LOW_CONFIDENCE = float(os.getenv("BK_LOW_CONFIDENCE", "0.5"))
 

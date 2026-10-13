@@ -4,6 +4,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from ai.llm import get_analyze_llm
+from ai.observability import KIND_ANALYZE, Timer, record_call
 from schemas.ai import BudgetPlan, ExpenseAnalysis
 
 ANALYZE_SYSTEM = (
@@ -82,7 +83,8 @@ def _sanitize_budget(plan: BudgetPlan, monthly_income: float) -> BudgetPlan:
     return plan
 
 
-async def analyze_expense(ctx: dict, query: str | None = None) -> ExpenseAnalysis:
+async def analyze_expense(ctx: dict, query: str | None = None,
+                          user_id: int | None = None) -> ExpenseAnalysis:
     """消费分析（6.9）：ctx = build_user_context 的财务数据
 
     结构化输出：把 ExpenseAnalysis 交给 with_structured_output，
@@ -91,10 +93,16 @@ async def analyze_expense(ctx: dict, query: str | None = None) -> ExpenseAnalysi
     query：用户自然语言诉求（ExpenseAnalyzeIn.query）。历史 bug 是该字段
     定义了、API 文档写了、前端传了，服务端却硬编码「请分析我的消费情况」
     并丢弃入参——于是「为什么餐饮涨了」和「随便分析」得到完全相同的分析。
+
+    观测口径（审查报告 P0-1）：分析链此前直接 ainvoke，无 Timer 无 record_call，
+    /admin/stats 的 usage 报表缺整个 analyze 场景。此处对齐 chat/bookkeeping 链：
+    成功传 response（结构化对象无 usage_metadata，extract_tokens 兜底记 0）、
+    失败记 ok=False，均按 user_id 落点。
     """
     demand = (query or "").strip() or "请分析我的消费情况"
 
-    llm = get_analyze_llm().with_structured_output(_ExpenseInsightPart)
+    base_llm = get_analyze_llm()
+    llm = base_llm.with_structured_output(_ExpenseInsightPart)
     prompt = (
         f"统计月份: {ctx['this_month']}\n"
         f"当月总收入: {ctx['total_income']}\n"
@@ -103,7 +111,17 @@ async def analyze_expense(ctx: dict, query: str | None = None) -> ExpenseAnalysi
         f"当月支出Top分类: {ctx['top_categories']}\n"
         f"用户诉求: {demand}"
     )
-    part: _ExpenseInsightPart = await llm.ainvoke([SystemMessage(content=ANALYZE_SYSTEM), HumanMessage(content=prompt)])
+    timer = Timer()
+    try:
+        part: _ExpenseInsightPart = await llm.ainvoke(
+            [SystemMessage(content=ANALYZE_SYSTEM), HumanMessage(content=prompt)]
+        )
+    except Exception as e:
+        record_call(KIND_ANALYZE, getattr(base_llm, "model_name", "?"), user_id,
+                    timer=timer, ok=False, error=type(e).__name__)
+        raise
+    record_call(KIND_ANALYZE, getattr(base_llm, "model_name", "?"), user_id,
+                response=part, timer=timer)
 
     income = float(ctx["total_income"])
     expense = float(ctx["total_expense"])
@@ -120,11 +138,16 @@ async def analyze_expense(ctx: dict, query: str | None = None) -> ExpenseAnalysi
     )
 
 
-async def plan_budget(monthly_income: float, savings_goal: float | None, ctx: dict) -> BudgetPlan:
-    """预算规划（6.10）：不传 savings_goal 时按 50/30/20 法则推导（储蓄=收入的20%）"""
+async def plan_budget(monthly_income: float, savings_goal: float | None, ctx: dict,
+                      user_id: int | None = None) -> BudgetPlan:
+    """预算规划（6.10）：不传 savings_goal 时按 50/30/20 法则推导（储蓄=收入的20%）
+
+    观测口径同 analyze_expense（审查报告 P0-1）：Timer + record_call 对齐。
+    """
     target = savings_goal if savings_goal else round(monthly_income * 0.2, 2)
 
-    llm = get_analyze_llm().with_structured_output(BudgetPlan)
+    base_llm = get_analyze_llm()
+    llm = base_llm.with_structured_output(BudgetPlan)
     prompt = (
         f"用户月收入: {monthly_income}\n"
         f"月储蓄目标: {target}\n"
@@ -132,6 +155,16 @@ async def plan_budget(monthly_income: float, savings_goal: float | None, ctx: di
         f"当月支出Top分类: {ctx.get('top_categories', [])}\n"
         f"请制定下月预算。"
     )
-    plan: BudgetPlan = await llm.ainvoke([SystemMessage(content=BUDGET_SYSTEM), HumanMessage(content=prompt)])
+    timer = Timer()
+    try:
+        plan: BudgetPlan = await llm.ainvoke(
+            [SystemMessage(content=BUDGET_SYSTEM), HumanMessage(content=prompt)]
+        )
+    except Exception as e:
+        record_call(KIND_ANALYZE, getattr(base_llm, "model_name", "?"), user_id,
+                    timer=timer, ok=False, error=type(e).__name__)
+        raise
+    record_call(KIND_ANALYZE, getattr(base_llm, "model_name", "?"), user_id,
+                response=plan, timer=timer)
     plan.savings_target = target  # 储蓄目标以系统计算为准
     return _sanitize_budget(plan, monthly_income)

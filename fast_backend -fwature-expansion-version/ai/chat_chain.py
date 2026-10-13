@@ -60,11 +60,21 @@ async def chat_stream(messages: list, premium: bool = False,
     """逐块 yield 文本；messages = [system, *history, human]
 
     TTFT：首个 chunk 到达即打点，用于观测「首字延迟」而非整段耗时。
+
+    P1-5：流式末尾 chunk（常为 content 为空的用量块）携带 usage_metadata /
+    response_metadata.token_usage，此前 record_call 不传 response 导致
+    流式对话 token 恒记 0。捕获携带用量信息的 chunk 用于落库；
+    网关不返回用量时保持记 0，不抛异常（extract_tokens 兜底）。
     """
     llm = get_chat_llm(premium=premium)
     timer = Timer()
+    last_usage = None
     try:
         async for chunk in llm.astream(messages):
+            meta = getattr(chunk, "usage_metadata", None)
+            rm = getattr(chunk, "response_metadata", None) or {}
+            if meta or (isinstance(rm, dict) and rm.get("token_usage")):
+                last_usage = chunk
             if chunk.content:
                 timer.mark_first_chunk()
                 yield chunk.content
@@ -72,4 +82,5 @@ async def chat_stream(messages: list, premium: bool = False,
         record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
                     timer=timer, ok=False, error=type(e).__name__)
         raise
-    record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id, timer=timer)
+    record_call(KIND_CHAT, getattr(llm, "model_name", "?"), user_id,
+                response=last_usage, timer=timer)

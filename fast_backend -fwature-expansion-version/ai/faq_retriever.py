@@ -22,6 +22,7 @@ from collections import OrderedDict
 from config.settings import (
     FAQ_SIMILARITY_THRESHOLD, FAQ_TOP_K, FAQ_QUERY_CACHE_SIZE,
 )
+from ai import security as ai_security
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +251,15 @@ async def rebuild(rows) -> int:
 
 
 async def _embed_query(query: str) -> list[float] | None:
-    """算查询向量，失败返回 None（调用方降级关键词）。带 LRU 缓存。"""
+    """算查询向量，失败返回 None（调用方降级关键词）。带 LRU 缓存。
+
+    P0-3：查询文本先本地脱敏再上云——用户可能直接输入手机号/卡号去搜
+    （如「退款的卡号怎么填」），Embedding 端点同样会把原文发给第三方。
+    desensitize 只替换身份标识为占位符，语义骨架保留，相似度几乎不受影响；
+    放在 _cache_key 之前，保证缓存键按脱敏后文本归一，不会出现
+    「原样 key 查脱敏向量」的错位（也天然幂等）。
+    """
+    query = ai_security.desensitize(query)
     key = _cache_key(query)
     cached = _cache_get(key)
     if cached is not None:

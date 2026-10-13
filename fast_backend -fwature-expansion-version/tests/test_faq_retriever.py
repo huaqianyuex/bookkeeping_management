@@ -493,3 +493,81 @@ class TestEmbeddingDimensionGuard:
         """记录 zip 截断的具体危害：结果看起来是满分相似度"""
         assert fr._cosine_raw([1.0, 0.0], [1.0, 0.0, 0.0]) == 1.0
         # -> 换模型后旧索引会「完美命中」，故必须在调用前做长度守卫
+
+
+class TestQueryDesensitized:
+    """P0-3（审查报告缺陷 3）：FAQ 检索此前把用户原文直接交给 Embedding，
+    用户可能直接输入手机号/卡号（如「退款的卡号怎么填」），PII 随之上云。
+    入参必须先本地脱敏（占位符不影响相似度）。"""
+
+    @pytest.mark.asyncio
+    async def test_embed_query_masks_pii_before_cloud(self, monkeypatch):
+        captured = {}
+
+        class _CapturingEmbeddings:
+            async def aembed_query(self, text):
+                captured["text"] = text
+                return [1.0, 0.0, 0.0, 0.0]
+
+        import ai.llm as llm_mod
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: _CapturingEmbeddings())
+        fr._query_cache.clear()
+
+        await fr._embed_query("手机号 13800138000 怎么改绑定")
+
+        assert "[PHONE]" in captured["text"]
+        assert "13800138000" not in captured["text"], "PII 不得出现在上云的查询文本里"
+
+    @pytest.mark.asyncio
+    async def test_card_number_masked(self, monkeypatch):
+        captured = {}
+
+        class _CapturingEmbeddings:
+            async def aembed_query(self, text):
+                captured["text"] = text
+                return [1.0, 0.0, 0.0, 0.0]
+
+        import ai.llm as llm_mod
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: _CapturingEmbeddings())
+        fr._query_cache.clear()
+
+        await fr._embed_query("还信用卡 6222021234567890 逾期费怎么填")
+
+        assert "[CARD]" in captured["text"]
+        assert "6222021234567890" not in captured["text"]
+
+    @pytest.mark.asyncio
+    async def test_cache_key_normalized_on_masked_text(self, monkeypatch):
+        """脱敏发生在 _cache_key 之前：两条脱敏后相同的原文只付一次 Embedding"""
+        calls = {"n": 0}
+
+        class _CountingEmbeddings:
+            async def aembed_query(self, text):
+                calls["n"] += 1
+                return [1.0, 0.0, 0.0, 0.0]
+
+        import ai.llm as llm_mod
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: _CountingEmbeddings())
+        fr._query_cache.clear()
+
+        await fr._embed_query("卡号 6222021234567890 绑定失败")
+        await fr._embed_query("卡号 6222021234567891 绑定失败")
+
+        assert calls["n"] == 1, "脱敏后文本相同，应命中同一缓存键（不会重复计费）"
+
+    @pytest.mark.asyncio
+    async def test_plain_query_unchanged(self, monkeypatch):
+        """不误伤：无 PII 的普通问句原样上云"""
+        captured = {}
+
+        class _CapturingEmbeddings:
+            async def aembed_query(self, text):
+                captured["text"] = text
+                return [1.0, 0.0, 0.0, 0.0]
+
+        import ai.llm as llm_mod
+        monkeypatch.setattr(llm_mod, "get_embeddings", lambda: _CapturingEmbeddings())
+        fr._query_cache.clear()
+
+        await fr._embed_query("预算怎么设置")
+        assert captured["text"] == "预算怎么设置"

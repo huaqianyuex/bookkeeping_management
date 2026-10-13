@@ -455,7 +455,11 @@ class TestMembershipBadge:
         assert res.json()["code"] == "QUOTA_EXCEEDED"
 
     def test_bookkeeping_quota_exceeded_returns_bare_error(self, client, monkeypatch):
-        """按 membership-plan §5.5：bookkeeping 超额走 HTTP 200 + 裸 {"error"}"""
+        """按 membership-plan §5.5：bookkeeping 超额走 HTTP 200 + 裸 {"error"}
+
+        附带机器可读 code（增量字段）——前端不读不影响旧行为，但可以据此
+        区分「配额超限」与其它裸 error，无需解析中文文案。
+        """
         from routers import ai as ai_router
 
         _patch_quota(monkeypatch, admitted=False, used=5, limit=5, kind_expected="bookkeeping")
@@ -478,7 +482,8 @@ class TestMembershipBadge:
         assert res.status_code == 200
         body = res.json()
         assert "action" not in body            # 不是 created/clarify/ignored 分支
-        assert "code" not in body              # 不是 429 裸 JSON 体
+        assert "data" not in body              # 不是 Result 信封
+        assert body["code"] == "QUOTA_EXCEEDED"   # 机器可读增量字段
         assert "已用完" in body["error"]
 
     def test_stream_concurrency_limit_emits_sse_error(self, client, monkeypatch):

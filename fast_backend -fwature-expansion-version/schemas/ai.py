@@ -1,103 +1,28 @@
-# """AI 模块 Pydantic 模型 — /api/ai
-#
-# ⚠️ 铁律（10-实现骨架.md §六 / 05 §0）：
-# - `/api/ai/**` 一律**裸返回**，不套 `{code,message,data}` 信封；
-# - 会话/消息时间戳是 **int 毫秒**（createdAt/updatedAt/deletedAt/timestamp 皆是）；
-# - 业务失败统一 `{"error": "中文"}`（HTTP 200），勿抛 HTTPException；
-# - 例外：鉴权 401 由依赖抛出，是唯一带 Result 结构的形态。
-#
-# ⚠️ 消费分析 / 预算规划的 `data` **内部字段是 snake_case**（total_expense / savings_rate /
-# monthly_budget...），与业务模块「对外 camelCase」的约定不同——前端 AiChat.jsx 按此读取，
-# 不要自作主张改成驼峰。
-# """
-#
+"""AI 模块 Pydantic 模型 — /api/ai
+
+⚠️ 铁律（10-实现骨架.md §六 / 05 §0）：
+- `/api/ai/**` 一律**裸返回**，不套 `{code,message,data}` 信封；
+- 会话/消息时间戳是 **int 毫秒**（createdAt/updatedAt/deletedAt/timestamp 皆是）；
+- 业务失败统一 `{"error": "中文"}`（HTTP 200），勿抛 HTTPException；
+- 例外：鉴权 401 由依赖抛出，是唯一带 Result 结构的形态。
+
+⚠️ 消费分析 / 预算规划的 `data` **内部字段是 snake_case**（total_expense / savings_rate /
+monthly_budget...），与业务模块「对外 camelCase」的约定不同——前端 AiChat.jsx 按此读取，
+不要自作主张改成驼峰。
+
+历史清理（审查报告 P2-10）：本文件顶部原有一整段被 `#` 注释掉的旧定义，其字段约束
+（如 SessionOut.user_id 可空、ChatIn 无长度上限）与现行契约不同，在被注释的状态下仍会被
+误读为现行契约。已删除该注释死代码，并把其中的铁律说明提升为本模块 docstring 保留；
+同时删除 207-211 行的重复 import、修正 `ChatOut` 缺失的 messageId。现行契约只看下方活跃类。
+"""
+
 from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.base import OrmBase
-#
-#
-# class ErrorOut(BaseModel):
-#     """AI 模块统一失败结构（HTTP 200 裸返回）"""
-#     error: str
-#
-#
-# # ── 会话 ──────────────────────────────────────────────────────────────
-#
-# class SessionCreateIn(BaseModel):
-#     """创建会话请求体（6.1）"""
-#     title: Optional[str] = Field(None, max_length=50, description="会话标题，缺省「新对话」，服务端截断 50 字")
-#
-#
-# class SessionRenameIn(BaseModel):
-#     """重命名会话请求体（6.3）"""
-#     title: str = Field(..., description="新标题，trim 后 1–50 字")
-#
-#
-# class SessionOut(OrmBase):
-#     """会话出参（裸 Session 对象，6.1 / 6.3 使用）
-#
-#     字段名与 ChatSession ORM 属性一一对应；时间戳为 int 毫秒。
-#     """
-#     id: str
-#     user_id: Optional[int] = Field(None, alias="userId")
-#     title: str
-#     auto_title: int = Field(1, alias="autoTitle", description="1=AI 可覆盖标题，0=用户已重命名锁定")
-#     created_at: int = Field(..., alias="createdAt")
-#     updated_at: int = Field(..., alias="updatedAt")
-#     deleted_at: int = Field(0, alias="deletedAt", description="0=未删；>0=软删毫秒")
-#
-#
-# class SessionListItem(OrmBase):
-#     """会话列表项（6.2）— preview / messageCount 是查询时算出来的展示字段，不是表列
-#
-#     继承 OrmBase（populate_by_name）：路由里既可以用字段名 message_count 构造，
-#     也可以 model_dump(by_alias=True) 输出 camelCase 给前端。
-#     """
-#     id: str
-#     title: str
-#     preview: str = Field(..., description="最后一条消息，前缀「你: 」/「AI: 」，内容截 50 字")
-#     message_count: int = Field(0, alias="messageCount")
-#     created_at: int = Field(..., alias="createdAt")
-#     updated_at: int = Field(..., alias="updatedAt")
-#
-#
-# class SessionListOut(BaseModel):
-#     """会话列表出参 — 注意是裸 {items, total}，**不是**业务 PageResult 的 records/total"""
-#     items: List[SessionListItem] = Field(default_factory=list)
-#     total: int = 0
-#
-#
-# class SessionIdsIn(BaseModel):
-#     """AI 批量删除会话请求体（6.5）—— 元素是 **string**，勿与 admin 模块 int 版 IdsIn 混用"""
-#     ids: List[str] = Field(..., min_length=1, description="会话 ID 数组，单次最多 50 条")
-#
-#
-# # ── 消息 / 对话 ────────────────────────────────────────────────────────
-#
-# class MessageOut(OrmBase):
-#     """消息出参（6.6，裸数组元素，按 timestamp 升序）"""
-#     id: str
-#     session_id: str = Field(..., alias="sessionId")
-#     role: str = Field(..., description="user | assistant")
-#     content: str
-#     timestamp: int = Field(..., description="毫秒时间戳")
-#
-#
-# class ChatIn(BaseModel):
-#     """对话请求体（6.7 非流式 / 6.8 流式共用）"""
-#     session_id: str = Field(..., alias="sessionId")
-#     message: str = Field(..., min_length=1)
-#
-#     model_config = ConfigDict(populate_by_name=True)
-#
-#
-# class ChatOut(BaseModel):
-#     """非流式对话出参（6.7）— 字段名是 content，不是 answer"""
-#     content: str
-#
-#
+
+
 class ExpenseAnalyzeIn(BaseModel):
     """消费分析请求体（6.9）— 财务数据由服务端查库组包，前端只传诉求文本"""
     query: Optional[str] = Field("请分析我的消费情况", description="自然语言诉求，作为提示词 human 片段")
@@ -147,8 +72,8 @@ class UserFinanceContext(BaseModel):
     last_month_expense: float = 0                           # 环比用
     recent_records: List[dict] = Field(default_factory=list)  # 预留，当前组包未填充
     top_categories: List[dict] = Field(default_factory=list)
-#
-#
+
+
 class FeedbackIn(BaseModel):
     """保存反馈请求体（6.13）— 对应 feedback 表 {message_id, rating, comment, timestamp}"""
     message_id: str = Field(..., alias="messageId", description="被评价的消息 ID（msg_...）")
@@ -201,14 +126,6 @@ class BookkeepingAmendIn(BaseModel):
     message: Optional[str] = Field(None, description="自然语言修正指令，如「改成45块5」")
 
     model_config = ConfigDict(populate_by_name=True)
-
-
-
-from typing import Any, List, Optional
-
-from pydantic import BaseModel, ConfigDict, Field
-
-from schemas.base import OrmBase
 
 
 class ErrorOut(BaseModel):
@@ -274,8 +191,16 @@ class ChatIn(BaseModel):
 
 
 class ChatOut(BaseModel):
-    """非流式对话出参（字段名是 content，不是 answer）"""
+    """非流式对话出参（字段名是 content，不是 answer）
+
+    ⚠️ 契约漂移修正（审查报告 P2-10）：/chat 实际返回 `{"content", "messageId"}`，
+    而此前本模型只声明 content。端点未声明 response_model，故此前只影响契约文档与
+    构造校验；补上 message_id 后模型与真实响应一致。
+    """
     content: str
+    message_id: Optional[str] = Field(None, alias="messageId")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class SessionIdsIn(BaseModel):

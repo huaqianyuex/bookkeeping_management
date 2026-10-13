@@ -29,6 +29,7 @@ Starlette 按注册顺序匹配，否则 "batch-delete" 会被当成 session_id 
 import hashlib
 import json
 import logging
+import struct
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, HTTPException, File, UploadFile
@@ -50,7 +51,8 @@ from ai.bookkeeping_chain import parse_bookkeeping
 from config.db_config import get_db, AsyncSessionLocal
 from config.settings import (
     MEMBERSHIP_PLANS, STT_ENABLED, STT_MAX_SECONDS, STT_MAX_SIZE_MB,
-    VOICE_RATE_LIMIT_PER_MIN, FAQ_INJECT_ENABLED, BK_LOW_CONFIDENCE,
+    VOICE_RATE_LIMIT_PER_MIN, FAQ_INJECT_ENABLED, FAQ_RATE_LIMIT_PER_MIN,
+    BK_LOW_CONFIDENCE,
 )
 from crud import ai as ai_crud
 from crud import membership as membership_crud
@@ -75,9 +77,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
-def ai_error(msg: str) -> dict:
-    """AI 业务失败统一返回：HTTP 200 + 裸 {"error": "中文"}"""
-    return {"error": msg}
+def ai_error(msg: str, *, code: str | None = None) -> dict[str, Any]:
+    """AI 业务失败统一返回：HTTP 200 + 裸 {"error": "中文"}
+
+    ``code`` 可选：裸 error 契约下前端只依赖 ``error`` 即可，故默认不带；
+    但「配额超限」这类前端需要分支处理的场景带上机器可读 code 更省事。
+    纯增量字段——旧前端不读也不受影响。
+    """
+    body: dict[str, Any] = {"error": msg}
+    if code is not None:
+        body["code"] = code
+    return body
 
 
 # ── 会员配额闸门 ────────────────────────────────────────────────────────
@@ -420,7 +430,10 @@ async def analyze_expenses(
             return JSONResponse(status_code=429, content=quota_error)
         ctx = await ai_context.build_user_context(db, user_id)
         # body.query 此前收而不传，用户诉求被丢弃（analyze_chain 内硬编码默认文案）
-        data = await analyze_chain.analyze_expense(ctx, query=body.query)
+        # P0-3：诉求原文含手机号/卡号等 PII，上云前统一走 _safe_user_text 脱敏
+        data = await analyze_chain.analyze_expense(
+            ctx, query=_safe_user_text(body.query), user_id=user_id
+        )
         return {"success": True, "data": data.model_dump()}
     except Exception:
         # 不用回显原始异常：DB/LLM 报错可能含 SQL 语句、内部路径、API key 提示
@@ -448,7 +461,9 @@ async def analyze_budget(
         if quota_error:
             return JSONResponse(status_code=429, content=quota_error)
         ctx = await ai_context.build_user_context(db, user_id)
-        data = await analyze_chain.plan_budget(body.monthly_income, body.savings_goal, ctx)
+        data = await analyze_chain.plan_budget(
+            body.monthly_income, body.savings_goal, ctx, user_id=user_id
+        )
         return {"success": True, "data": data.model_dump()}
     except Exception:
         logger.exception("budget plan failed, user_id=%s income=%s goal=%s",
@@ -459,6 +474,14 @@ async def analyze_budget(
 
 
 # ── FAQ ────────────────────────────────────────────────────────────────
+
+# /faq/search 是认证用户可直调的 Embedding 计费口：cache miss 即一次 Embedding 调用
+# （真金白银）。挂独立滑动窗口限流（P0-4，口径同语音转写），端点必须直接引用模块全局，
+# 否则测试对 ai_router.faq_search_rate_limiter 的 monkeypatch 不生效。
+faq_search_rate_limiter = SlidingWindowRateLimiter(
+    max_calls=FAQ_RATE_LIMIT_PER_MIN, window=60
+)
+
 
 @router.get("/faq/search", summary="FAQ 语义检索")
 async def faq_search(
@@ -477,12 +500,23 @@ async def faq_search(
     两种失败形态要区分：无命中**没有** fallback 键；整体抛异常才有。
     历史问题：top_k 硬编码 3，绕过 FAQ_TOP_K 配置；且降级是静默的，
     前端拿到 score 却无从判断它是余弦分还是字符重合度分（两者量纲不可比）。
+
+    P0-4：per-user 滑动窗口限流，防止认证用户无限刷 Embedding 计费。
     """
+    ok, retry_after = faq_search_rate_limiter.allow(f"faq:{user}")
+    if not ok:
+        return JSONResponse(status_code=429, content={
+            "error": f"检索太频繁，请 {retry_after} 秒后再试",
+            "code": "RATE_LIMIT",
+        })
     try:
         # top_k 不传，用 search_faq_detailed 默认值（读 FAQ_TOP_K）
         results, mode = await faq_retriever.search_faq_detailed(query)
         return {"results": results, "mode": mode}
     except Exception:
+        # 失败不产生 Embedding 计费 → 退还本次占位，避免把用户的每分钟名额
+        # 耗在注定失败的请求上（占位在 allow 里是原子的，不存在 check→record 并发窗口）
+        faq_search_rate_limiter.refund(f"faq:{user}")
         logger.exception("faq search failed, query_len=%d", len(query or ""))
         return {"results": [], "fallback": True}
 
@@ -534,6 +568,47 @@ def _looks_like_audio(data: bytes, ext: str) -> bool:
     return False
 
 
+def _wav_duration_seconds(data: bytes) -> float | None:
+    """从 WAV 容器解析时长（秒）；无法可靠解析时返回 None。
+
+    为什么需要（审查报告 P1-7）：STT_MAX_SECONDS 此前只是下发给前端的录音上限，
+    服务端不校验，客户端可以绕过直接上传长音频，外部 ASR 按音频时长计费。
+
+    实现要点：
+    - 只认 RIFF/WAVE 容器，从 offset 12 起逐个子块扫描——不假设 fmt 块一定是 16 字节、
+      也不假设 data 紧跟在 fmt 之后（扩展 fmt / LIST 块都常见）；
+    - 用 fmt 块的 byte_rate 与 data 块的**实际字节数**推算时长，**不采信客户端可控的
+      data 块声明长度**——伪造 RIFF 头（声明 1 秒、实传 10 分钟）不能绕过时长守卫；
+    - **返回 None 表示「未校验」**（非 WAV、头损坏、缺 fmt/byte_rate），
+      绝不因解析失败而阻断转写——其余格式（mp3/m4a/webm/ogg）无统一时长头，
+      由 provider 侧超时兜底。
+    """
+    if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        return None
+    byte_rate = 0
+    pos = 12
+    while pos + 8 <= len(data):
+        chunk_id = data[pos:pos + 4]
+        chunk_size = struct.unpack_from("<I", data, pos + 4)[0]
+        body = pos + 8
+        if chunk_id == b"fmt ":
+            # PCM WAV 的 byte_rate 在 fmt 块偏移 8 处（4 字节）
+            if chunk_size < 16 or body + 16 > len(data):
+                return None
+            byte_rate = struct.unpack_from("<I", data, body + 8)[0]
+        elif chunk_id == b"data":
+            if byte_rate <= 0:
+                return None
+            # 时长只按**实际字节数**算，不采信 data 块的声明长度。
+            # 声明长度是客户端可控的 RIFF 头字段：伪造「声明 1 秒、实际传 10 分钟」
+            # 即可绕过 STT_MAX_SECONDS；而真实音频长度本就等于容器中 data 块的
+            # 字节数，声明值没有任何可信度。截断上传同样按实际长度算（偏短，安全方向）。
+            return max(len(data) - body, 0) / byte_rate
+        # 子块按声明长度前进；奇数长度需 1 字节对齐 padding
+        pos = body + chunk_size + (chunk_size & 1)
+    return None
+
+
 # 语音是按次计费的外部调用：免费/会员两档滑动窗口限流（内存态，口径同 ai_concurrency）。
 # 注意：端点里必须直接引用模块全局（而非装进 dict），否则测试对
 # ai_router.voice_rate_limiter 的 monkeypatch 不生效。
@@ -557,17 +632,25 @@ async def voice_transcribe(
     """6.19 语音转写：裸 {text, language, confidence}；失败 ai_error
 
     音频只在内存流转，不落盘、不写库。转写空文本返回 {"text": ""}（不是故障），
-    由前端提示「没听清」。STT_MAX_SECONDS 是客户端录音上限，服务端不做时长校验。
+    由前端提示「没听清」。
+
+    审查报告 P1-7 的两处修正：
+    - 限流口径：转写失败不产生 ASR 计费，不该白占用户每分钟的名额。但「成功才记」
+      的 check+record 写法两次加锁、中间隔着 await，N 个并发请求可全部通过 check
+      再依次执行，把放行量放大 N 倍——而并发刷量正是限流要防的攻击形态。
+      故改为 allow（原子查+记，占位置于本地校验之后、转写之前）+ 失败 refund 退还，
+      既守住并发额度，又保住「失败不占槽」。
+    - STT_MAX_SECONDS 此前只下发给前端、服务端不校验，客户端可绕过上传长音频。
+      对可解析的 WAV 补一道服务端时长校验（其余格式无统一时长头，不校验）。
     """
     if not STT_ENABLED:
         return ai_error("语音识别未启用")
 
-    # 1) 节流（按用户 + 会员分档）：ASR 是按次计费的外部调用，需独立成本防护
+    # 1) 会员分档决定限流额度（ASR 是按次计费的外部调用，需独立成本防护）。
+    #    占位动作推迟到步骤 4 转写**之前**原子完成（allow = 查+记一次锁内完成），
+    #    失败由 refund 退还；上面的本地校验全部先于占位，不会白烧用户名额。
     tier = await membership_crud.get_tier(db, user_id)
     limiter = voice_rate_limiter_member if tier == 1 else voice_rate_limiter
-    ok, retry_after = limiter.allow(f"voice:{user_id}")
-    if not ok:
-        return ai_error(f"说话太频繁，请 {retry_after} 秒后再试")
 
     # 2) 扩展名白名单（含 webm：H5 MediaRecorder 产出 webm/opus）
     filename = (file.filename or "audio.m4a").strip()
@@ -595,13 +678,26 @@ async def voice_transcribe(
     if not _looks_like_audio(data, ext):
         return ai_error("音频内容与格式不符，请重新录音后再试")
 
-    # 4) 转写（异常不回显底层报错：URL/key 提示可能泄露）
+    # 3.5) 服务端时长校验（P1-7）：仅 WAV 能可靠解析时长；解析不出（None）
+    # 视为「未校验」放行，由 provider 的 timeout 兜底，避免误伤正常录音。
+    if ext == "wav":
+        duration = _wav_duration_seconds(data)
+        if duration is not None and duration > STT_MAX_SECONDS:
+            return ai_error(f"录音过长，请控制在 {STT_MAX_SECONDS} 秒以内")
+
+    # 4) 原子占位后转写（异常不回显底层报错：URL/key 提示可能泄露）。
+    #    allow 与后续 await 之间无检查-记录窗口，并发刷量不会被放大 N 倍。
+    ok, retry_after = limiter.allow(f"voice:{user_id}")
+    if not ok:
+        return ai_error(f"说话太频繁，请 {retry_after} 秒后再试")
     try:
         provider = ai_stt.get_stt_provider()
         result = await provider.transcribe(data, filename)
     except ProviderNotConfigured:
+        limiter.refund(f"voice:{user_id}")
         return ai_error("语音识别未启用")
     except Exception:
+        limiter.refund(f"voice:{user_id}")
         logger.exception("voice transcribe failed user_id=%s size=%s", user_id, len(data))
         return ai_error("语音识别暂不可用，请稍后重试")
 
@@ -744,7 +840,7 @@ async def bookkeeping(
     # bookkeeping 前端只消费裸 {"error"}，故用 HTTP 200 + error 文案（与 chat 的 429 二选一，勿混用）
     quota_error = await _quota_gate(db, user_id, "bookkeeping")
     if quota_error:
-        return ai_error(quota_error["error"])
+        return ai_error(quota_error["error"], code=quota_error["code"])
 
     # ── 第 4 步：先 INSERT 日志占位（唯一键 uk_abk_client_msg 兜底并发）──
     # dry_run 不写日志、不参与去重
@@ -1040,9 +1136,15 @@ async def bookkeeping(
             parse_json=parse_payload, action="created",
             intent=parsed.intent, status=1,
         )
+    # P2-14：审计链补全——ai_bookkeeping_logs.message_id 列（FK 指向 messages.id）
+    # 此前从未赋值，日志↔消息无法追溯，已建 FK 形同虚设。created 路径把助手
+    # 消息 ID 回写到日志，并在出参 BkCreatedOut.messageId 透出。
+    ai_msg = None
     if body.session_id:
         await ai_crud.add_message(db, body.session_id, "user", message)
-        await ai_crud.add_message(db, body.session_id, "assistant", echo)
+        ai_msg = await ai_crud.add_message(db, body.session_id, "assistant", echo)
+        if log is not None:
+            await ai_crud.update_bookkeeping_log(db, log.id, message_id=ai_msg.id)
     await db.commit()
 
     return BkCreatedOut(
@@ -1063,6 +1165,7 @@ async def bookkeeping(
         echo=echo,
         warnings=warnings,
         session_id=body.session_id,
+        message_id=ai_msg.id if ai_msg else None,
     ).model_dump(by_alias=True)
 
 
@@ -1101,47 +1204,66 @@ async def amend_bookkeeping(
     new_remark = body.remark
 
     # ── 2) message 解析链取增量字段（显式字段优先覆盖）──
+    # P0-2：此路径调 LLM（parse_bookkeeping），此前**不走配额、不走并发闸门**，
+    # 认证用户可无限刷修改请求烧 token，护栏口径与对话/记账不一致。补齐：
+    #   取 plan → try_acquire 并发槽 → _quota_gate 扣 bookkeeping 配额。
+    # 超额按 bookkeeping 既有口径返回 HTTP 200 裸 error（与 POST /bookkeeping 一致，
+    # 不用 429）；配额失败不回滚（防刷量优先，既定取舍）。
     if body.message:
         msg = body.message.strip()
         if len(msg) > 500:
             return ai_error("消息过长，最多 500 字")
-        cat_rows = (await db.execute(
-            select(Category).where(
-                Category.status == 1,   # 禁用分类不可被 AI 选中入账
-                or_(Category.user_id == user_id, Category.user_id.is_(None))
-            )
-        )).scalars().all()
-        user_cats = [c for c in cat_rows if c.user_id == user_id]
-        sys_cats = [c for c in cat_rows if c.user_id != user_id]
+        plan = MEMBERSHIP_PLANS[await membership_crud.get_tier(db, user_id)]
+        release = await ai_concurrency.try_acquire(user_id, plan["concurrency"])
+        if release is None:
+            return JSONResponse(status_code=429, content={
+                "error": "您的 AI 并发已达上限，请等待当前请求完成",
+                "code": "CONCURRENCY_LIMIT",
+            })
         try:
-            parsed = await parse_bookkeeping(
-                _safe_user_text(msg), _date.today().isoformat(), [c.name for c in cat_rows], user_id=user_id
+            quota_error = await _quota_gate(db, user_id, "bookkeeping", plan=plan)
+            if quota_error:
+                return ai_error(quota_error["error"], code=quota_error["code"])
+
+            cat_rows = (await db.execute(
+                select(Category).where(
+                    Category.status == 1,   # 禁用分类不可被 AI 选中入账
+                    or_(Category.user_id == user_id, Category.user_id.is_(None))
+                )
+            )).scalars().all()
+            user_cats = [c for c in cat_rows if c.user_id == user_id]
+            sys_cats = [c for c in cat_rows if c.user_id != user_id]
+            try:
+                parsed = await parse_bookkeeping(
+                    _safe_user_text(msg), _date.today().isoformat(), [c.name for c in cat_rows], user_id=user_id
+                )
+            except Exception:
+                logger.exception("amend parse failed, user_id=%s record_id=%s", user_id, record_id)
+                return ai_error("修改解析失败，请换个说法再试")
+            item = next(
+                (i for i in parsed.items
+                 if i.is_expense_related and (i.amount_raw or i.amount is not None)),
+                None,
             )
-        except Exception:
-            logger.exception("amend parse failed, user_id=%s record_id=%s", user_id, record_id)
-            return ai_error("修改解析失败，请换个说法再试")
-        item = next(
-            (i for i in parsed.items
-             if i.is_expense_related and (i.amount_raw or i.amount is not None)),
-            None,
-        )
-        if item is not None:
-            if new_amount is None:
-                amt = bk_norm.normalize_amount(item.amount_raw, item.amount)
-                if amt is not None:
-                    new_amount = amt
-            if new_category_id is None and item.category_name:
-                cat, _ = bk_alias.resolve_category(
-                    item.category_name, user_cats + sys_cats
-                )
-                if cat is not None:
-                    new_category_id = cat.id
-            if new_date is None and (item.date or item.date_expr):
-                new_date = bk_norm.normalize_date(
-                    item.date_expr, item.date, _date.today()
-                )
-            if new_remark is None and item.remark:
-                new_remark = item.remark
+            if item is not None:
+                if new_amount is None:
+                    amt = bk_norm.normalize_amount(item.amount_raw, item.amount)
+                    if amt is not None:
+                        new_amount = amt
+                if new_category_id is None and item.category_name:
+                    cat, _ = bk_alias.resolve_category(
+                        item.category_name, user_cats + sys_cats
+                    )
+                    if cat is not None:
+                        new_category_id = cat.id
+                if new_date is None and (item.date or item.date_expr):
+                    new_date = bk_norm.normalize_date(
+                        item.date_expr, item.date, _date.today()
+                    )
+                if new_remark is None and item.remark:
+                    new_remark = item.remark
+        finally:
+            release()
 
     if all(v is None for v in (new_amount, new_category_id, new_date, new_remark)):
         return ai_error("缺少修改内容")

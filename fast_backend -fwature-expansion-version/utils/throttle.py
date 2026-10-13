@@ -9,8 +9,9 @@
 调用侧：
     from utils.throttle import login_throttle
     ...
-    if not login_throttle.check(key):
-        raise HTTPException(429, "尝试过于频繁，请稍后再试")
+    locked, remain = login_throttle.is_locked(key)
+    if locked:
+        raise HTTPException(429, f"尝试过于频繁，请 {remain} 秒后再试")
     if not password_ok:
         login_throttle.record_fail(key)
     else:
@@ -138,6 +139,27 @@ class SlidingWindowRateLimiter:
                 return False, int(dq[0] + self.window - now) + 1
             dq.append(now)
             return True, 0
+
+    def refund(self, key: str) -> None:
+        """退还一次占位：外部调用**失败**时调用，撤销本次 allow 记下的命中。
+
+        为什么是「先占后还」而不是「成功才记」
+        ------------------------------------
+        早先的实现是 check()（只查）+ record()（只记），两次各自加锁、中间隔着
+        一次 await 外部调用。单事件循环下 N 个并发请求可以全部通过 check（发生在
+        任何一次 record 落地之前）再依次执行，限流额度被放大 N 倍——而并发刷量
+        恰恰是限流要防的攻击形态，等于护栏在真正需要时失效。
+
+        现在改为 allow()（原子「查 + 记」）+ 失败时 refund()：
+        占位发生在进入临界区时，不再有 check→await→record 的窗口；失败路径退还，
+        既保证「失败不消耗成本额度」的原有语义，又不会把并发放行量放大。
+        """
+        with self._lock:
+            dq = self._hits.get(key)
+            if dq:
+                dq.pop()
+                if not dq:
+                    self._hits.pop(key, None)
 
 
 # 语音转写按用户限流：ASR 是按次计费的外部调用，先于配额闸门发生，需独立成本防护

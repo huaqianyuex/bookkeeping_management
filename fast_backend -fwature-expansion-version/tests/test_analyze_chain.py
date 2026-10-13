@@ -246,3 +246,141 @@ class TestFinanceBlockDegradation:
         monkeypatch.setattr(ctx_mod, "build_user_context", ok)
         block = await ctx_mod.build_finance_block(None, 1)
         assert "8000.00" in block and "5200.00" in block
+
+
+# ── P0-1：分析链观测打点（审查报告缺陷 1）────────────────────────────────────
+
+def _reset_usage() -> None:
+    from ai import observability as obs
+    obs.recorder.reset()
+
+
+@pytest.mark.asyncio
+async def test_analyze_expense_records_usage(fake_llm):
+    """回归：分析链此前直接 ainvoke，既无 Timer 也无 record_call，
+    /admin/stats 的 usage 报表完全缺 analyze 场景。"""
+    from ai import observability as obs
+    _reset_usage()
+    try:
+        await ac.analyze_expense(CTX, query="随便看看", user_id=7)
+        row = obs.recorder.snapshot()[obs.KIND_ANALYZE]["7"]
+        assert row["calls"] == 1
+        assert row["errors"] == 0
+    finally:
+        _reset_usage()
+
+
+@pytest.mark.asyncio
+async def test_plan_budget_records_usage(monkeypatch):
+    from ai import observability as obs
+    _reset_usage()
+    f = FakeChatLLM()
+    f.budget_payload = ac.BudgetPlan(
+        monthly_budget=1000.0, category_limits=[], savings_target=0.0, alerts=[],
+    )
+    monkeypatch.setattr(ac, "get_analyze_llm", lambda: f)
+    try:
+        await ac.plan_budget(5000.0, 1000.0, CTX, user_id=8)
+        assert obs.recorder.snapshot()[obs.KIND_ANALYZE]["8"]["calls"] == 1
+    finally:
+        _reset_usage()
+
+
+@pytest.mark.asyncio
+async def test_analyze_failure_recorded_as_error(monkeypatch):
+    """失败也必须落点（ok=False），否则报表只看得见成功调用，错误率恒为 0"""
+    from ai import observability as obs
+    _reset_usage()
+
+    class _BoomLLM:
+        model_name = "boom"
+
+        def with_structured_output(self, schema, **kwargs):
+            class _Inner:
+                async def ainvoke(self, messages):
+                    raise RuntimeError("gateway down")
+            return _Inner()
+
+    monkeypatch.setattr(ac, "get_analyze_llm", lambda: _BoomLLM())
+    try:
+        with pytest.raises(RuntimeError):
+            await ac.analyze_expense(CTX, user_id=9)
+        row = obs.recorder.snapshot()[obs.KIND_ANALYZE]["9"]
+        assert row["calls"] == 1 and row["errors"] == 1
+    finally:
+        _reset_usage()
+
+
+# ── P1-5：流式对话 token 计量（审查报告缺陷 5）──────────────────────────────
+
+class _StreamChunk:
+    def __init__(self, content, usage=None, token_usage=None):
+        self.content = content
+        self.usage_metadata = usage
+        self.response_metadata = {"token_usage": token_usage} if token_usage else {}
+
+
+class _FakeStreamLLM:
+    model_name = "fake-stream"
+
+    def __init__(self, chunks):
+        self._chunks = chunks
+
+    async def astream(self, messages):
+        for c in self._chunks:
+            yield c
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_records_tokens_from_usage_chunk(monkeypatch):
+    """回归：流式末尾常有一个 content 为空的用量块，此前被直接丢弃，
+    record_call 不传 response → 流式对话 token 恒记 0。"""
+    from ai import observability as obs
+    _reset_usage()
+    chunks = [
+        _StreamChunk("你好"),
+        _StreamChunk("，", usage={"input_tokens": 11, "output_tokens": 7}),
+    ]
+    monkeypatch.setattr(cc, "get_chat_llm", lambda premium=False: _FakeStreamLLM(chunks))
+    try:
+        got = []
+        async for piece in cc.chat_stream([], user_id=42):
+            got.append(piece)
+        assert "".join(got) == "你好，"
+        row = obs.recorder.snapshot()[obs.KIND_CHAT]["42"]
+        assert row["promptTokens"] == 11
+        assert row["completionTokens"] == 7
+    finally:
+        _reset_usage()
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_records_usage_from_response_metadata(monkeypatch):
+    """兼容只给 response_metadata.token_usage 的网关"""
+    from ai import observability as obs
+    _reset_usage()
+    chunks = [_StreamChunk("嗯", token_usage={"prompt_tokens": 5, "completion_tokens": 2})]
+    monkeypatch.setattr(cc, "get_chat_llm", lambda premium=False: _FakeStreamLLM(chunks))
+    try:
+        async for _ in cc.chat_stream([], user_id=43):
+            pass
+        row = obs.recorder.snapshot()[obs.KIND_CHAT]["43"]
+        assert row["promptTokens"] == 5 and row["completionTokens"] == 2
+    finally:
+        _reset_usage()
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_without_usage_keeps_zero(monkeypatch):
+    """网关不返回用量时保持记 0，不得抛异常打断流式输出"""
+    from ai import observability as obs
+    _reset_usage()
+    monkeypatch.setattr(cc, "get_chat_llm",
+                        lambda premium=False: _FakeStreamLLM([_StreamChunk("嗯")]))
+    try:
+        async for _ in cc.chat_stream([], user_id=44):
+            pass
+        row = obs.recorder.snapshot()[obs.KIND_CHAT]["44"]
+        assert row["calls"] == 1 and row["totalTokens"] == 0
+    finally:
+        _reset_usage()

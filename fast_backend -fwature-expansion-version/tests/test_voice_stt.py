@@ -5,11 +5,14 @@
 （照 tests/test_membership.py 模式），STT provider 注入假实现，纯逻辑用普通断言。
 """
 
+import asyncio
+import struct
 import time
 from collections import deque
 from datetime import date
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -142,6 +145,37 @@ class TestSlidingWindowRateLimiter:
         limiter._hits["u1"] = deque([time.time() - 61])
         ok, wait = limiter.allow("u1")
         assert ok and wait == 0
+
+    def test_refund_restores_one_slot(self):
+        """refund 撤销一次占位：外部调用失败不应烧掉用户的名额"""
+        limiter = SlidingWindowRateLimiter(max_calls=1, window=60)
+        assert limiter.allow("u1")[0]
+        assert not limiter.allow("u1")[0]
+        limiter.refund("u1")               # 失败退还
+        assert limiter.allow("u1")[0]      # 名额回来了
+        assert not limiter.allow("u1")[0]
+
+    def test_refund_on_empty_key_is_noop(self):
+        limiter = SlidingWindowRateLimiter(max_calls=1, window=60)
+        limiter.refund("never-seen")       # 不得抛异常
+        assert limiter.allow("u1")[0]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_allow_admits_at_most_max_calls(self):
+        """并发放行量不得超过 max_calls。
+
+        回归护栏：旧实现是 check()（只查）+ record()（只记），两次加锁中间隔着
+        一次 await 外部调用——N 个并发请求可全部通过 check 再依次执行，把额度
+        放大 N 倍，而并发刷量恰恰是限流要防的攻击形态。改为 allow（原子查+记）
+        后放行量严格受限。
+        """
+        limiter = SlidingWindowRateLimiter(max_calls=3, window=60)
+
+        async def _one():
+            return limiter.allow("u")
+
+        results = await asyncio.gather(*[_one() for _ in range(20)])
+        assert sum(1 for ok, _ in results if ok) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -425,3 +459,298 @@ class TestBookkeepingOverrides:
         assert body["originRequestId"] == "bk_first"
         assert created_logs == []        # 短路，不写新日志
         assert fake_db._added == []      # 不重复入账
+
+
+# ---------------------------------------------------------------------------
+# 5. P1-7：WAV 服务端时长校验 + 限流槽位（失败不占）
+# ---------------------------------------------------------------------------
+
+def _make_wav(*, byte_rate: int, data_size: int, fmt_extra: bytes = b"",
+              actual_bytes: int | None = None) -> bytes:
+    """构造 PCM WAV 容器。
+
+    ``data_size`` 写进 RIFF 头的 data 块声明长度；``actual_bytes`` 是 data 块
+    真正写入的字节数，默认与之相等（真实文件即如此）。显式传入远大于声明值的
+    数字即可模拟攻击者伪造 RIFF 头「声明很短、实传很长」绕过时长守卫。
+    """
+    fmt = struct.pack("<HHIIHH", 1, 1, 16000, byte_rate, 2, 16) + fmt_extra
+    body = b"fmt " + struct.pack("<I", len(fmt)) + fmt
+    n = data_size if actual_bytes is None else actual_bytes
+    body += b"data" + struct.pack("<I", data_size) + b"\x00" * n
+    return b"RIFF" + struct.pack("<I", 4 + len(body)) + b"WAVE" + body
+
+
+class TestWavDuration:
+    """回归：STT_MAX_SECONDS 此前只下发给前端，服务端不校验，客户端可绕过上传长音频"""
+
+    def test_parses_standard_wav(self):
+        assert ai_router._wav_duration_seconds(
+            _make_wav(byte_rate=16000, data_size=32000)) == pytest.approx(2.0)
+
+    def test_tolerates_oversized_fmt_chunk(self):
+        """扩展 fmt 块（cbSize>0）不得导致解析失败"""
+        assert ai_router._wav_duration_seconds(
+            _make_wav(byte_rate=8000, data_size=8000, fmt_extra=b"\x00\x00")
+        ) == pytest.approx(1.0)
+
+    def test_non_wav_returns_none(self):
+        assert ai_router._wav_duration_seconds(FAKE_M4A) is None
+        assert ai_router._wav_duration_seconds(b"this-is-not-audio") is None
+
+    def test_truncated_or_missing_fmt_returns_none(self):
+        # 截断头
+        assert ai_router._wav_duration_seconds(b"RIFF\x00\x00\x00\x00WAVE") is None
+        # data 在 fmt 之前：拿不到 byte_rate → 未校验
+        body = b"data" + struct.pack("<I", 999999)
+        wav = b"RIFF" + struct.pack("<I", 4 + len(body)) + b"WAVE" + body
+        assert ai_router._wav_duration_seconds(wav) is None
+
+    def test_ignores_lied_about_data_length(self):
+        """伪造 RIFF 头不能绕过时长守卫：声明 1 秒、实传 180 秒 → 必须按 180s 算
+
+        data 块长度是客户端可控的头字段。若按声明值算，攻击者把 180 秒录音的
+        声明长度伪造成 1 秒即可绕过 STT_MAX_SECONDS，而真实音频长度本就等于
+        容器里 data 块的字节数——故只能信实际字节数。
+        """
+        wav = _make_wav(byte_rate=1600, data_size=1600, actual_bytes=1600 * 180)
+        assert ai_router._wav_duration_seconds(wav) == pytest.approx(180.0)
+
+
+class TestVoiceDurationGuard:
+    def test_rejects_too_long_wav(self, stt_client, monkeypatch):
+        monkeypatch.setattr(ai_router, "STT_MAX_SECONDS", 2)
+        monkeypatch.setattr(stt, "_provider", _FakeProvider())
+        res = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.wav", _make_wav(byte_rate=16000, data_size=16000 * 3), "audio/wav")},
+        )
+        assert res.status_code == 200
+        assert "录音过长" in res.json()["error"]
+
+    def test_rejects_wav_whose_header_lies_about_length(self, stt_client, monkeypatch):
+        """端到端：伪造 RIFF 头（声明 1 秒、实传 60 秒）同样被时长守卫拦下"""
+        monkeypatch.setattr(ai_router, "STT_MAX_SECONDS", 2)
+        monkeypatch.setattr(stt, "_provider", _FakeProvider())
+        res = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.wav", _make_wav(byte_rate=1600, data_size=1600,
+                                               actual_bytes=1600 * 60), "audio/wav")},
+        )
+        assert res.status_code == 200
+        assert "录音过长" in res.json()["error"]
+
+    def test_accepts_wav_within_limit(self, stt_client, monkeypatch):
+        monkeypatch.setattr(ai_router, "STT_MAX_SECONDS", 10)
+        monkeypatch.setattr(stt, "_provider", _FakeProvider())
+        res = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.wav", _make_wav(byte_rate=16000, data_size=16000 * 2), "audio/wav")},
+        )
+        assert res.status_code == 200
+        assert res.json()["text"] == "今天打车花了18块"
+
+    def test_unparsable_duration_is_not_blocked(self, stt_client, monkeypatch):
+        """解析不出时长（None）视为未校验，不得误伤正常录音"""
+        monkeypatch.setattr(ai_router, "STT_MAX_SECONDS", 0)
+        monkeypatch.setattr(stt, "_provider", _FakeProvider())
+        body = b"data" + struct.pack("<I", 999999)
+        wav = b"RIFF" + struct.pack("<I", 4 + len(body)) + b"WAVE" + body
+        res = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.wav", wav, "audio/wav")},
+        )
+        assert res.status_code == 200
+        assert res.json()["text"] == "今天打车花了18块"
+
+
+class TestVoiceRateSlot:
+    """回归：转写失败不产生 ASR 计费，却会白占用户每分钟的配额名额"""
+
+    def test_provider_failure_does_not_consume_slot(self, stt_client, monkeypatch):
+        monkeypatch.setattr(ai_router, "voice_rate_limiter",
+                            SlidingWindowRateLimiter(max_calls=1, window=60))
+        monkeypatch.setattr(stt, "_provider", _BoomProvider())
+
+        failed = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.m4a", FAKE_M4A, "audio/m4a")},
+        )
+        assert "语音识别暂不可用" in failed.json()["error"]
+
+        # 失败未占槽 → 换回可用 provider 后同一用户仍可立即重试
+        monkeypatch.setattr(stt, "_provider", _FakeProvider())
+        retry = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.m4a", FAKE_M4A, "audio/m4a")},
+        )
+        assert retry.status_code == 200
+        assert retry.json()["text"] == "今天打车花了18块"
+
+    def test_oversize_failure_does_not_consume_slot(self, stt_client, monkeypatch):
+        """前置校验失败同样不该占槽"""
+        monkeypatch.setattr(ai_router, "voice_rate_limiter",
+                            SlidingWindowRateLimiter(max_calls=1, window=60))
+        monkeypatch.setattr(stt, "_provider", _FakeProvider())
+
+        bad = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.txt", b"x", "text/plain")},
+        )
+        assert "不支持" in bad.json()["error"]
+
+        ok = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.m4a", FAKE_M4A, "audio/m4a")},
+        )
+        assert ok.status_code == 200 and "text" in ok.json()
+
+    def test_success_consumes_slot(self, stt_client, monkeypatch):
+        """成功才计槽：额度用尽后必须限流，否则限流形同虚设"""
+        monkeypatch.setattr(ai_router, "voice_rate_limiter",
+                            SlidingWindowRateLimiter(max_calls=2, window=60))
+        monkeypatch.setattr(stt, "_provider", _FakeProvider())
+
+        for _ in range(2):
+            ok = stt_client.post(
+                "/api/ai/voice/transcribe",
+                files={"file": ("a.m4a", FAKE_M4A, "audio/m4a")},
+            )
+            assert ok.status_code == 200 and "text" in ok.json()
+
+        third = stt_client.post(
+            "/api/ai/voice/transcribe",
+            files={"file": ("a.m4a", FAKE_M4A, "audio/m4a")},
+        )
+        assert "说话太频繁" in third.json()["error"]
+
+
+class TestWhisperProviderClient:
+    """P1-7：连接池复用 + 瞬时故障重试一次（4xx 不重试）"""
+
+    def test_reuses_single_client(self):
+        p = stt.OpenAIWhisperProvider(
+            base_url="https://example.invalid/v1", api_key="k", model="whisper-1", timeout=5.0,
+        )
+        assert p._get_client() is p._get_client(), "每次 transcribe 不应重建 httpx 客户端"
+
+    @pytest.mark.asyncio
+    async def test_client_rebuilt_when_event_loop_changes(self):
+        """httpx client 与创建它的 loop 绑定；loop 变了必须重建，否则跨 loop 复用会炸。
+
+        单 worker 生产环境只有一个 loop，但 pytest-asyncio 默认每个 async 用例
+        新建 loop——若不做隔离，第二个用例就会踩到 Event loop is closed。
+        """
+        p = stt.OpenAIWhisperProvider(
+            base_url="https://example.invalid/v1", api_key="k", model="whisper-1", timeout=5.0,
+        )
+        stale = httpx.AsyncClient(timeout=5.0)
+        other_loop = asyncio.new_event_loop()
+        try:
+            p._client, p._client_loop = stale, other_loop
+            fresh = p._get_client()
+            assert fresh is not stale, "事件循环切换后不得复用绑定旧 loop 的 client"
+        finally:
+            await stale.aclose()
+            await p._client.aclose()
+            other_loop.close()
+
+    @pytest.mark.asyncio
+    async def test_aclose_releases_connection_pool(self):
+        """aclose 必须真正关掉连接池并清空引用（lifespan shutdown 调用）"""
+        p = stt.OpenAIWhisperProvider(
+            base_url="https://example.invalid/v1", api_key="k", model="whisper-1", timeout=5.0,
+        )
+        client = p._get_client()
+        await p.aclose()
+        assert client.is_closed
+        assert p._client is None and p._client_loop is None
+
+    @pytest.mark.asyncio
+    async def test_aclose_stt_provider_tolerates_unset_and_custom_provider(self, monkeypatch):
+        """模块级关闭入口：provider 从未创建、或自定义实现无连接池时都不得抛"""
+        monkeypatch.setattr(stt, "_provider", None)
+        await stt.aclose_stt_provider()          # 从未创建 → 静默通过
+
+        monkeypatch.setattr(stt, "_provider", _FakeProvider())   # 无 aclose 方法
+        await stt.aclose_stt_provider()          # 不应抛异常
+
+    @pytest.mark.asyncio
+    async def test_retries_once_on_5xx(self, monkeypatch):
+        calls = {"n": 0}
+
+        class _Resp:
+            def __init__(self, code):
+                self.status_code = code
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"text": "ok"}
+
+        class _Client:
+            async def post(self, *a, **kw):
+                calls["n"] += 1
+                return _Resp(500 if calls["n"] == 1 else 200)
+
+        p = stt.OpenAIWhisperProvider("https://x.invalid/v1", "k", "m", 1.0)
+        monkeypatch.setattr(p, "_get_client", lambda: _Client())
+        monkeypatch.setattr(stt, "_RETRY_BACKOFF_SECONDS", 0)
+
+        out = await p.transcribe(b"x", "a.m4a")
+        assert out.text == "ok"
+        assert calls["n"] == 2
+
+    @pytest.mark.asyncio
+    async def test_retries_once_on_transport_error(self, monkeypatch):
+        calls = {"n": 0}
+
+        class _Resp:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"text": "ok"}
+
+        class _Client:
+            async def post(self, *a, **kw):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise httpx.ConnectError("boom")
+                return _Resp()
+
+        p = stt.OpenAIWhisperProvider("https://x.invalid/v1", "k", "m", 1.0)
+        monkeypatch.setattr(p, "_get_client", lambda: _Client())
+        monkeypatch.setattr(stt, "_RETRY_BACKOFF_SECONDS", 0)
+
+        out = await p.transcribe(b"x", "a.m4a")
+        assert out.text == "ok"
+        assert calls["n"] == 2
+
+    @pytest.mark.asyncio
+    async def test_does_not_retry_4xx(self, monkeypatch):
+        """4xx 是请求自身的问题，重试只会白付一次外部计费"""
+        calls = {"n": 0}
+
+        class _Resp:
+            status_code = 401
+
+            def raise_for_status(self):
+                raise RuntimeError("unauthorized")
+
+            def json(self):
+                return {}
+
+        class _Client:
+            async def post(self, *a, **kw):
+                calls["n"] += 1
+                return _Resp()
+
+        p = stt.OpenAIWhisperProvider("https://x.invalid/v1", "k", "m", 1.0)
+        monkeypatch.setattr(p, "_get_client", lambda: _Client())
+
+        with pytest.raises(RuntimeError, match="unauthorized"):
+            await p.transcribe(b"x", "a.m4a")
+        assert calls["n"] == 1

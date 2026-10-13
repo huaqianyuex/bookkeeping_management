@@ -5,11 +5,14 @@
 """
 
 import types
+from datetime import date
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
 
 from ai import faq_retriever as fr
+from ai.bookkeeping_chain import Parsed, ParsedItem
 from config.db_config import get_db
 from main import app
 from utils.auth import get_current_regular_user, get_current_user
@@ -246,3 +249,247 @@ class TestChatPromptAssembly:
                         json={"sessionId": "nope", "message": "你好"})
         assert r.status_code == 200
         assert r.json() == {"error": "会话不存在"}
+
+
+# ── P0-3：/analyze/expenses 的 query 必须脱敏后才进 LLM（审查报告缺陷 3）──────
+
+class TestAnalyzeQueryDesensitized:
+    def _patch_env(self, monkeypatch):
+        import routers.ai as ai_router
+        from ai import context as ai_context
+        from crud import membership as membership_crud
+        from schemas.ai import ExpenseAnalysis
+        from utils import ai_concurrency
+
+        captured = {}
+
+        async def _tier(db, uid):
+            return 0
+
+        async def _consume(db, uid, plan, kind):
+            return True, 1, 100
+
+        async def _acquire(user_id, limit):
+            def _r():
+                return None
+            return _r
+
+        async def _ctx(db, uid):
+            return {"this_month": "2026-10", "total_income": 1000.0,
+                    "total_expense": 500.0, "last_month_expense": 400.0,
+                    "top_categories": []}
+
+        async def _analyze(ctx, query=None, user_id=None):
+            captured["query"] = query
+            captured["user_id"] = user_id
+            return ExpenseAnalysis(summary="s", total_expense=500.0)
+
+        monkeypatch.setattr(membership_crud, "get_tier", _tier)
+        monkeypatch.setattr(membership_crud, "consume_quota", _consume)
+        monkeypatch.setattr(ai_concurrency, "try_acquire", _acquire)
+        monkeypatch.setattr(ai_context, "build_user_context", _ctx)
+        monkeypatch.setattr(ai_router.analyze_chain, "analyze_expense", _analyze)
+        return captured
+
+    def test_pii_is_masked_before_llm(self, client, monkeypatch):
+        """回归：body.query 此前原样进 analyze_chain，手机号/卡号随之上云"""
+        captured = self._patch_env(monkeypatch)
+        r = client.post("/api/ai/analyze/expenses",
+                        json={"query": "打给我 13800138000 的那笔为什么涨了"})
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+        assert "[PHONE]" in captured["query"]
+        assert "13800138000" not in captured["query"], "PII 不得随诉求上云"
+        assert captured["user_id"] == 1          # P0-1：user_id 透传，usage 才能按用户落点
+
+    def test_plain_query_unchanged(self, client, monkeypatch):
+        captured = self._patch_env(monkeypatch)
+        r = client.post("/api/ai/analyze/expenses", json={"query": "为什么餐饮涨了"})
+        assert r.status_code == 200
+        assert captured["query"] == "为什么餐饮涨了"
+
+
+# ── P0-4：/faq/search 独立限流（审查报告缺陷 4）──────────────────────────────
+
+class TestFaqSearchRateLimit:
+    def test_rate_limited_returns_429_bare_json(self, client, monkeypatch):
+        """cache miss 即一次 Embedding 计费，认证用户可无限刷 → 必须限流"""
+        import routers.ai as ai_router
+        from utils.throttle import SlidingWindowRateLimiter
+
+        monkeypatch.setattr(ai_router, "faq_search_rate_limiter",
+                            SlidingWindowRateLimiter(max_calls=1, window=60))
+
+        first = client.get("/api/ai/faq/search", params={"query": "预算"})
+        assert first.status_code == 200          # 首次放行并计一次
+
+        second = client.get("/api/ai/faq/search", params={"query": "预算"})
+        assert second.status_code == 429
+        body = second.json()
+        assert body["code"] == "RATE_LIMIT"
+        assert "data" not in body                # 裸契约：无 Result 信封
+
+    def test_failed_search_does_not_consume_slot(self, client, monkeypatch):
+        """检索整体抛异常时不该占槽（与语音同口径：失败不消耗成本额度）"""
+        import routers.ai as ai_router
+        from utils.throttle import SlidingWindowRateLimiter
+
+        monkeypatch.setattr(ai_router, "faq_search_rate_limiter",
+                            SlidingWindowRateLimiter(max_calls=1, window=60))
+
+        async def _boom(query, top_k=None):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(fr, "search_faq_detailed", _boom)
+        first = client.get("/api/ai/faq/search", params={"query": "预算"})
+        assert first.json() == {"results": [], "fallback": True}
+
+        async def _ok(query, top_k=None):
+            return [], "empty"
+
+        monkeypatch.setattr(fr, "search_faq_detailed", _ok)
+        second = client.get("/api/ai/faq/search", params={"query": "预算"})
+        assert second.status_code == 200         # 失败未占槽 → 仍可发起
+
+
+# ── P0-2：PATCH /bookkeeping/{id} 带 message 必须走配额与并发闸门（缺陷 2）───
+
+class _AmendResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self._rows
+
+    def first(self):
+        return self._rows[0] if self._rows else None
+
+
+class _AmendFakeDB:
+    """假会话：按 SQL 目标表分派结果（Record 命中 / Category 列表 / 日志为空）
+
+    比「按调用次序返回」稳健：_AmendResult 同时支持 .first()/.all()，
+    因此 Record 查询与 Category 查询可以共用同一套桩。
+    """
+
+    def __init__(self, rec, categories):
+        self.rec = rec
+        self.categories = categories
+        self.commits = 0
+
+    async def commit(self):
+        self.commits += 1
+
+    async def rollback(self):
+        return None
+
+    async def refresh(self, obj):
+        return None
+
+    def add(self, obj):
+        return None
+
+    async def flush(self):
+        return None
+
+    async def execute(self, stmt, *args, **kwargs):
+        sql = str(stmt)
+        if "ai_bookkeeping_logs" in sql:
+            return _AmendResult([])
+        if "categories" in sql:
+            return _AmendResult(self.categories)
+        if "records" in sql:
+            return _AmendResult([self.rec])
+        raise AssertionError(f"测试未打桩的查询不应触库: {sql}")
+
+
+@pytest.fixture()
+def amend_env(monkeypatch):
+    """打桩 amend 路径：假 DB + 放行配额 + 假解析，返回 (fake_db, 配额记录器)"""
+    import routers.ai as ai_router
+    from crud import ai as ai_crud
+    from crud import membership as membership_crud
+    from utils import ai_concurrency
+
+    rec = types.SimpleNamespace(
+        id=101, user_id=1, category_id=1, type=0, amount=Decimal("30.00"),
+        date=date(2026, 10, 5), remark="午饭", status=1,
+    )
+    cats = [
+        types.SimpleNamespace(id=1, name="餐饮", user_id=None, type=0, status=1),
+        types.SimpleNamespace(id=2, name="交通", user_id=None, type=0, status=1),
+    ]
+    fake_db = _AmendFakeDB(rec, cats)
+    calls = {"quota": []}
+
+    async def _override_get_db():
+        yield fake_db
+
+    app.dependency_overrides[get_db] = _override_get_db
+
+    async def _tier(db, uid):
+        return 0
+
+    async def _consume(db, uid, plan, kind):
+        calls["quota"].append(kind)
+        return True, 1, 100
+
+    async def _acquire(user_id, limit):
+        def _r():
+            return None
+        return _r
+
+    async def _parse(message, today, category_names, user_id=None):
+        return Parsed(intent="bookkeeping", items=[ParsedItem(
+            amount=45.0, amount_raw="45块", type=0, category_name="餐饮",
+        )])
+
+    async def _create_log(db, **fields):
+        return types.SimpleNamespace(id=77, **fields)
+
+    monkeypatch.setattr(membership_crud, "get_tier", _tier)
+    monkeypatch.setattr(membership_crud, "consume_quota", _consume)
+    monkeypatch.setattr(ai_concurrency, "try_acquire", _acquire)
+    monkeypatch.setattr(ai_router, "parse_bookkeeping", _parse)
+    monkeypatch.setattr(ai_crud, "create_bookkeeping_log", _create_log)
+
+    yield fake_db, calls
+    app.dependency_overrides.pop(get_db, None)
+
+
+class TestAmendQuota:
+    def test_with_message_consumes_bookkeeping_quota(self, client, amend_env):
+        """回归：amend 带 message 会调 LLM 解析，此前完全不扣配额"""
+        fake_db, calls = amend_env
+        r = client.patch("/api/ai/bookkeeping/101", json={"message": "改成45块"})
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+        assert calls["quota"] == ["bookkeeping"]
+
+    def test_without_message_does_not_consume_quota(self, client, amend_env):
+        """纯字段修改不调 LLM，不该扣 AI 配额"""
+        fake_db, calls = amend_env
+        r = client.patch("/api/ai/bookkeeping/101", json={"amount": 45})
+        assert r.status_code == 200
+        assert r.json()["success"] is True
+        assert calls["quota"] == []
+
+    def test_quota_exceeded_returns_bare_error_not_429(self, client, amend_env, monkeypatch):
+        """超额口径对齐 POST /bookkeeping：HTTP 200 + 裸 {"error"}，不是 429"""
+        fake_db, calls = amend_env
+        from crud import membership as membership_crud
+
+        async def _deny(db, uid, plan, kind):
+            calls["quota"].append(kind)
+            return False, 100, 100
+
+        monkeypatch.setattr(membership_crud, "consume_quota", _deny)
+        r = client.patch("/api/ai/bookkeeping/101", json={"message": "改成45块"})
+        assert r.status_code == 200
+        body = r.json()
+        assert "error" in body
+        assert "data" not in body
+        assert calls["quota"] == ["bookkeeping"]
