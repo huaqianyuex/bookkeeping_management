@@ -493,3 +493,157 @@ class TestAmendQuota:
         assert "error" in body
         assert "data" not in body
         assert calls["quota"] == ["bookkeeping"]
+
+
+# ── P1-1：/chat/stream 当前消息只能进 LLM 一次（审查报告缺陷 1）──────────────
+
+class TestChatStreamDedup:
+    """流式路径曾「先落库用户消息、再 build_history」，刚存的当前消息被读回
+    历史、随后又显式追加一次 HumanMessage → 当前消息进 LLM 两次。
+
+    用「顺序敏感的假库」复现该场景：add_message 写库、list_messages_tail 读库，
+    build_history 走真实实现（仅桩化其 SQL 出口），谁先执行直接决定结果。
+    """
+
+    def test_current_message_appears_once(self, client, allow_quota, monkeypatch):
+        import routers.ai as ai_router
+        from crud import ai as ai_crud
+        from langchain_core.messages import HumanMessage
+
+        captured = {"messages": None}
+
+        class _MemDB:
+            def __init__(self):
+                self.store = [
+                    {"role": "user", "content": "历史1"},
+                    {"role": "assistant", "content": "答1"},
+                ]
+
+            def append(self, role, content):
+                self.store.append({"role": role, "content": content})
+
+        memdb = _MemDB()
+
+        class _FakeGenCtx:
+            def __init__(self):
+                self.db = types.SimpleNamespace()
+
+            async def __aenter__(self):
+                return self.db
+
+            async def __aexit__(self, *exc):
+                return False
+
+        async def _session(db, sid, uid):
+            return types.SimpleNamespace(id=sid, user_id=uid)
+
+        async def _add_message(db, sid, role, content):
+            memdb.append(role, content)
+            return types.SimpleNamespace(id="m" + str(len(memdb.store)))
+
+        async def _list_tail(db, sid, limit):
+            rows = memdb.store[-limit:] if limit > 0 else []
+            return [types.SimpleNamespace(role=r["role"], content=r["content"])
+                    for r in rows]
+
+        async def _system(db, uid, message):
+            return "system-block"
+
+        async def _stream(messages, premium=False, user_id=None):
+            captured["messages"] = messages
+            yield "AI 回复"
+
+        monkeypatch.setattr(ai_crud, "get_user_session", _session)
+        monkeypatch.setattr(ai_crud, "add_message", _add_message)
+        monkeypatch.setattr(ai_crud, "list_messages_tail", _list_tail)
+        monkeypatch.setattr(ai_router, "_build_system_prompt", _system)
+        monkeypatch.setattr(ai_router, "AsyncSessionLocal", lambda: _FakeGenCtx())
+        monkeypatch.setattr(ai_router.chat_chain, "chat_stream", _stream)
+
+        r = client.post("/api/ai/chat/stream",
+                        json={"sessionId": "s1", "message": "当前消息"})
+        assert r.status_code == 200
+        assert "AI 回复" in r.text
+
+        current = [m for m in captured["messages"]
+                   if isinstance(m, HumanMessage) and m.content == "当前消息"]
+        assert len(current) == 1, \
+            f"当前消息进 LLM 的次数应为 1（重复计费 + 上下文冗余），实际 {len(current)}"
+
+        contents = [m.content for m in captured["messages"]]
+        assert contents[-1] == "当前消息", "当前消息应作为最后一个 HumanMessage 追加"
+        assert "历史1" in contents and "答1" in contents, "历史窗口仍应完整保留"
+
+    def test_stream_keeps_user_message_on_save_failure(self, client, allow_quota, monkeypatch):
+        """顺序调整不改变「落库失败仍报消息保存失败」的语义（审查 P1-1 注）"""
+        import routers.ai as ai_router
+        from crud import ai as ai_crud
+
+        class _FakeGenCtx:
+            def __init__(self):
+                self.db = types.SimpleNamespace()
+
+            async def __aenter__(self):
+                return self.db
+
+            async def __aexit__(self, *exc):
+                return False
+
+        async def _session(db, sid, uid):
+            return types.SimpleNamespace(id=sid, user_id=uid)
+
+        async def _list_tail(db, sid, limit):
+            return []
+
+        async def _system(db, uid, message):
+            return "system-block"
+
+        async def _add_message(db, sid, role, content):
+            raise RuntimeError("db down")
+
+        monkeypatch.setattr(ai_crud, "get_user_session", _session)
+        monkeypatch.setattr(ai_crud, "list_messages_tail", _list_tail)
+        monkeypatch.setattr(ai_crud, "add_message", _add_message)
+        monkeypatch.setattr(ai_router, "_build_system_prompt", _system)
+        monkeypatch.setattr(ai_router, "AsyncSessionLocal", lambda: _FakeGenCtx())
+
+        r = client.post("/api/ai/chat/stream",
+                        json={"sessionId": "s1", "message": "你好"})
+        assert r.status_code == 200          # SSE 保持 200 契约
+        assert "消息保存失败" in r.text
+
+
+# ── P1-4：_quota_gate 抛错后并发槽必须归还（审查报告缺陷 4）────────────────────
+
+class TestStreamConcurrencySlotRelease:
+    def test_quota_gate_exception_releases_slot(self, client, monkeypatch):
+        """回归：try_acquire 之后、_quota_gate 之前无 try/finally，DB 故障等异常
+        会让 release() 永不执行 → 该用户并发槽永久泄漏，重启前一直 CONCURRENCY_LIMIT"""
+        import routers.ai as ai_router
+        from crud import ai as ai_crud
+        from crud import membership as membership_crud
+        from utils import ai_concurrency
+
+        ai_concurrency._slots.clear()
+
+        async def _session(db, sid, uid):
+            return types.SimpleNamespace(id=sid, user_id=uid)
+
+        async def _tier(db, uid):
+            return 0
+
+        async def _boom(db, uid, kind, plan=None):
+            raise RuntimeError("db down")
+
+        monkeypatch.setattr(ai_crud, "get_user_session", _session)
+        monkeypatch.setattr(membership_crud, "get_tier", _tier)
+        monkeypatch.setattr(ai_router, "_quota_gate", _boom)
+        # 不 patch try_acquire：用真实信号量，验证「占用后异常路径已归还」
+
+        with pytest.raises(RuntimeError):
+            client.post("/api/ai/chat/stream",
+                        json={"sessionId": "s1", "message": "你好"})
+
+        entry = ai_concurrency._slots.get(1)
+        assert entry is not None
+        assert not entry[0].locked(), "并发槽泄漏：_quota_gate 抛错后未归还，用户被永久限流"

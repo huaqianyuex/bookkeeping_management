@@ -366,18 +366,26 @@ async def chat_stream(
             media_type="text/event-stream",
         )
 
-    quota_error = await _quota_gate(db, user_id, "chat", plan=plan)
-    if quota_error:
-        release()
-        return JSONResponse(status_code=429, content=quota_error)
-
+    # event_gen 必须定义在下面的 try 之前：Python 按执行顺序绑定嵌套函数名，
+    # 反过来（先 StreamingResponse(event_gen()) 再 def）会在每次通过配额闸门的
+    # /chat/stream 请求上抛 UnboundLocalError，流式对话整体不可用。
     async def event_gen():
         # Depends(get_db) 的会话在响应头发出后即被关闭（FastAPI>=0.106 yield 依赖的
         # 生命周期只到 response start），流式期间复用会隐式重开事务并泄漏连接；
         # 这里为生成器单独建会话，随流结束关闭。add_message 内部自带 commit。
         async with AsyncSessionLocal() as gen_db:
             try:
-                # 1) 落库用户消息
+                # 1) 先组包、后落库用户消息（审查 P1-1）：流式路径曾先 add_message
+                # 再 build_history，刚存的当前消息被读回历史、随后又显式追加一次
+                # HumanMessage → 当前消息进 LLM 两次（重复计费 + 上下文冗余）。
+                # 调整后与 /chat 非流式（先 build_history 后 add_message）对齐；
+                # 落库仍在流式产出前且失败照样报「消息保存失败」，语义不变。
+                history = await memory.build_history(gen_db, body.session_id)
+                system_prompt = await _build_system_prompt(gen_db, user_id, body.message)
+                messages = [SystemMessage(content=system_prompt), *history,
+                    HumanMessage(content=_safe_user_text(body.message))]
+
+                # 2) 落库用户消息
                 try:
                     await ai_crud.add_message(gen_db, body.session_id, "user", body.message)
                 except Exception:
@@ -385,12 +393,7 @@ async def chat_stream(
                     yield sse({"type": "error", "error": "消息保存失败"})
                     return
 
-                # 2) 组装消息并流式产出（注入实时财务数据，模型才能分析当月账单）
-                history = await memory.build_history(gen_db, body.session_id)
-                system_prompt = await _build_system_prompt(gen_db, user_id, body.message)
-                messages = [SystemMessage(content=system_prompt), *history,
-                    HumanMessage(content=_safe_user_text(body.message))]
-
+                # 3) 组装消息并流式产出（注入实时财务数据，模型才能分析当月账单）
                 full = []
                 try:
                     async for chunk in chat_chain.chat_stream(messages, premium=plan["premium_model"], user_id=user_id):
@@ -417,7 +420,19 @@ async def chat_stream(
             finally:
                 release()
 
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+    try:
+        quota_error = await _quota_gate(db, user_id, "chat", plan=plan)
+        if quota_error:
+            # 此处手动释放（event_gen 未被创建，外层 except 不会触发，无双释放）
+            release()
+            return JSONResponse(status_code=429, content=quota_error)
+        return StreamingResponse(event_gen(), media_type="text/event-stream")
+    except Exception:
+        # 并发槽泄漏修复（审查 P1-4）：_quota_gate 抛错（如 DB 故障）时此前
+        # 没有任何保护，release() 永不执行 → 该用户并发槽永久泄漏，重启前一直
+        # 返回 CONCURRENCY_LIMIT。此处兜底释放后继续上抛（其余端点均有 finally 保护）。
+        release()
+        raise
 
 
 # ── 分析 / 预算 ────────────────────────────────────────────────────────

@@ -64,6 +64,12 @@ def get_embeddings():
     global _embeddings
     if _embeddings is None:
         from langchain_openai import OpenAIEmbeddings
+        # 审查 P2-5：Embedding 与 chat/analyze 同口径——显式 timeout + SDK 重试归零。
+        # 无 timeout 时（SDK 默认约 600s）知识库 Embedding 挂起会长期占住
+        # ai_concurrency 并发槽，/faq/rebuild 阻塞且 SDK 默认 2 次重试放大计费；
+        # 瞬时失败由调用方降级处理（faq_retriever._embed_query 降级关键词检索）。
         _embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL, api_key=AGNES_API_KEY,
-                                       base_url=OPENAI_BASE_URL)
+                                       base_url=OPENAI_BASE_URL,
+                                       timeout=LLM_TIMEOUT_SECONDS,
+                                       max_retries=0)
     return _embeddings

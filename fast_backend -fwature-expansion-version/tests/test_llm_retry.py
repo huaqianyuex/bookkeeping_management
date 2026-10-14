@@ -479,3 +479,22 @@ class TestRouterUpstreamMessaging:
 
         src = inspect.getsource(llm)
         assert src.count("max_retries=0") >= 2, "chat / analyze 客户端都应关闭 SDK 重试"
+
+
+class TestEmbeddingsClientGuards:
+    """审查 P2-5：OpenAIEmbeddings 未配 timeout/max_retries 时走 SDK 默认
+    （约 600s 超时、2 次重试）——知识库 Embedding 挂起会长期占住并发槽，
+    /faq/rebuild 阻塞且重试放大计费。应与 chat/analyze 同口径关闭。"""
+
+    def test_embeddings_have_timeout_and_no_sdk_retry(self, monkeypatch):
+        from ai import llm
+        from config.settings import LLM_TIMEOUT_SECONDS
+
+        monkeypatch.setattr(llm, "_embeddings", None)
+        emb = llm.get_embeddings()
+        assert emb.max_retries == 0, "Embedding 也应关闭 SDK 重试（瞬时失败由调用方降级关键词检索）"
+        # 断言 request_timeout 而非 timeout：`timeout` 只是 langchain-openai 构造期的
+        # 兼容别名（OpenAIEmbeddings/ChatOpenAI 的真实字段名都是 request_timeout，
+        # extra=forbid 下别名会被转发），构造完成后并不存在 .timeout 属性。
+        # 早前断言 emb.timeout 会恒定抛 AttributeError，使本用例失去守门作用。
+        assert emb.request_timeout == LLM_TIMEOUT_SECONDS

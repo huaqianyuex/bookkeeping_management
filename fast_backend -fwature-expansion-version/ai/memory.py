@@ -3,6 +3,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ai import security as ai_security
 from config.settings import KEEP_RECENT_MESSAGES, MAX_HISTORY_TOKENS
 
 # 历史 bug：这两个常量原先在本文件里硬编码（MAX_TOKENS=2000 / KEEP_RECENT=6），
@@ -31,6 +32,11 @@ async def build_history(db: AsyncSession, session_id: str) -> list[BaseMessage]:
         if used > MAX_TOKENS or len(picked) >= KEEP_RECENT:
             break
         cls = HumanMessage if m.role == "user" else AIMessage
-        picked.append(cls(content=m.content))
+        # 审查 P1-2：历史消息此前原样进 LLM，脱敏/注入过滤只盖住当前消息，
+        # 历史里的手机号/卡号/身份证/邮箱会绕过安全管道上云，注入话术也能借
+        # 历史进入上下文。这里对 user 消息套与当前消息同一套 sanitize
+        # （routers/ai.py::_safe_user_text 同口径：上云脱敏，落库仍存原文）。
+        content = ai_security.sanitize(m.content) if m.role == "user" else m.content
+        picked.append(cls(content=content))
     picked.reverse()  # 恢复升序
     return picked

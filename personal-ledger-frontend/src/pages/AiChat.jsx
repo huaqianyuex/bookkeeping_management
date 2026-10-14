@@ -203,6 +203,21 @@ export default function AiChatPage() {
         body: JSON.stringify({ sessionId, message: currentInput }),
       })
 
+      // 审查 P1-3：非 200（配额超限 429 / 缺参 400 等）返回 JSON 而非 SSE，
+      // 此前直接 getReader() 解析不到 data: 行，用户只见空白 assistant 气泡、
+      // 看不到「今日次数已用完」等提示。先检状态码并弹出错误，也不追加占位气泡。
+      if (!res.ok) {
+        let msg = '对话失败'
+        try {
+          const j = await res.json()
+          if (j && j.error) msg = j.error
+        } catch {
+          // 错误体不是 JSON 时用默认文案
+        }
+        message.error(msg)
+        return
+      }
+
       setMessages((prev) => [...prev, { role: 'assistant', content: '', streaming: true }])
 
       const reader = res.body.getReader()
